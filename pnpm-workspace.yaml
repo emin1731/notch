@@ -5,6 +5,7 @@ allowBuilds:
   '@prisma/engines': true
   '@scarf/scarf': false
   '@swc/core': true
+  argon2: true
   cpu-features: false
   prisma: true
   protobufjs: false
