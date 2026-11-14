@@ -1,0 +1,12 @@
+// Models arrive sprint by sprint, starting with User and Session in S1.
+// The connection URL lives in prisma.config.ts.
+
+generator client {
+  provider     = "prisma-client"
+  output       = "../src/generated/prisma"
+  moduleFormat = "esm"
+}
+
+datasource db {
+  provider = "postgresql"
+}
