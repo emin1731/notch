@@ -1,0 +1,1428 @@
+# Habit Tracker — MVP Implementation Plan
+
+**Stack:** Vite + React (client) · NestJS (server) · PostgreSQL + Prisma · pnpm + Turborepo monorepo
+**Scope:** Core product only. No AI features in this version.
+**Audience:** Internal tool for personal use (one user, possibly a few invited ones). Served at `https://notch.emindabakhov.com`.
+
+---
+
+## Table of contents
+
+1. [Product scope](#1-product-scope)
+2. [Product rules (source of truth)](#2-product-rules-source-of-truth)
+3. [Architecture and tech stack](#3-architecture-and-tech-stack)
+4. [Monorepo structure](#4-monorepo-structure)
+5. [Data model](#5-data-model)
+6. [Backend (NestJS)](#6-backend-nestjs)
+7. [Frontend (Vite + React)](#7-frontend-vite--react)
+8. [Shared package](#8-shared-package)
+9. [Dates, timezones and weeks](#9-dates-timezones-and-weeks)
+10. [Security](#10-security)
+11. [Testing strategy](#11-testing-strategy)
+12. [DevOps and environments](#12-devops-and-environments)
+13. [Delivery phases](#13-delivery-phases)
+14. [Tone and copy guide](#14-tone-and-copy-guide)
+15. [Out of scope and future work](#15-out-of-scope-and-future-work)
+
+---
+
+## 1. Product scope
+
+### 1.1 In scope (MVP)
+
+| Area | Features |
+|---|---|
+| Accounts | Invite-only registration (username + password), log in, log out, log out everywhere, timezone, profile, change password, delete account |
+| Onboarding | Pick cores (presets + custom), optional first goal with milestones, add first habits |
+| Structure | Cores → Goals → Milestones; habits belong to a core and optionally to a goal |
+| Habits | Three types (toggle, count, duration); three schedules (daily, specific days, X times per week); time-of-day grouping; archive/delete; reorder |
+| Logging | One-click toggle, +/− counter, duration timer or manual minutes; partial progress; backfill up to 7 days |
+| Today screen | Habits grouped by time of day, progress per habit, daily completion %, weekly quota for times-per-week habits, streaks, "target changed" badges |
+| Adaptive difficulty | Weekly evaluation; automatic level-up / deload / hold; undo; change history |
+| Weekly review | Summary of the past week and of all applied changes, with undo |
+| Goals & milestones | Manual milestone ticking, ordered milestones, goal progress, goal completion celebration |
+| Stats | Overall and per-core completion, per-habit heatmap, streaks, target-over-time chart, goal progress |
+| Tone | "Firm but friendly" copy throughout |
+
+### 1.2 Explicitly not in this version
+
+AI prioritization, AI accountability chat, conversational logging, automatic audits, mobile apps, notifications/reminders, social features, payments, email (no addresses, no password reset by email, no verification), public sign-up. See [section 15](#15-out-of-scope-and-future-work).
+
+---
+
+## 2. Product rules (source of truth)
+
+This section defines behaviour. Backend logic, frontend UI and tests should all be derived from it.
+
+### 2.1 Hierarchy
+
+```
+User
+ └── Core (life area: Health, Career, Mind…)
+      ├── Goal (optional outcome, optional deadline)
+      │    ├── Milestone (ordered checkpoints, ticked manually)
+      │    └── Habit (linked to the goal)
+      └── Habit (not linked to any goal)
+```
+
+- Every **habit belongs to exactly one core**. Linking to a goal is optional, and the goal must belong to the same core.
+- A **core** has a name, color and icon. Cores can be reordered and archived.
+- A **goal** has a title, optional description, optional deadline and a status (`ACTIVE`, `COMPLETED`, `ARCHIVED`).
+- A **milestone** has a title, an order and a completion timestamp.
+
+### 2.2 Habit types
+
+| Type | What the user logs | Stored `value` | Stored `targetValue` | Example |
+|---|---|---|---|---|
+| `TOGGLE` | Done / not done | `0` or `1` | always `1` | Cold shower |
+| `COUNT` | A number of units | integer units | integer units | Read 20 pages |
+| `DURATION` | Time spent | seconds | seconds | Meditate 10 min |
+
+- `COUNT` habits have a free-text `unit` ("pages", "reps", "glasses").
+- `DURATION` is stored in **seconds** but always shown and edited in minutes (and hours when ≥ 60 min).
+- Values may exceed the target. Overachievement is shown ("25 / 20 pages") but progress caps at 100%.
+
+### 2.3 Schedules
+
+| Schedule | Meaning | Fields |
+|---|---|---|
+| `DAILY` | Every day | — |
+| `SPECIFIC_DAYS` | Only on chosen weekdays | `daysOfWeek`: ISO numbers, Mon = 1 … Sun = 7 |
+| `TIMES_PER_WEEK` | Any N days per week | `timesPerWeek`: 1–7 |
+
+**Time of day** (`MORNING`, `AFTERNOON`, `EVENING`, `ANYTIME`) is used only for grouping on the Today screen. It is the "custom timeline". It has no effect on logic.
+
+A habit has a `startDate` (the local date it was created, or a chosen later date). It is never scheduled before that date.
+
+### 2.4 Logging
+
+- One log per habit per local calendar date (`unique(habitId, date)`).
+- `TOGGLE`: tapping flips between `0` and `1`.
+- `COUNT`: `+` / `−` buttons and direct number entry. Floor is `0`.
+- `DURATION`: start/stop timer that adds elapsed time, or manual minutes entry. Both add to the day's value. Manual entry can also overwrite the value.
+- Each log stores `targetSnapshot`: the habit's target at the moment the log was first created. A later target change never alters old logs.
+- **Hit:** a log is a *hit* when `value >= targetSnapshot`.
+- **Progress:** `min(value / targetSnapshot, 1)`.
+- **Backfill:** logs can be created or edited for today and the previous 6 days, never for the future and never before `startDate`.
+- **Logs on unscheduled days** (e.g. a Mon/Wed/Fri habit logged on Tuesday) are allowed and stored. They count as a "bonus" in stats and do not affect rates or streaks.
+- Editing a log in a week that has already been reviewed does **not** change that review retroactively. The UI says so with a small note.
+
+### 2.5 Completion rate (used by adaptive difficulty and stats)
+
+For one habit and one week (Monday–Sunday):
+
+| Schedule | Occurrences | Hits | Weekly rate |
+|---|---|---|---|
+| `DAILY` | 7 | hit days | hits / 7 |
+| `SPECIFIC_DAYS` | number of chosen weekdays | hit days among chosen weekdays | hits / occurrences |
+| `TIMES_PER_WEEK` | `timesPerWeek` | `min(hit days, timesPerWeek)` | hits / `timesPerWeek` |
+
+For stats over arbitrary ranges, the same logic applies per day (`DAILY`, `SPECIFIC_DAYS`) or per week (`TIMES_PER_WEEK`).
+
+### 2.6 Streaks
+
+- **`DAILY` / `SPECIFIC_DAYS`:** number of consecutive *scheduled* days that were hits, counting back from today. If today is scheduled but not yet hit, counting starts from the previous scheduled day, so today doesn't break a streak until it's over.
+- **`TIMES_PER_WEEK`:** number of consecutive weeks where hits ≥ `timesPerWeek`. The current week counts only once the quota is met, and an unfinished week doesn't break the streak.
+- **Current streak** is computed on read. **Longest streak** is stored on the habit and recomputed whenever a log for that habit changes.
+
+### 2.7 Adaptive difficulty
+
+#### What progresses
+
+| Habit | Progressing field | Step |
+|---|---|---|
+| `COUNT` (any schedule) | `targetValue` | `PERCENT` (default 10%) or `ABSOLUTE` units |
+| `DURATION` (any schedule) | `targetValue` | `PERCENT` (default 10%) or `ABSOLUTE` minutes |
+| `TOGGLE` + `TIMES_PER_WEEK` | `timesPerWeek` | always +1 / −1 |
+| `TOGGLE` + `DAILY` / `SPECIFIC_DAYS` | — | **not adaptive** (the UI hides the setting and explains why) |
+
+#### Step size
+
+- `PERCENT`: `increment = max(minIncrement, round(current × stepValue / 100))`
+- `ABSOLUTE`: `increment = stepValue` (in units, or in seconds for duration)
+- `minIncrement`: 1 unit for `COUNT`, 60 s for `DURATION`, 1 for frequency.
+- `DURATION` targets are always rounded to whole minutes.
+
+#### Bounds
+
+- `minTarget`: defaults to 50% of the initial target, rounded (min 1 unit / 60 s / 1×). User-editable.
+- `maxTarget`: optional, user-editable. For frequency, the hard max is 7.
+- A level-up at `maxTarget` or a deload at `minTarget` becomes a `HOLD`, with the reason `"at max"` or `"at min"`.
+
+#### Eligible week
+
+A week counts as **eligible** for a habit only if:
+
+1. the habit existed and was not archived for the whole week (`startDate <= weekStart`), and
+2. the progressing field had the **same value for the whole week**. Undone changes are treated as if they never happened. Manual edits do count as changes.
+
+#### Decision rules (evaluated for the week that just ended, W)
+
+```
+if W is not eligible                  → HOLD   (reason: "not enough data")
+else if rate(W) < 0.50                → DELOAD
+else if rate(W) >= 0.85
+     and W-1 is eligible
+     and rate(W-1) >= 0.85
+     and target was the same in W-1 and W   → LEVEL_UP
+else                                  → HOLD
+```
+
+- **Level-up** sets the target to `current + increment`, clamped to `maxTarget`.
+- **Deload:** if the current value came from a non-undone `LEVEL_UP`, it returns to that change's `fromValue`. Otherwise it sets `current − increment`. Either way, the result is clamped to `minTarget`.
+- **Cooldown:** if a change of kind K was undone during the previous review cycle, the habit cannot receive another change of kind K in this review. It gets a `HOLD` instead, with the reason `"cooldown after undo"`.
+- **Inactive week:** if the user logged **nothing at all** across all habits during W, every habit gets a `HOLD` and the review is flagged `inactive`. This avoids punishing vacations. The app shows a "welcome back" message instead of deloading everything.
+- Only the most recent completed week is evaluated. If the user was away for several weeks, the missed weeks are not evaluated one by one.
+
+All thresholds live in one config object in the shared package (`PROGRESSION_CONFIG`) so they can be tuned later.
+
+### 2.8 Weekly review and undo
+
+- A review is created for the week that just ended (Monday–Sunday in the **user's timezone**) the first time the user opens or logs anything in the new week. There is no background job. See [6.6](#66-weekly-review-creation) for the mechanics.
+- All decisions are **applied automatically**. Each applied change becomes a `TargetChange` row with `effectiveFrom = Monday of the new week`.
+- **Undo** is available while **both** of these are true:
+  - the week the change took effect hasn't ended yet (`now < effectiveFrom + 7 days`, local midnight), and
+  - the habit has **no log dated on or after `effectiveFrom`** (no log at the new level yet).
+- Undoing restores `fromValue` on the habit and sets `undoneAt` on the change.
+- The Today screen shows a badge on every habit whose target changed this week (e.g. "↑ 12 min", "↓ 3× / week"). Tapping it opens a popover with the reason and an Undo button if undo is still allowed.
+- A banner on the Today screen links to the review until the user opens it (`seenAt`).
+
+### 2.9 Goals and milestones
+
+- Goal progress is `ticked milestones / total milestones`.
+- **Ticking the last open milestone** sets the goal to `COMPLETED` with `completedAt`. The API response flags this so the client can show the celebration screen.
+- **Un-ticking** a milestone of a completed goal sets the goal back to `ACTIVE`.
+- A goal **without milestones** shows no percentage and has a manual "Mark goal complete" action.
+- Milestones can be added, renamed, reordered (drag and drop) and deleted at any time.
+- **Archiving a goal** keeps its linked habits active (they stay under the core). **Deleting a goal** unlinks its habits (`goalId → null`) and deletes its milestones.
+
+### 2.10 Cores, archiving and deletion
+
+| Action | Behaviour |
+|---|---|
+| Archive core | Confirmation dialog, then archives the core and all its active goals and habits |
+| Unarchive core | Restores the core only. Goals and habits are restored individually |
+| Delete core | Only allowed if it has no goals and no habits (including archived ones) |
+| Archive habit | Hidden from Today, excluded from reviews, kept in stats history |
+| Delete habit | Permanently deletes the habit, its logs and its target changes (confirmation required) |
+
+---
+
+## 3. Architecture and tech stack
+
+```
+┌──────────────────────────┐   HTTPS / JSON, same origin  ┌──────────────────────────┐
+│  apps/web (Vite + React) │  ───────────────────────▶    │  apps/api (NestJS)       │
+│  TanStack Query          │  ◀───────────────────────    │  REST controllers        │
+│  React Router            │  SESSION cookie (HttpOnly)   │  Services + Prisma       │
+│  Zustand (timer only)    │  X-XSRF-TOKEN header         │  serves the built SPA    │
+└────────────┬─────────────┘                              └────────────┬─────────────┘
+             │  imports                                              │  imports
+             ▼                                                       ▼
+        ┌──────────────────────── packages/shared ────────────────────────┐
+        │ zod schemas · DTO types · enums · progression & streak logic   │
+        │ schedule helpers · date/week helpers · PROGRESSION_CONFIG      │
+        └─────────────────────────────────────────────────────────────────┘
+                                                                     │
+                                                              ┌──────▼──────┐
+                                                              │ PostgreSQL  │
+                                                              └─────────────┘
+```
+
+### 3.1 Tooling
+
+| Concern | Choice | Notes |
+|---|---|---|
+| Package manager | pnpm workspaces | |
+| Task runner | Turborepo | cached `build`, `lint`, `typecheck`, `test` |
+| Language | TypeScript (strict) everywhere | |
+| Lint / format | ESLint (flat config) + Prettier | shared in `packages/config` |
+| Commit hooks | Husky + lint-staged | |
+| Node | Node 22 LTS, pinned in `.nvmrc` and `engines` | |
+
+### 3.2 Backend
+
+| Concern | Choice |
+|---|---|
+| Framework | NestJS 11 |
+| ORM / DB | Prisma + PostgreSQL 16 |
+| Validation | zod schemas from `packages/shared`, applied through a `ZodValidationPipe` (`nestjs-zod` or a ~30-line custom pipe) |
+| Auth | Server-side sessions in Postgres (custom `Session` table + global guard, see [6.4](#64-authentication)), `cookie-parser`, `argon2` for password hashing |
+| Rate limiting | `@nestjs/throttler` (login and register only) |
+| Security headers | `helmet` |
+| Static hosting | `@nestjs/serve-static` serves the built SPA from the same origin |
+| Dates | `luxon` (timezone-aware week and day math) |
+| Config | `@nestjs/config` with zod-validated env |
+| Logging | `nestjs-pino` |
+| API docs | `@nestjs/swagger` at `/docs` (dev only) |
+| Tests | Jest (Nest default) + Supertest; Testcontainers for Postgres in e2e |
+
+### 3.3 Frontend
+
+| Concern | Choice |
+|---|---|
+| Build | Vite + React 19 + TypeScript |
+| Routing | React Router (data router, `createBrowserRouter`) |
+| Server state | TanStack Query |
+| Client state | Zustand (only for the duration timer and small UI state) |
+| HTTP | `fetch` wrapper: same-origin cookies, CSRF header, global 401 handler |
+| Forms | react-hook-form + `@hookform/resolvers/zod` (same schemas as the API) |
+| UI | Tailwind CSS + shadcn/ui (Radix primitives) |
+| Icons | lucide-react |
+| Charts | Recharts; heatmap as a custom CSS grid |
+| Drag and drop | dnd-kit (reordering cores, habits, milestones) |
+| Toasts | sonner |
+| Celebration | canvas-confetti |
+| Dates | luxon (same helpers as the server, from `packages/shared`) |
+| Tests | Vitest + React Testing Library; Playwright for e2e |
+
+---
+
+## 4. Monorepo structure
+
+```
+habit-tracker/
+├── apps/
+│   ├── api/                      # NestJS
+│   │   ├── prisma/
+│   │   │   ├── schema.prisma
+│   │   │   ├── migrations/
+│   │   │   └── seed.ts
+│   │   ├── src/
+│   │   │   ├── main.ts
+│   │   │   ├── app.module.ts
+│   │   │   ├── config/           # env schema, config module
+│   │   │   ├── prisma/           # PrismaModule, PrismaService
+│   │   │   ├── common/           # guards, decorators, pipes, filters, interceptors
+│   │   │   └── modules/
+│   │   │       ├── auth/
+│   │   │       ├── users/
+│   │   │       ├── cores/
+│   │   │       ├── goals/
+│   │   │       ├── milestones/
+│   │   │       ├── habits/
+│   │   │       ├── logs/
+│   │   │       ├── today/
+│   │   │       ├── progression/  # weekly review, target changes, undo
+│   │   │       └── stats/
+│   │   ├── scripts/              # CLI: create user, set password
+│   │   └── test/                 # e2e tests
+│   └── web/                      # Vite + React
+│       ├── index.html
+│       ├── src/
+│       │   ├── main.tsx
+│       │   ├── app/              # router, providers, layouts, route guards
+│       │   ├── components/ui/    # shadcn components
+│       │   ├── components/       # shared app components
+│       │   ├── features/
+│       │   │   ├── auth/
+│       │   │   ├── onboarding/
+│       │   │   ├── today/
+│       │   │   ├── cores/
+│       │   │   ├── goals/
+│       │   │   ├── habits/
+│       │   │   ├── review/
+│       │   │   ├── stats/
+│       │   │   └── settings/
+│       │   ├── lib/              # api client, query keys, formatters
+│       │   └── stores/           # zustand stores (timer)
+│       └── e2e/                  # Playwright
+├── packages/
+│   ├── shared/                   # schemas, types, domain logic (see section 8)
+│   └── config/                   # eslint, prettier, tsconfig bases
+├── Dockerfile                    # one image: API + built SPA
+├── docker-compose.yml            # postgres (local dev)
+├── turbo.json
+├── pnpm-workspace.yaml
+├── package.json
+└── .github/workflows/ci.yml
+```
+
+Each `features/<name>/` folder in the web app contains `api.ts` (query/mutation hooks), `components/`, and `pages/`.
+
+Each `modules/<name>/` folder in the API contains `<name>.module.ts`, `<name>.controller.ts`, `<name>.service.ts`, and `*.spec.ts`.
+
+---
+
+## 5. Data model
+
+### 5.1 Prisma schema
+
+```prisma
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum HabitType        { TOGGLE COUNT DURATION }
+enum ScheduleType     { DAILY SPECIFIC_DAYS TIMES_PER_WEEK }
+enum TimeOfDay        { MORNING AFTERNOON EVENING ANYTIME }
+enum StepType         { PERCENT ABSOLUTE }
+enum GoalStatus       { ACTIVE COMPLETED ARCHIVED }
+enum TargetChangeKind { LEVEL_UP DELOAD MANUAL }
+enum TargetField      { TARGET_VALUE TIMES_PER_WEEK }
+
+model User {
+  id             String    @id @default(uuid())
+  username       String    @unique             // trimmed + lower-cased, ^[a-z0-9_.-]{3,50}$
+  passwordHash   String                        // argon2id encoded string
+  name           String?
+  timezone       String    @default("UTC")   // IANA, e.g. "Asia/Baku"
+  onboardedAt    DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  cores          Core[]
+  goals          Goal[]
+  habits         Habit[]
+  logs           HabitLog[]
+  reviews        WeeklyReview[]
+  sessions       Session[]
+}
+
+model Session {
+  id         String   @id @default(uuid())
+  tokenHash  String   @unique                  // SHA-256 of the cookie value; the raw token is never stored
+  userId     String
+  expiresAt  DateTime
+  lastSeenAt DateTime @default(now())
+  userAgent  String?
+  createdAt  DateTime @default(now())
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
+}
+
+model Core {
+  id         String    @id @default(uuid())
+  userId     String
+  name       String
+  color      String                       // token from a fixed palette, e.g. "emerald"
+  icon       String                       // lucide icon name
+  sortOrder  Int       @default(0)
+  archivedAt DateTime?
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  goals      Goal[]
+  habits     Habit[]
+
+  @@index([userId, archivedAt])
+}
+
+model Goal {
+  id          String     @id @default(uuid())
+  userId      String
+  coreId      String
+  title       String
+  description String?
+  deadline    DateTime?  @db.Date
+  status      GoalStatus @default(ACTIVE)
+  completedAt DateTime?
+  sortOrder   Int        @default(0)
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+
+  user        User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  core        Core       @relation(fields: [coreId], references: [id], onDelete: Restrict)
+  milestones  Milestone[]
+  habits      Habit[]
+
+  @@index([userId, coreId, status])
+}
+
+model Milestone {
+  id          String    @id @default(uuid())
+  goalId      String
+  title       String
+  sortOrder   Int
+  completedAt DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  goal        Goal      @relation(fields: [goalId], references: [id], onDelete: Cascade)
+
+  @@index([goalId, sortOrder])
+}
+
+model Habit {
+  id                  String       @id @default(uuid())
+  userId              String
+  coreId              String
+  goalId              String?
+  name                String
+  type                HabitType
+  unit                String?                  // COUNT only
+  targetValue         Int                      // TOGGLE = 1, COUNT = units, DURATION = seconds
+  initialTargetValue  Int
+  scheduleType        ScheduleType
+  daysOfWeek          Int[]                    // SPECIFIC_DAYS only, ISO 1..7
+  timesPerWeek        Int?                     // TIMES_PER_WEEK only
+  initialTimesPerWeek Int?
+  timeOfDay           TimeOfDay    @default(ANYTIME)
+
+  adaptiveEnabled     Boolean      @default(true)
+  stepType            StepType     @default(PERCENT)
+  stepValue           Int          @default(10) // percent, or units/seconds when ABSOLUTE
+  minTarget           Int?                     // applies to the progressing field
+  maxTarget           Int?
+
+  longestStreak       Int          @default(0)
+  startDate           DateTime     @db.Date    // user-local date
+  sortOrder           Int          @default(0)
+  archivedAt          DateTime?
+  createdAt           DateTime     @default(now())
+  updatedAt           DateTime     @updatedAt
+
+  user                User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  core                Core         @relation(fields: [coreId], references: [id], onDelete: Restrict)
+  goal                Goal?        @relation(fields: [goalId], references: [id], onDelete: SetNull)
+  logs                HabitLog[]
+  targetChanges       TargetChange[]
+
+  @@index([userId, archivedAt])
+  @@index([coreId])
+  @@index([goalId])
+}
+
+model HabitLog {
+  id             String   @id @default(uuid())
+  habitId        String
+  userId         String
+  date           DateTime @db.Date            // user-local calendar date
+  value          Int                          // TOGGLE 0/1, COUNT units, DURATION seconds
+  targetSnapshot Int
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  habit          Habit    @relation(fields: [habitId], references: [id], onDelete: Cascade)
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([habitId, date])
+  @@index([userId, date])
+}
+
+model WeeklyReview {
+  id        String         @id @default(uuid())
+  userId    String
+  weekStart DateTime       @db.Date           // Monday of the evaluated week
+  inactive  Boolean        @default(false)
+  summary   Json                              // per-habit rates and decisions, see 5.3
+  seenAt    DateTime?
+  createdAt DateTime       @default(now())
+
+  user      User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  changes   TargetChange[]
+
+  @@unique([userId, weekStart])
+}
+
+model TargetChange {
+  id             String           @id @default(uuid())
+  habitId        String
+  weeklyReviewId String?                       // null for MANUAL changes
+  kind           TargetChangeKind
+  field          TargetField
+  fromValue      Int
+  toValue        Int
+  effectiveFrom  DateTime         @db.Date
+  reason         Json?                         // { rule, rates: { current, previous } }
+  undoDeadline   DateTime?
+  undoneAt       DateTime?
+  createdAt      DateTime         @default(now())
+
+  habit          Habit            @relation(fields: [habitId], references: [id], onDelete: Cascade)
+  review         WeeklyReview?    @relation(fields: [weeklyReviewId], references: [id], onDelete: SetNull)
+
+  @@index([habitId, effectiveFrom])
+}
+```
+
+### 5.2 Database-level rules not expressible in Prisma
+
+Add these in a raw SQL migration:
+
+```sql
+ALTER TABLE "Habit" ADD CONSTRAINT habit_target_positive CHECK ("targetValue" >= 1);
+ALTER TABLE "Habit" ADD CONSTRAINT habit_tpw_range
+  CHECK ("timesPerWeek" IS NULL OR "timesPerWeek" BETWEEN 1 AND 7);
+ALTER TABLE "HabitLog" ADD CONSTRAINT log_value_nonneg CHECK ("value" >= 0);
+```
+
+Cross-field rules are enforced by the zod schemas and the service layer:
+
+- `TOGGLE` ⇒ `targetValue = 1`
+- `SPECIFIC_DAYS` ⇒ `daysOfWeek` is non-empty
+- `TIMES_PER_WEEK` ⇒ `timesPerWeek` is set
+- `goal.coreId = habit.coreId`
+
+### 5.3 `WeeklyReview.summary` shape
+
+```ts
+type WeeklyReviewSummary = {
+  weekStart: string;              // "2026-11-09"
+  overallRate: number | null;     // average of eligible habits
+  habits: Array<{
+    habitId: string;
+    name: string;
+    coreId: string;
+    rate: number | null;          // null if not eligible
+    previousRate: number | null;
+    decision: 'LEVEL_UP' | 'DELOAD' | 'HOLD';
+    reason: 'NOT_ELIGIBLE' | 'NOT_ADAPTIVE' | 'INACTIVE_WEEK' | 'COOLDOWN'
+          | 'AT_MAX' | 'AT_MIN' | 'CONSISTENT' | 'STRUGGLING' | 'STEADY';
+    targetChangeId?: string;
+  }>;
+};
+```
+
+The summary is a snapshot: it keeps habit names as they were, so renames don't rewrite history.
+
+### 5.4 Date column convention
+
+`@db.Date` columns hold a **user-local calendar date**, not an instant. The API always sends and receives them as `"YYYY-MM-DD"` strings. Prisma returns them as `Date` objects at UTC midnight, so conversion happens in exactly one place, the shared helpers `toDateString()` and `fromDateString()`. Never call `new Date()` on these values in business logic.
+
+---
+
+## 6. Backend (NestJS)
+
+### 6.1 Cross-cutting setup
+
+- **Global prefix:** `/api/v1`.
+- **Global guards:** `SessionGuard` (authentication) and `CsrfGuard` (unsafe methods), see [6.4](#64-authentication). Public routes are marked with `@Public()`.
+- **`@CurrentUser()` decorator:** returns `{ id, username, timezone }`, loaded by `SessionGuard` together with the session in one query, so the timezone is always current.
+- **Ownership:** every service method takes `userId` and scopes every query with `where: { userId }` (or via the parent's `userId`). A record owned by another user returns **404**, never 403, so ids can't be probed.
+- **Validation:** `ZodValidationPipe` with schemas imported from `@app/shared`.
+- **Errors:** a global exception filter returns `{ statusCode, code, message, details? }`. `code` is a stable string the client can switch on, for example `HABIT_NOT_FOUND`, `UNDO_NOT_ALLOWED`, `BACKFILL_OUT_OF_RANGE`, `CORE_NOT_EMPTY`, `GOAL_CORE_MISMATCH`, `USERNAME_TAKEN`, `INVALID_CREDENTIALS`, `INVALID_INVITE_CODE`, `REGISTRATION_CLOSED`, `UNAUTHENTICATED`, `CSRF_INVALID`.
+- **Transactions:** any operation touching more than one table uses `prisma.$transaction`. This includes: milestone tick plus goal status, log write plus longest-streak update, review creation plus target changes, and undo.
+- **Config:** env validated at boot by a zod schema. The app refuses to start if a value is missing.
+
+### 6.2 Modules and responsibilities
+
+| Module | Responsibility |
+|---|---|
+| `auth` | CSRF token, invite-only register, login, logout, log out everywhere, `SessionGuard`, `CsrfGuard`, expired-session cleanup |
+| `users` | profile, timezone, password change, account deletion, onboarding flag |
+| `cores` | CRUD, reorder, archive/unarchive with cascade |
+| `goals` | CRUD, archive, manual complete, progress computation |
+| `milestones` | CRUD, reorder, tick/untick with goal status sync |
+| `habits` | CRUD, reorder, archive, manual target edits (writes `MANUAL` TargetChange) |
+| `logs` | upsert, increment, delete, backfill rules, longest-streak recompute |
+| `today` | aggregated read model for the Today screen |
+| `progression` | `ProgressionService` (pure decisions via shared logic), `WeeklyReviewService` (persisting reviews, `ensureDue`), undo |
+| `stats` | overview and per-habit statistics |
+
+### 6.3 REST API
+
+All routes are under `/api/v1` and require auth unless marked public.
+
+#### Auth
+
+| Method | Path | Body / query | Notes |
+|---|---|---|---|
+| GET | `/auth/csrf` | — | public; sets the `XSRF-TOKEN` cookie, returns 204 |
+| POST | `/auth/register` | `{ username, password, inviteCode, name?, timezone }` | public; throttled; creates the user and starts a session, returns 201 + the user. `403 INVALID_INVITE_CODE`, `403 REGISTRATION_CLOSED`, `409 USERNAME_TAKEN` |
+| POST | `/auth/login` | `{ username, password }` | public; throttled; starts a session, returns 200 + the user. `401 INVALID_CREDENTIALS` for a wrong username or password alike |
+| GET | `/auth/me` | — | the current user (`id`, `username`, `name`, `timezone`, `onboardedAt`), or 401 |
+| POST | `/auth/logout` | — | deletes the current session, clears the cookie, returns 204 |
+| POST | `/auth/logout-all` | — | deletes every session of the user, including the current one, returns 204 |
+
+#### Users
+
+| Method | Path | Body | Notes |
+|---|---|---|---|
+| PATCH | `/me` | `{ name?, timezone? }` | a new timezone applies from the next request |
+| POST | `/me/password` | `{ currentPassword, newPassword }` | deletes the user's other sessions |
+| POST | `/me/onboarding/complete` | — | sets `onboardedAt` |
+| DELETE | `/me` | `{ password }` | hard delete via cascade |
+
+#### Cores
+
+| Method | Path | Body | Notes |
+|---|---|---|---|
+| GET | `/cores?includeArchived=` | — | ordered by `sortOrder`, with goal and habit counts |
+| POST | `/cores` | `{ name, color, icon }` | |
+| POST | `/cores/batch` | `{ cores: [...] }` | used by onboarding |
+| PATCH | `/cores/:id` | `{ name?, color?, icon? }` | |
+| PUT | `/cores/order` | `{ ids: string[] }` | |
+| POST | `/cores/:id/archive` | — | cascades to goals and habits |
+| POST | `/cores/:id/unarchive` | — | |
+| DELETE | `/cores/:id` | — | `409 CORE_NOT_EMPTY` if it has goals or habits |
+
+#### Goals and milestones
+
+| Method | Path | Body | Notes |
+|---|---|---|---|
+| GET | `/goals?coreId=&status=` | — | includes `progress` and `milestoneCounts` |
+| GET | `/goals/:id` | — | goal with milestones and linked habits |
+| POST | `/goals` | `{ coreId, title, description?, deadline?, milestones?: string[] }` | milestones can be created inline |
+| PATCH | `/goals/:id` | `{ title?, description?, deadline?, coreId? }` | changing core is only allowed if no habits are linked, or the linked habits move with it (confirmation) |
+| POST | `/goals/:id/complete` | — | only for goals without milestones |
+| POST | `/goals/:id/reopen` | — | |
+| POST | `/goals/:id/archive` | — | |
+| DELETE | `/goals/:id` | — | unlinks habits |
+| POST | `/goals/:goalId/milestones` | `{ title }` | appended at the end |
+| PATCH | `/milestones/:id` | `{ title? }` | |
+| PUT | `/goals/:goalId/milestones/order` | `{ ids: string[] }` | |
+| POST | `/milestones/:id/toggle` | — | returns `{ milestone, goal, goalJustCompleted: boolean }` |
+| DELETE | `/milestones/:id` | — | if it was the last open one and the others are ticked, the goal completes |
+
+#### Habits
+
+| Method | Path | Body | Notes |
+|---|---|---|---|
+| GET | `/habits?coreId=&goalId=&includeArchived=` | — | |
+| GET | `/habits/:id` | — | habit with current streak, recent target changes, and `adaptiveApplicable` |
+| POST | `/habits` | `CreateHabitDto` | sets `initial*` fields, `startDate = today (local)` unless given |
+| PATCH | `/habits/:id` | `UpdateHabitDto` | changing `targetValue`/`timesPerWeek` writes a `MANUAL` TargetChange; changing `type` is **not allowed** (create a new habit instead) |
+| PUT | `/habits/order` | `{ ids: string[] }` | |
+| POST | `/habits/:id/archive` / `/unarchive` | — | |
+| DELETE | `/habits/:id` | — | |
+
+`CreateHabitDto`:
+
+```ts
+{
+  coreId: string;
+  goalId?: string | null;
+  name: string;                       // 1–80 chars
+  type: 'TOGGLE' | 'COUNT' | 'DURATION';
+  unit?: string;                      // COUNT only
+  targetValue: number;                // COUNT units | DURATION seconds | ignored for TOGGLE
+  scheduleType: 'DAILY' | 'SPECIFIC_DAYS' | 'TIMES_PER_WEEK';
+  daysOfWeek?: number[];
+  timesPerWeek?: number;
+  timeOfDay?: 'MORNING' | 'AFTERNOON' | 'EVENING' | 'ANYTIME';
+  adaptiveEnabled?: boolean;
+  stepType?: 'PERCENT' | 'ABSOLUTE';
+  stepValue?: number;
+  minTarget?: number | null;
+  maxTarget?: number | null;
+  startDate?: string;                 // "YYYY-MM-DD", today or later
+}
+```
+
+#### Logs
+
+| Method | Path | Body | Notes |
+|---|---|---|---|
+| GET | `/habits/:id/logs?from=&to=` | — | |
+| PUT | `/habits/:id/logs/:date` | `{ value }` | upsert (toggle, manual entry) |
+| POST | `/habits/:id/logs/:date/increment` | `{ delta }` | counter buttons, timer stop; atomic `value = GREATEST(value + delta, 0)` |
+| DELETE | `/habits/:id/logs/:date` | — | |
+
+Every log write runs these steps in order:
+
+1. Validate that the date is within `[today − 6, today]` in the user's timezone and on or after `startDate`. Otherwise return `BACKFILL_OUT_OF_RANGE`.
+2. Call `WeeklyReviewService.ensureDue(userId)`, so that a new week's review always runs **before** the first log of that week. This keeps `targetSnapshot` correct.
+3. Upsert the log. `targetSnapshot` is set only on create, from the habit's target **effective on that date**, which may be an older target when backfilling across a change.
+4. Recompute `longestStreak` for the habit in the same transaction.
+5. Return `{ log, habitProgress, currentStreak, longestStreak }` so the client can reconcile its optimistic update.
+
+#### Today
+
+| Method | Path | Notes |
+|---|---|---|
+| GET | `/today?date=YYYY-MM-DD` | `date` defaults to the local today; allowed range is today − 6 … today |
+
+Response:
+
+```ts
+{
+  date: string;
+  dayProgress: number;               // avg progress of DAILY/SPECIFIC_DAYS habits scheduled today
+  pendingReview: { id: string; weekStart: string } | null;   // unseen review banner
+  welcomeBack: boolean;              // last review was inactive
+  groups: Array<{
+    timeOfDay: 'MORNING' | 'AFTERNOON' | 'EVENING' | 'ANYTIME';
+    habits: TodayHabit[];
+  }>;
+  weeklyQuota: TodayHabit[];         // TIMES_PER_WEEK habits, with weekHits / timesPerWeek
+}
+
+type TodayHabit = {
+  id: string; name: string; type: HabitType; unit: string | null;
+  core: { id: string; name: string; color: string; icon: string };
+  goal: { id: string; title: string } | null;
+  target: number;                    // effective on `date`
+  log: { value: number; targetSnapshot: number } | null;
+  progress: number;                  // 0..1
+  currentStreak: number;
+  week?: { hits: number; quota: number };            // TIMES_PER_WEEK only
+  change?: {                                         // target changed this week
+    id: string; kind: 'LEVEL_UP' | 'DELOAD';
+    field: 'TARGET_VALUE' | 'TIMES_PER_WEEK';
+    fromValue: number; toValue: number; canUndo: boolean;
+  };
+};
+```
+
+The service loads all active habits, the logs for the last ~120 days (for current streaks), and this week's target changes, in **three queries**. It then computes everything in memory with the shared functions. There are no per-habit queries.
+
+#### Reviews and target changes
+
+| Method | Path | Notes |
+|---|---|---|
+| GET | `/reviews?limit=&cursor=` | list, newest first |
+| GET | `/reviews/latest` | runs `ensureDue` first; returns the latest review with changes and their `canUndo` |
+| GET | `/reviews/:weekStart` | |
+| POST | `/reviews/:id/seen` | sets `seenAt` |
+| POST | `/target-changes/:id/undo` | `409 UNDO_NOT_ALLOWED` with `details.reason`: `EXPIRED`, `ALREADY_LOGGED`, `ALREADY_UNDONE`, or `NOT_AUTOMATIC` |
+| GET | `/habits/:id/target-history` | all changes, for the chart |
+
+#### Stats
+
+| Method | Path | Notes |
+|---|---|---|
+| GET | `/stats/overview?range=7d\|30d\|90d\|365d` | see below |
+| GET | `/stats/habits/:id?range=` | see below |
+
+Overview response: `overallRate`, a daily series `[{ date, rate }]`, per-core rates, the top 5 current streaks, a goals summary (`active`, `completed in range`, list with progress), and the count of level-ups vs deloads in the range.
+
+Per-habit response: `rate`, `currentStreak`, `longestStreak`, `totalValue` (e.g. total minutes or pages), a heatmap `[{ date, value, target, hit, scheduled }]`, and the target history series `[{ date, target }]`.
+
+For the MVP, stats are computed on request from logs. With an index on `(userId, date)`, a year of data for ~20 habits is about 7k rows, which is fast. Add caching only if profiling shows a need.
+
+### 6.4 Authentication
+
+Server-side sessions in an `HttpOnly` cookie (no JWTs), the SPA and API on one origin, a CSRF token on every request that changes data, and invite-only registration. Modelled on the setup described in [auth.md](auth.md), ported from Spring Security to NestJS.
+
+```
+Browser (SPA)                         NestJS (same origin)                    Postgres
+  │ GET  /api/v1/auth/csrf  ─────────▶ sets XSRF-TOKEN cookie
+  │ POST /api/v1/auth/login            throttled, argon2 verify
+  │   X-XSRF-TOKEN: <cookie value> ──▶ new random token ────────────────────▶ Session (tokenHash)
+  │ ◀── Set-Cookie: SESSION=…; HttpOnly; Secure; SameSite=Lax
+  │ GET  /api/v1/today (cookie sent automatically) ─▶ SessionGuard ─────────▶ Session ⋈ User → WHERE userId = ?
+```
+
+**Users and passwords**
+
+- Usernames are trimmed and lower-cased before validation, storage and login, so they're case-insensitive. Allowed: `^[a-z0-9_.-]{3,50}$`. There is no email address.
+- Passwords are 8–128 characters, hashed with argon2id. The encoded hash carries its own parameters, so `argon2.needsRehash()` on login allows upgrading them later.
+- A wrong username and a wrong password give the same `401 INVALID_CREDENTIALS` ("Invalid username or password"). When the username doesn't exist, the server still verifies against a dummy hash so response timing doesn't reveal which usernames exist.
+
+**Sessions**
+
+- On login and register the server creates a random 256-bit token, stores its SHA-256 in `Session`, and sets the cookie `SESSION=<token>; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=30 days`. `Secure` is switched off with `COOKIE_SECURE=false` in local dev.
+- A fresh token is issued on every login, so a session id planted before login is never reused (session fixation).
+- Sessions last 30 days. `SessionGuard` extends `expiresAt` (and refreshes the cookie's `Max-Age`) at most once a day, so an app in regular use stays logged in.
+- Sessions survive restarts and redeploys because they live in Postgres.
+- Expired rows are deleted lazily: on login, the user's expired sessions are removed.
+- **Log out** deletes the session row. **Log out everywhere** and **password change** delete the user's other rows. **Account deletion** cascades.
+
+**`SessionGuard`** (global; skipped for `@Public()` routes)
+
+1. Read the `SESSION` cookie (`cookie-parser`), hash it, and load the session joined with its user in one query.
+2. If the session is missing or expired, return `401 UNAUTHENTICATED`.
+3. Attach `{ id, username, timezone }` to the request for `@CurrentUser()`.
+
+**CSRF**
+
+- `GET /auth/csrf` sets an `XSRF-TOKEN` cookie that JavaScript can read (`Secure; SameSite=Lax; Path=/`, not `HttpOnly`).
+- The token is `random.HMAC(CSRF_SECRET, random + sessionTokenHash | "anon")`, so it's bound to the current session and can't be planted from elsewhere.
+- `CsrfGuard` (global) requires the `X-XSRF-TOKEN` header to equal the cookie and the signature to verify, on every POST, PUT, PATCH and DELETE, **including** login, register and logout. A failure returns `403 CSRF_INVALID` ("Invalid or missing CSRF token").
+- The token is reissued on login, register and logout (a new `Set-Cookie` in the same response), so the client reads the cookie fresh before every request instead of caching it.
+
+**Registration rules**
+
+- The invite code comes from `INVITE_CODE` and is compared in constant time (`crypto.timingSafeEqual` on SHA-256 digests). A mismatch gives `403 INVALID_INVITE_CODE`.
+- Registration closes once the user count reaches `MAX_USERS`, with `403 REGISTRATION_CLOSED`.
+- A taken username gives `409 USERNAME_TAKEN` on the `username` field.
+- Register starts a session straight away, just like login.
+
+**Brute-force protection:** `@nestjs/throttler` on `POST /auth/login` and `POST /auth/register` only: 10 requests per minute per IP, then 429. `/auth/me` and `/auth/csrf` run on every page load and are not throttled. Express has `trust proxy` set, so the client IP comes from `X-Forwarded-For` behind the host's reverse proxy.
+
+**Account recovery without email:** CLI scripts run on the server (or locally against the production database):
+
+- `pnpm --filter api user:set-password <username>` prompts for a new password and deletes that user's sessions.
+- `pnpm --filter api user:create <username>` creates a user without an invite code, which is useful for the first account.
+
+**Authorization** is unchanged: there are no roles, every query is scoped by `userId`, and another user's record returns 404.
+
+### 6.5 Progression implementation
+
+The decision logic is **pure** and lives in `packages/shared/src/progression/`, so it can be unit-tested exhaustively and reused for client previews. The API's `ProgressionService` only loads data and persists results.
+
+```ts
+// packages/shared/src/progression/decide.ts
+export function decideForHabit(input: {
+  habit: HabitForProgression;          // type, schedule, current target, step, bounds, adaptiveEnabled
+  week: WeekWindow;                    // W
+  prevWeek: WeekWindow;                // W-1
+  logsW: LogLite[];
+  logsPrev: LogLite[];
+  changes: TargetChangeLite[];         // non-undone + undone, for eligibility & cooldown
+  inactiveWeek: boolean;
+  config: ProgressionConfig;
+}): Decision;                          // { decision, reason, rate, previousRate, toValue? }
+```
+
+Steps inside `decideForHabit`:
+
+1. If adaptive is not applicable (a toggle habit not on `TIMES_PER_WEEK`) or `adaptiveEnabled = false`, return `HOLD / NOT_ADAPTIVE`. The rate is still computed for the summary.
+2. If `inactiveWeek`, return `HOLD / INACTIVE_WEEK`.
+3. If W is not eligible, return `HOLD / NOT_ELIGIBLE`.
+4. Compute `rate(W)`. If it is below `deloadBelow`:
+   1. If the habit is under cooldown for `DELOAD`, return `HOLD / COOLDOWN`.
+   2. Compute the deload value. If it can't go lower, return `HOLD / AT_MIN`. Otherwise return `DELOAD / STRUGGLING`.
+5. If `rate(W) >= levelUpAtOrAbove`, W-1 is eligible at the same target, and `rate(W-1) >= levelUpAtOrAbove`:
+   1. If the habit is under cooldown for `LEVEL_UP`, return `HOLD / COOLDOWN`.
+   2. Compute the level-up value. If it is at max, return `HOLD / AT_MAX`. Otherwise return `LEVEL_UP / CONSISTENT`.
+6. Otherwise return `HOLD / STEADY`.
+
+```ts
+export const PROGRESSION_CONFIG = {
+  levelUpAtOrAbove: 0.85,
+  consecutiveWeeksForLevelUp: 2,
+  deloadBelow: 0.5,
+  defaultStepPercent: 10,
+  minIncrement: { COUNT: 1, DURATION: 60, FREQUENCY: 1 },
+  defaultMinTargetRatio: 0.5,
+  undoWindowDays: 7,
+  backfillDays: 6,
+} as const;
+```
+
+`WeeklyReviewService.runForUser(userId, weekStart)` does the following inside one transaction:
+
+1. Insert the `WeeklyReview` row. The unique `(userId, weekStart)` makes this idempotent: on a unique violation, return the existing review.
+2. Load the active habits that existed during W, the logs for W and W-1, and the target changes.
+3. Determine `inactiveWeek` (zero logs across all habits in W).
+4. Run `decideForHabit` for each habit.
+5. For each `LEVEL_UP` or `DELOAD`, update the habit field and insert a `TargetChange` with `effectiveFrom = weekStart + 7`, `undoDeadline = effectiveFrom + 7 days` (local midnight in the user's timezone, i.e. the end of the week the change applies to), and the reason JSON. The deadline doesn't depend on when the review happened to run, so it never overlaps the next review.
+6. Write the `summary`.
+
+**Undo** (`POST /target-changes/:id/undo`), also in one transaction:
+
+1. Check that `kind ∈ {LEVEL_UP, DELOAD}` and that `undoneAt` is null.
+2. Check that `now < undoDeadline`.
+3. Check that no `HabitLog` exists for the habit with `date >= effectiveFrom`.
+4. Check that the habit's current value equals `toValue`, so there was no manual edit since.
+5. Set the habit field back to `fromValue` and set `undoneAt = now`.
+
+The cooldown is derived at decision time from `changes` (an undone change whose review was the previous one). No extra column is needed.
+
+### 6.6 Weekly review creation
+
+Reviews are created **lazily**. There is no background job.
+
+- `ensureDue(userId)` checks whether a review exists for the last completed week in the user's timezone, and runs `runForUser` if not.
+- It is called from `GET /today`, `GET /reviews/latest`, and before any log write. The user can't see a review or log at a new target without passing through one of these, so the result is the same as running it at Monday 00:00. This also covers downtime, timezone changes and deployments.
+- The check is a single indexed lookup on `(userId, weekStart)`.
+- Concurrent calls (two tabs, or a page load plus a log write) are made safe by the unique `(userId, weekStart)` constraint. The losing call catches the unique-violation error **outside** its aborted transaction and reads the review that won.
+
+A review is **not** created for a week in which the user had no active habits at any point.
+
+A scheduled job is only needed once something has to happen without the user opening the app, such as notifications. See [section 15](#15-out-of-scope-and-future-work).
+
+---
+
+## 7. Frontend (Vite + React)
+
+### 7.1 Routes
+
+| Path | Page | Guard |
+|---|---|---|
+| `/login` | Log in | guest only |
+| `/register` | Register with username, password and invite code (detects timezone via `Intl.DateTimeFormat().resolvedOptions().timeZone`) | guest only |
+| `/onboarding` | Multi-step onboarding | auth, not onboarded |
+| `/` → `/today` | Today | auth + onboarded |
+| `/today?date=` | Today for a past date (backfill) | auth + onboarded |
+| `/cores` | Cores and goals tree | auth + onboarded |
+| `/goals/:goalId` | Goal detail | auth + onboarded |
+| `/habits/new?coreId=&goalId=` | Create habit | auth + onboarded |
+| `/habits/:habitId` | Habit detail and stats | auth + onboarded |
+| `/habits/:habitId/edit` | Edit habit | auth + onboarded |
+| `/review` | Latest weekly review | auth + onboarded |
+| `/review/:weekStart` | Past review | auth + onboarded |
+| `/stats` | Stats overview | auth + onboarded |
+| `/settings` | Profile, timezone, password, archived items, delete account | auth + onboarded |
+
+**Layout:**
+
+- **Desktop:** a left sidebar with Today, Cores & Goals, Stats, Review and Settings, plus a main content area.
+- **Narrow screens:** a bottom tab bar. It's a web app, but people will open it on phones.
+- **`RequireAuth`:** while auth is `loading` it renders nothing, so the login screen doesn't flash. When `anonymous` it redirects to `/login` with `state.from`, and after logging in the user returns to the page they asked for.
+- **`RequireOnboarded`:** redirects to `/onboarding` while `onboardedAt` is null.
+
+### 7.2 API client and data fetching
+
+- `lib/api-client.ts` wraps `fetch`:
+  - It uses `credentials: "same-origin"` and relative `/api/v1/...` URLs. No token is ever stored in JavaScript; the `SESSION` cookie is `HttpOnly`.
+  - On POST, PUT, PATCH and DELETE it reads the `XSRF-TOKEN` cookie **fresh on every request** and sends it as `X-XSRF-TOKEN`. If the cookie is missing, it first calls `GET /auth/csrf`.
+  - Any `401` calls a global "unauthenticated" handler.
+  - It parses the error body into a typed `ApiError { code, message, details }`.
+- **Auth state** (`features/auth/AuthProvider.tsx` + `useAuth()`):
+  - The current user is the query `['me']` with `staleTime: Infinity`. Its fetcher ensures the CSRF cookie exists, then calls `GET /auth/me`. A 401 resolves to `null` (logged out), not an error.
+  - The status is one of `loading | authenticated | anonymous | error`. `error` means the server couldn't be reached, which is different from being logged out, and shows a "Try again" screen.
+  - `login` and `register` put the returned user straight into the `['me']` cache, so no extra `/auth/me` call is needed.
+  - `logout` calls the endpoint, then clears `['me']` **and every other cached query**, so the next user never sees the previous user's data.
+  - A 401 on any request while authenticated means the session expired: clear the cache, set `['me']` to `null`, and show a "Your session ended. Log in again." toast.
+- **Query keys** are defined centrally in `lib/query-keys.ts`, e.g. `['me']`, `['today', date]`, `['habits', filters]`, `['habit', id]`, `['goals', filters]`, `['goal', id]`, `['cores']`, `['reviews', 'latest']`, `['stats', 'overview', range]`, `['stats', 'habit', id, range]`.
+- **Invalidation map** (after a mutation succeeds):
+
+| Mutation | Invalidate |
+|---|---|
+| log write | `today` (that date), `habit/:id`, `stats` |
+| habit create/edit/archive/delete | `habits`, `today`, `cores`, `goal/:id` if linked |
+| milestone toggle | `goal/:id`, `goals`, `cores`, `stats` |
+| goal CRUD | `goals`, `cores` |
+| core CRUD/order | `cores`, `today` |
+| undo | `today`, `reviews`, `habit/:id` |
+
+### 7.3 Optimistic logging
+
+Logging must feel instant. For toggle, increment and set:
+
+1. In `onMutate`, cancel `['today', date]` queries, snapshot the cache, and patch the habit's `log.value`, `progress` and `dayProgress` locally using the shared `computeProgress()`.
+2. In `onError`, restore the snapshot and show a toast: "Couldn't save that. Try again."
+3. In `onSuccess`, merge the server's `{ habitProgress, currentStreak, longestStreak }` into the cache.
+4. Counter buttons (`+` / `−`) debounce sends by 400 ms and send the summed `delta` through the increment endpoint, so rapid taps don't flood the API.
+
+### 7.4 Duration timer
+
+- A Zustand store holds `{ habitId, date, startedAt } | null`, persisted to `localStorage` so a running timer survives a refresh or a closed tab.
+- **Only one timer runs at a time.** Starting another prompts the user to stop the current one first.
+- **On stop:** `delta = floor((now − startedAt) / 1000)` seconds is sent via the increment endpoint, and the store is cleared.
+- A running timer shows live elapsed time on the habit card and as a small indicator in the sidebar.
+- **Midnight edge case:** if the timer was started on a previous date, the time is credited to the **start date** (if still within the backfill window). A toast explains this.
+- **Sanity limit:** if more than 6 hours have elapsed, the app asks "Still going? Log X h Y min?" with the option to edit the amount before saving.
+
+### 7.5 Pages in detail
+
+#### Onboarding (`/onboarding`)
+
+Four steps with a progress indicator. State is held locally and submitted at the end. Each step is skippable except step 1.
+
+1. **Your cores:** preset chips (Health, Career, Mind, Relationships, Finance, Learning) plus "Add your own". At least one is required. Each core can have its color and icon edited.
+2. **A goal (optional):** pick a core, write a goal title, optionally set a deadline, and add milestones as a quick list. A "Skip for now" link is available.
+3. **First habits:** suggested templates per selected core (e.g. Health: "Walk 20 min", "Drink 8 glasses"; Mind: "Meditate 5 min"). Users can also create a habit from scratch with a compact version of the habit form. The UI gently recommends 2–3 habits and soft-warns above 5 ("Starting small makes it stick. You can add more later.").
+4. **How it works:** one screen explaining levels in plain words: "Hit a habit consistently for two weeks and its target goes up a little. Have a rough week and it eases off. You can always undo."
+
+**Submit:** `POST /cores/batch`, then the goal and milestones, then the habits, then `POST /me/onboarding/complete`, then navigate to `/today`. If a step fails, the user stays on it and the data already created is reused on retry. Track created ids in state so nothing is duplicated.
+
+#### Today (`/today`)
+
+- **Header:**
+  - The date, with ‹ › arrows to navigate back up to 6 days. Past dates show a "Backfilling" pill.
+  - A circular **day progress** ring showing `dayProgress`.
+  - A one-line message based on progress (see section 14).
+- **Review banner** (when `pendingReview`): "Your week is in. 2 targets went up, 1 eased off. See review →".
+- **Welcome back banner** (when `welcomeBack`).
+- **Time-of-day groups** (Morning, Afternoon, Evening, Anytime): empty groups are hidden, and habits are ordered by `sortOrder`.
+- **Habit card**, depending on type:
+  - **Toggle:** a large circular check button. Tapping toggles it.
+  - **Count:** `− value / target unit +`, where tapping the value opens a number input, plus a progress bar.
+  - **Duration:** `value / target` in minutes, a ▶ start / ■ stop button, a "+ add time" button (opens a minutes input), and a progress bar.
+  - **Always shown:** a core color stripe, the goal name (small, if linked), the 🔥 streak count, and the target-change badge when `change` is present ("↑ from 10 to 12 min"). Clicking the badge opens a popover with the reason sentence, plus an Undo button if `canUndo`, or else a disabled state explaining why.
+  - **Kebab menu:** Edit, View stats, Archive.
+- **"This week" section** for `TIMES_PER_WEEK` habits: shows "2 / 3 this week" dots. Habits whose quota is met collapse into a "Done for the week ✓" row but can still be logged.
+- **Empty state:** "Nothing scheduled today. Enjoy it, or add a habit."
+- **Floating "+ Habit" button.**
+
+#### Cores & Goals (`/cores`)
+
+- Core cards, reorderable with dnd-kit. Each card shows:
+  - an icon, name and color
+  - active goals with progress bars (e.g. "2 / 4 milestones")
+  - habits not linked to a goal, as compact rows
+  - actions: add goal, add habit, edit core, archive
+- A "Show archived" toggle at the bottom.
+- An "Add core" card.
+
+#### Goal detail (`/goals/:goalId`)
+
+- Title, description, deadline (shows "12 days left" or "Overdue" in a muted warning color), status, and a progress bar.
+- **Milestone list:** checkbox, inline-editable title, drag handle, and delete. Has an "Add milestone" input at the bottom.
+- **Ticking the last milestone:** opens a full-screen celebration modal (confetti plus a message from section 14). It offers "Archive goal" or "Set a new goal in this core".
+- **Linked habits:** list with today's status and streaks, plus a "Link a habit" action.
+- **Goals without milestones:** a "Mark goal complete" button.
+- **Menu:** edit, archive, delete (with a confirmation that explains habits will be unlinked).
+
+#### Habit form (`/habits/new`, `/habits/:id/edit`)
+
+Sections, all in one page:
+
+1. **Basics:** name, core (select), goal (select filtered by core, optional).
+2. **Type:** segmented control for Toggle / Count / Duration. It's disabled when editing, with a hint: "To change the type, create a new habit."
+3. **Target:**
+   - Count: number plus unit.
+   - Duration: minutes, with hours shown when ≥ 60.
+   - Toggle: hidden.
+4. **Schedule:** Daily / Specific days (weekday chips) / X times per week (stepper 1–7).
+5. **Time of day:** Morning / Afternoon / Evening / Anytime.
+6. **Levels (adaptive difficulty):**
+   - A switch.
+   - Step: "+10%" (default) or a custom absolute value.
+   - Min and max target (advanced, collapsed by default).
+   - A preview line computed with shared logic: "If you're consistent: 10 → 11 → 12 → 13 min over the next 6 weeks."
+   - For toggle habits on daily or specific days, the section shows: "Levels work on how often you do a yes/no habit. Switch the schedule to 'X times per week' to use them."
+7. **Start date** (optional, today or later).
+
+When editing the target of an existing habit, a note says: "This counts as a manual change. Levels will wait for two full weeks at the new target before adjusting."
+
+Validation uses the shared zod schema, so the same errors appear client-side and server-side.
+
+#### Habit detail (`/habits/:habitId`)
+
+- Header: name, core, goal, current target, schedule, current and longest streak.
+- Range selector: 30d / 90d / 365d.
+- **Heatmap:** calendar grid with columns per week. Cell intensity shows progress, unscheduled days are hollow, and bonus logs get a dot. Hovering shows the date and value.
+- **Target over time:** a Recharts step-line chart. ↑ / ↓ markers show level-ups and deloads, and undone changes appear as faded markers.
+- **Totals:** completion rate, total minutes/units, number of level-ups.
+- **Log history:** a list of the last 14 days with inline editing within the backfill window.
+
+#### Weekly review (`/review`, `/review/:weekStart`)
+
+- Title "Week of Nov 9 – 15" and the overall rate.
+- **Levelled up:** each change with "Morning run: 3× → 4× per week. 6 of 6 last week, 6 of 6 the week before." and an **Undo** button while allowed.
+- **Eased off:** the same format, with a supportive sentence.
+- **Holding steady:** a collapsed list with a short reason per habit (e.g. "Needs one more strong week", "Not enough data yet", "At your max").
+- An inactive-week variant: "You were away last week. Nothing changed. Pick up where you left off."
+- A list of previous reviews.
+- Opening the page calls `POST /reviews/:id/seen`.
+
+#### Stats (`/stats`)
+
+- Range tabs: 7d / 30d / 90d / 365d.
+- **KPI row:** overall completion rate, best current streak, goals completed in range, and level-ups vs deloads.
+- **Completion over time:** a line chart of the daily rate.
+- **By core:** horizontal bars per core.
+- **Streak leaderboard:** your top 5 habits.
+- **Goals:** active goals with progress bars, plus completed goals in range.
+
+#### Settings (`/settings`)
+
+Sections:
+
+- **Profile:** name, username (read-only).
+- **Timezone:** select, prefilled from the browser. Shows a warning if the browser timezone differs from the saved one ("Your device is on Asia/Baku but your account uses UTC. Update?").
+- **Password:** change password.
+- **Archived:** archived cores, goals and habits, each with an Unarchive action.
+- **Danger zone:** log out of all devices (`POST /auth/logout-all`), delete account (requires the password).
+
+### 7.6 Shared UI components
+
+`HabitCard` (with `ToggleControl`, `CounterControl`, `DurationControl`), `ProgressRing`, `ProgressBar`, `StreakBadge`, `TargetChangeBadge` (+ popover), `CoreChip`, `CorePicker`, `IconPicker`, `ColorPicker`, `WeekdayPicker`, `DurationInput`, `SortableList`, `ConfirmDialog`, `EmptyState`, `Heatmap`, `TargetHistoryChart`, `CelebrationModal`, `PageHeader`, `DateNavigator`.
+
+### 7.7 Accessibility and responsiveness
+
+- All controls are reachable by keyboard. Toggle buttons use `aria-pressed`, and counters have labelled buttons ("Increase pages").
+- Progress is never conveyed by color alone: there's always a number or icon too.
+- Heatmap cells have `aria-label`s, and the chart has a table fallback.
+- Light and dark themes via Tailwind's `dark:` and CSS variables (shadcn default). The theme follows the system and can be overridden in settings.
+- Layouts are tested at 360 px, 768 px and 1280 px.
+
+---
+
+## 8. Shared package
+
+`packages/shared` is the single source of truth for types and rules. It is built with `tsup` to **both ESM and CJS**, because NestJS compiles to CommonJS by default while Vite consumes ESM. Expose it via `exports` in `package.json`.
+
+```
+packages/shared/src/
+├── index.ts
+├── enums.ts                  # HabitType, ScheduleType, TimeOfDay, ... (string unions + arrays)
+├── constants.ts              # PROGRESSION_CONFIG, CORE_PRESETS, COLOR_PALETTE, HABIT_TEMPLATES
+├── schemas/                  # zod: auth, user, core, goal, milestone, habit, log, query params
+├── types/                    # API response types (TodayResponse, StatsOverview, ...)
+├── dates/
+│   ├── local-date.ts         # LocalDate = "YYYY-MM-DD" branded string; parse/format/add
+│   ├── today.ts              # todayIn(tz), nowIn(tz)
+│   └── week.ts               # weekStartOf(date), weekRange, isoWeekday
+├── schedule/
+│   └── is-scheduled.ts       # isScheduledOn(habit, date), occurrencesInWeek(habit)
+├── progress/
+│   ├── progress.ts           # computeProgress(value, target), isHit(log)
+│   ├── weekly-rate.ts        # weeklyRate(habit, logs, week)
+│   └── streaks.ts            # currentStreak(...), longestStreak(...)
+└── progression/
+    ├── step.ts               # nextLevelUp(), nextDeload(), clamp
+    ├── eligibility.ts        # isEligibleWeek(), targetOn(date, changes)
+    ├── decide.ts             # decideForHabit()
+    ├── preview.ts            # projectLevels(habit, weeks) → used by the habit form
+    └── reasons.ts            # reason code → human sentence (used by web)
+```
+
+**Rule:** no Prisma, Nest, or React imports in this package. Only `zod` and `luxon`.
+
+---
+
+## 9. Dates, timezones and weeks
+
+Getting this wrong causes the subtlest bugs, so the rules are strict:
+
+1. **Weeks are ISO weeks:** Monday to Sunday. There is no user setting for this in the MVP.
+2. **"Today" is always computed from `user.timezone` on the server.** The client sends dates explicitly (`?date=`), and the server validates them against its own computation of today.
+3. **Local calendar dates** (`HabitLog.date`, `startDate`, `weekStart`, `effectiveFrom`, `deadline`) are `@db.Date` columns and `"YYYY-MM-DD"` strings in the API. **Instants** (`createdAt`, `completedAt`, `undoDeadline`, `undoneAt`, `archivedAt`) are `timestamptz` and ISO strings.
+4. **All date math uses luxon with an explicit zone**, through the shared helpers. A lint rule (`no-restricted-syntax`) forbids `new Date()` and `Date.now()` in `packages/shared/src/{progress,progression,schedule}`. Callers pass `now` in, which also makes the functions testable.
+5. **Timezone change:**
+   - The new timezone applies from the next request.
+   - Existing logs keep their dates.
+   - If the change makes "today" jump backward or forward a day, the backfill window absorbs it.
+   - The next review is created by `ensureDue` based on the new timezone. The unique constraint prevents a second review for the same week.
+6. **DST:** luxon handles it. Tests cover a week containing a DST switch (e.g. `Europe/Berlin` in late October).
+
+---
+
+## 10. Security
+
+- **Authorization:** every query is scoped by `userId`, and there is an e2e test per resource that tries to access another user's records and expects a 404.
+- **Session security:** the `SESSION` cookie is `HttpOnly; Secure; SameSite=Lax`, so there is nothing for an XSS attack to read. Only the token's SHA-256 is stored. Sessions are revocable by deleting the row. See [6.4](#64-authentication).
+- **CSRF:** a session-bound, signed `XSRF-TOKEN` is required in the `X-XSRF-TOKEN` header on every unsafe method, including login and logout.
+- **CORS:** not enabled. The SPA and the API share one origin (`https://notch.emindabakhov.com`), so no other site can read API responses. Requests another site manages to send are stopped by `SameSite=Lax` and the CSRF check.
+- **Headers:** `helmet` defaults, including a strict CSP for the SPA (served by the same NestJS app).
+- **Throttling:** login and register only (10 per minute per IP). No global limit; this is a personal tool.
+- **Registration:** invite code + `MAX_USERS` cap. Nobody can sign up without the code.
+- **Input limits:** string lengths are capped in zod (names 80, descriptions 1,000). Arrays are capped (milestones 50 per goal, order arrays 200). The JSON body limit is 100 kB.
+- **Account deletion:** cascades and is irreversible. It requires the password.
+- **Secrets:** come from env only. `.env.example` is committed and `.env` is gitignored.
+
+---
+
+## 11. Testing strategy
+
+| Layer | Tool | What |
+|---|---|---|
+| Shared domain logic | Vitest | **Highest priority.** Table-driven tests for schedules, weekly rate, streaks, eligibility, every decision branch, step math, rounding, bounds, cooldown, inactive week, DST weeks, and backfill across a target change |
+| API services | Jest | Services with a real test database (Testcontainers) rather than mocked Prisma |
+| API e2e | Jest + Supertest | Auth flow (invite code, max users, same 401 for unknown user and wrong password, session expiry, logout and logout-all, CSRF rejected without or with a stale token), ownership isolation, log write → streak update, milestone tick → goal complete, review creation idempotency, undo rules, `ensureDue` before log writes |
+| Web components | Vitest + RTL | `HabitCard` variants, optimistic update rollback, `TargetChangeBadge`, habit form validation and type/schedule switching |
+| Web e2e | Playwright | Golden paths (below) against a seeded API |
+
+**Must-have progression test cases** (in `decide.spec.ts`), all with a fixed injected `now`:
+
+1. New habit, first partial week → HOLD / NOT_ELIGIBLE.
+2. Two full weeks at ≥ 85% → LEVEL_UP, with the value computed from the step and correct minute rounding.
+3. One week ≥ 85%, the previous week 80% → HOLD / STEADY.
+4. Week < 50% after a level-up → DELOAD back to that level-up's `fromValue`.
+5. Week < 50% with no prior level-up → DELOAD by one step, clamped to min.
+6. At min and struggling → HOLD / AT_MIN. At max and consistent → HOLD / AT_MAX.
+7. Level-up undone last cycle, still consistent → HOLD / COOLDOWN.
+8. Manual target edit mid-week → that week is NOT_ELIGIBLE.
+9. Inactive week (no logs at all) → HOLD / INACTIVE_WEEK for every habit.
+10. Toggle + daily → HOLD / NOT_ADAPTIVE. Toggle + 3×/week → frequency changes to 4×, capped at 7.
+11. `SPECIFIC_DAYS` habit logged on an unscheduled day → the log doesn't affect the rate.
+12. Overachievement (value > target) counts as one hit, not more.
+
+**Playwright golden paths:**
+
+1. Register → onboarding (2 cores, 1 goal with 3 milestones, 3 habits) → lands on Today.
+2. Log a toggle, a count via the `+` button, and a duration via start/stop; reload; the values persist and the day progress is correct.
+3. Backfill yesterday; the streak updates.
+4. Tick all milestones → celebration shows → goal is completed.
+5. With seeded logs and a fake clock: the review appears, the badge shows on Today, undo works, and undo disappears after logging at the new level.
+
+Seed script (`prisma/seed.ts`): creates a demo user with 8 weeks of realistic logs, including one habit that levelled up twice and one that deloaded. It's used for local development and Playwright.
+
+---
+
+## 12. DevOps and environments
+
+### 12.1 Local development
+
+```bash
+pnpm install
+docker compose up -d              # postgres:16 on 5432
+pnpm --filter api prisma migrate dev
+pnpm --filter api prisma db seed
+pnpm dev                          # turbo runs api (3000) and web (5173) in parallel
+```
+
+The Vite dev server proxies `/api` to `http://localhost:3000`, so the session and CSRF cookies work on the same origin in development, exactly as in production.
+
+### 12.2 Environment variables
+
+**API (`apps/api/.env`):**
+
+```
+NODE_ENV=development
+PORT=3000
+DATABASE_URL=postgresql://postgres:postgres@localhost:5432/habits
+SESSION_TTL_DAYS=30
+COOKIE_SECURE=false              # true in production
+CSRF_SECRET=change-me            # 32+ random bytes
+INVITE_CODE=change-me
+MAX_USERS=1                      # raise to invite someone
+TRUST_PROXY=false                # true behind the host's reverse proxy
+WEB_DIST_DIR=                    # production only: path to the built SPA
+```
+
+**Web (`apps/web/.env`):**
+
+```
+VITE_API_URL=/api/v1
+```
+
+### 12.3 CI (GitHub Actions)
+
+On every PR:
+
+1. pnpm install, with cache.
+2. `turbo run lint typecheck`.
+3. `turbo run test`. Unit and API tests use a Postgres service container.
+4. `turbo run build`.
+5. Playwright, on `main` and on PRs labelled `e2e`.
+6. Check that `prisma migrate diff` has no drift.
+
+### 12.4 Deployment
+
+- **Domain:** `https://notch.emindabakhov.com`, on the existing hosting.
+- **One app, one origin:** a single Docker image (multi-stage build, `node:22-slim`) contains the API and the built SPA. NestJS serves the SPA with `@nestjs/serve-static` (falling back to `index.html` for client routes) and the API under `/api/v1`. There's no separate web host and no CORS.
+- **TLS:** terminated by the host's reverse proxy, which forwards `X-Forwarded-Proto` and `X-Forwarded-For`. Set `TRUST_PROXY=true` so Express sees HTTPS (required for the `Secure` cookies) and the real client IP (required for throttling). The cookies are never sent over plain HTTP.
+- **Release:** the container runs `prisma migrate deploy` on start. `GET /api/v1/health` checks the DB connection.
+- **First user:** after the first deploy, run `user:create` (or register with the invite code).
+- **Database:** PostgreSQL 16 on the same host or a managed instance, with daily backups (`pg_dump` on a schedule is enough).
+- **Monitoring:** pino logs in the host's log viewer and the health endpoint. No error-tracking service.
+
+---
+
+## 13. Delivery phases
+
+Each phase ends in a working, demo-able state. Shared-package logic for a phase is written **before** the API and UI that use it.
+
+> The backend is built first, in the sprints described in [backend-sprints.md](backend-sprints.md). That document replaces the API and shared-package items of the phases below; the web items still apply once the backend is done.
+
+### Phase 0: Foundation
+
+- [ ] Monorepo: pnpm workspaces, Turborepo, `packages/config` (tsconfig, eslint, prettier)
+- [ ] `packages/shared` skeleton with tsup dual build; imported successfully by both apps
+- [ ] NestJS app: config module with zod env validation, Prisma module, pino, helmet, cookie-parser, global prefix, exception filter, health endpoint, Swagger, serve-static for the SPA in production
+- [ ] Vite app: Tailwind, shadcn/ui init, router, TanStack Query provider, layout shell (sidebar + bottom nav), theme, `/api` dev proxy
+- [ ] docker-compose (Postgres); first migration
+- [ ] CI pipeline; Husky + lint-staged
+
+**Done when:** `pnpm dev` runs both apps, the web app shows the shell, `/health` returns ok, and CI is green.
+
+### Phase 1: Authentication and users
+
+- [ ] Prisma: `User` (username), `Session`
+- [ ] Auth module: CSRF endpoint, invite-only register with `MAX_USERS`, login, `/auth/me`, logout, logout-all
+- [ ] `SessionGuard` and `CsrfGuard` (global), `@Public()`, `@CurrentUser()`, throttling on login/register, `trust proxy`
+- [ ] Users module: update profile and timezone, change password (drops other sessions), delete account
+- [ ] CLI scripts: `user:create`, `user:set-password`
+- [ ] Web: login and register pages (timezone detection); api-client with CSRF header and 401 handler; `AuthProvider` / `useAuth` with the four statuses; `RequireAuth` with return-to
+- [ ] Tests: auth e2e (invite code, max users, credential errors, CSRF, expiry, logout-all)
+
+**Done when:** a user can register with the invite code, stay logged in across reloads and restarts, log out (also from all devices), and have their password reset from the CLI.
+
+### Phase 2: Cores, goals and milestones
+
+- [ ] Prisma: `Core`, `Goal`, `Milestone`
+- [ ] Shared: schemas, presets, palette, goal progress helper
+- [ ] API: cores CRUD, order, archive cascade, delete guard; goals CRUD, complete/reopen, archive; milestones CRUD, order, toggle with goal completion sync
+- [ ] Web: Cores & Goals page (sortable), core create/edit dialog with icon and color pickers, goal detail page, milestone list with drag and drop, celebration modal
+- [ ] Tests: ownership e2e; tick-last-milestone completes the goal; untick reopens it
+
+**Done when:** a user can build their full core → goal → milestone structure and complete a goal with a celebration.
+
+### Phase 3: Habits
+
+- [ ] Prisma: `Habit`, `TargetChange` (manual changes only for now)
+- [ ] Shared: habit schemas with cross-field refinements, `isScheduledOn`, `occurrencesInWeek`, step math, `projectLevels` preview, `adaptiveApplicable()`
+- [ ] API: habits CRUD, order, archive; manual target edits write a `MANUAL` TargetChange; goal/core consistency check
+- [ ] Web: habit form with all sections, level preview and toggle-schedule hint; habits shown on core cards and goal detail
+- [ ] Tests: schema refinements, schedule helpers, step math, manual change recording
+
+**Done when:** a user can create every combination of type × schedule, with level settings, and see habits in the structure.
+
+### Phase 4: Logging and the Today screen
+
+- [ ] Prisma: `HabitLog`
+- [ ] Shared: `computeProgress`, `isHit`, `weeklyRate`, `currentStreak`, `longestStreak`, `targetOn(date)`
+- [ ] API: logs upsert/increment/delete with backfill validation, target snapshot from the effective target, longest-streak recompute; `/today` aggregated endpoint (three queries)
+- [ ] Web: Today page with date navigator, groups by time of day, `HabitCard` for each type, optimistic updates with rollback, debounced counters, persisted duration timer with edge cases, weekly-quota section, day progress ring, empty states
+- [ ] Tests: streak rules for all schedules, backfill limits, optimistic rollback, timer midnight and long-run prompts
+
+**Done when:** the user can log every habit type for today and the past 6 days, and see progress and streaks update instantly and correctly.
+
+### Phase 5: Adaptive difficulty and weekly review
+
+- [ ] Prisma: `WeeklyReview`; link `TargetChange` to reviews
+- [ ] Shared: `isEligibleWeek`, `decideForHabit`, cooldown derivation, inactive-week detection, `PROGRESSION_CONFIG`, reason sentences
+- [ ] API: `WeeklyReviewService.runForUser` (transactional, idempotent), `ensureDue` hooked into `/today`, `/reviews/latest` and log writes; undo endpoint with all four checks; review list/detail/seen; target-history endpoint
+- [ ] `/today` returns `change`, `pendingReview` and `welcomeBack`
+- [ ] Web: target-change badge and popover with undo; review banner; weekly review page (levelled up / eased off / holding steady / inactive variant); review history
+- [ ] Tests: the full decision table (section 11); idempotency under concurrent `ensureDue` calls; undo rules; review timing across timezones and DST
+- [ ] Dev-only endpoint/CLI: `pnpm --filter api review:run --user <id> --week <date>` to trigger reviews manually during QA
+
+**Done when:** seeded data produces correct level-ups and deloads on the first visit after Monday 00:00 in the user's timezone, the user sees them on Today and in the review, and undo behaves exactly as specified.
+
+### Phase 6: Stats
+
+- [ ] Shared: range helpers, heatmap builder, target-series builder
+- [ ] API: `/stats/overview` and `/stats/habits/:id`
+- [ ] Web: Stats page (KPIs, completion line, by-core bars, streak leaderboard, goals); habit detail page (heatmap, target-over-time step chart with markers, totals, editable recent log list)
+- [ ] Tests: stats calculations against seeded fixtures; chart table fallbacks
+
+**Done when:** a user with 8 weeks of seeded data sees accurate, readable stats at every range.
+
+### Phase 7: Onboarding, settings and copy
+
+- [ ] Shared: habit templates per core preset
+- [ ] Web: 4-step onboarding with resumable submission; `RequireOnboarded`; settings page (profile, timezone mismatch prompt, password, archived items, log out everywhere, delete account)
+- [ ] Copy pass across every screen using the guide in section 14; centralize strings in `features/*/copy.ts` (ready for i18n later)
+- [ ] Empty, loading (skeletons) and error states for every page
+
+**Done when:** a brand-new user goes from sign-up to a populated Today screen in under two minutes, and every state has intentional copy.
+
+### Phase 8: Hardening and launch
+
+- [ ] Playwright golden paths green in CI
+- [ ] Accessibility audit (axe) and keyboard pass; responsive checks at 360 / 768 / 1280
+- [ ] Dockerfile (API + built SPA), production env, deploy to `notch.emindabakhov.com` behind the host's TLS proxy
+- [ ] Database backups verified with a restore test
+- [ ] First user created; invite code set
+
+**Done when:** the app runs at `https://notch.emindabakhov.com`, survives a redeploy without logging you out, and backups restore.
+
+---
+
+## 14. Tone and copy guide
+
+**Voice: firm but friendly.** Like a good coach: direct, honest about results, never shaming, and brief. Use second person and plain words. No profanity, no guilt-tripping, no exclamation-mark spam (one per screen at most, reserved for real wins).
+
+| Moment | Example copy |
+|---|---|
+| Day progress 0% | "Fresh day. Start with the easiest one." |
+| Day progress 1–49% | "Momentum's started. Keep it going." |
+| Day progress 50–99% | "More than halfway. Finish strong." |
+| Day progress 100% | "Everything done. That's how it's built." |
+| Level-up badge popover | "You hit this 13 of 14 days. Target moves from 10 to 12 min. You've earned it." |
+| Deload badge popover | "Rough week, 2 of 7. We've eased it to 8 min so you can rebuild. This isn't a step back." |
+| Holding steady | "Solid week. One more like it and this levels up." |
+| Undo confirmation | "Back to 10 min. We'll check again next week." |
+| Undo unavailable | "You've already logged at the new target, so this one's locked in." |
+| Inactive week | "You were away last week. Nothing changed. Pick up where you left off." |
+| Streak broken (habit detail) | "Streak reset. Your longest is still 21 days. Go beat it." |
+| Goal completed | "Goal done: Run a half marathon. That's real change, not a checkbox." |
+| Backfill note | "Logging for Tuesday. Last week's review won't change." |
+| Too many habits (onboarding) | "Starting small makes it stick. You can add more anytime." |
+| Error saving | "Couldn't save that. Check your connection and try again." |
+
+---
+
+## 15. Out of scope and future work
+
+Listed so the architecture leaves room for them without building them now:
+
+| Feature | Notes for later |
+|---|---|
+| AI daily prioritization | Will read `/today` data and goals; add a `priority` field to the Today response |
+| AI accountability chat and conversational logging | New `ai` module that calls the existing logs service. Logging stays in one code path |
+| Automatic audits / AI daily summaries | Generated from the same stats queries |
+| Essentialism (pruning ignored habits) | Can reuse weekly rates: suggest archiving habits under 20% for 4+ weeks |
+| Reminders and notifications | Web push first; would add a `Reminder` table keyed on `timeOfDay`. This is also when a scheduled job (and, with several instances, a Postgres advisory lock) becomes worth adding |
+| Email and self-service password reset | Add an `email` column and a reset-token table; until then, `user:set-password` covers it |
+| Error tracking and performance budgets | Sentry, Lighthouse and latency targets if the app ever has users beyond a few |
+| Pause / vacation mode | Add `pausedFrom`/`pausedTo` on Habit; paused weeks become NOT_ELIGIBLE and don't break streaks |
+| Mobile apps | API is already client-agnostic; the shared package can be reused in React Native |
+| Configurable week start (Sunday) | `weekStartOf` already centralizes this |
+| Social / accountability partners, payments, i18n | Not planned for MVP |
