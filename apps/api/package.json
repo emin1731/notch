@@ -10,6 +10,7 @@
     "start": "node dist/main.js",
     "user:create": "node dist/cli/user-create.js",
     "user:set-password": "node dist/cli/user-set-password.js",
+    "seed": "node dist/cli/seed.js",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
