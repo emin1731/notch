@@ -52,7 +52,7 @@ export class HabitsController {
     @CurrentUser() user: AuthUser,
     @IdParam('id', habitNotFound) id: string,
   ): Promise<HabitDetailDto> {
-    return this.habits.detail(user.id, id);
+    return this.habits.detail(user, id);
   }
 
   @Patch(':id')
@@ -78,7 +78,7 @@ export class HabitsController {
     @CurrentUser() user: AuthUser,
     @IdParam('id', habitNotFound) id: string,
   ): Promise<HabitDetailDto> {
-    return this.habits.archive(user.id, id);
+    return this.habits.archive(user, id);
   }
 
   @Post(':id/unarchive')
@@ -87,7 +87,7 @@ export class HabitsController {
     @CurrentUser() user: AuthUser,
     @IdParam('id', habitNotFound) id: string,
   ): Promise<HabitDetailDto> {
-    return this.habits.unarchive(user.id, id);
+    return this.habits.unarchive(user, id);
   }
 
   @Delete(':id')

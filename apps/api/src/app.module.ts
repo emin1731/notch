@@ -11,7 +11,9 @@ import { GoalsModule } from './goals/goals.module.js';
 import { HabitsModule } from './habits/habits.module.js';
 import type { Env } from './config/env.schema.js';
 import { HealthModule } from './health/health.module.js';
+import { LogsModule } from './logs/logs.module.js';
 import { PrismaModule } from './prisma/prisma.module.js';
+import { TodayModule } from './today/today.module.js';
 import { UsersModule } from './users/users.module.js';
 
 @Module({
@@ -42,6 +44,8 @@ import { UsersModule } from './users/users.module.js';
     CoresModule,
     GoalsModule,
     HabitsModule,
+    LogsModule,
+    TodayModule,
     HealthModule,
   ],
   providers: [{ provide: APP_FILTER, useClass: AllExceptionsFilter }],

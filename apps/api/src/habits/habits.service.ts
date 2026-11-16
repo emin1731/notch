@@ -3,6 +3,7 @@ import {
   adaptiveApplicable,
   addDays,
   type CreateHabitInput,
+  currentStreak,
   daysToMask,
   defaultMinTarget,
   fromDateString,
@@ -28,6 +29,7 @@ import { CoresService } from '../cores/cores.service.js';
 import type { Habit, Prisma } from '../generated/prisma/client.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { toHabitDto, toTargetChangeDto } from './habit-dto.js';
+import { historyOf } from './habit-history.js';
 
 type Db = PrismaService | Prisma.TransactionClient;
 
@@ -60,9 +62,9 @@ export class HabitsService {
     return habits.map(toHabitDto);
   }
 
-  async detail(userId: string, id: string): Promise<HabitDetailDto> {
-    await this.findOwned(userId, id);
-    return this.detailOf(id);
+  async detail(user: AuthUser, id: string): Promise<HabitDetailDto> {
+    await this.findOwned(user.id, id);
+    return this.detailOf(id, user.timezone);
   }
 
   async create(user: AuthUser, input: CreateHabitInput): Promise<HabitDetailDto> {
@@ -101,7 +103,7 @@ export class HabitsService {
         },
       });
     });
-    return this.detailOf(habit.id);
+    return this.detailOf(habit.id, user.timezone);
   }
 
   /**
@@ -135,7 +137,7 @@ export class HabitsService {
       }
       await tx.habit.update({ where: { id }, data: definedFields(input) });
     });
-    return this.detailOf(id);
+    return this.detailOf(id, user.timezone);
   }
 
   /** The listed habits first, the others after them in their current order. */
@@ -164,25 +166,25 @@ export class HabitsService {
     return this.list(userId, { includeArchived: false });
   }
 
-  async archive(userId: string, id: string): Promise<HabitDetailDto> {
-    const habit = await this.findOwned(userId, id);
+  async archive(user: AuthUser, id: string): Promise<HabitDetailDto> {
+    const habit = await this.findOwned(user.id, id);
     if (!habit.archivedAt) {
       await this.prisma.habit.update({ where: { id }, data: { archivedAt: this.clock.now() } });
     }
-    return this.detailOf(id);
+    return this.detailOf(id, user.timezone);
   }
 
-  async unarchive(userId: string, id: string): Promise<HabitDetailDto> {
-    const habit = await this.findOwned(userId, id);
-    const core = await this.cores.findOwned(userId, habit.coreId);
+  async unarchive(user: AuthUser, id: string): Promise<HabitDetailDto> {
+    const habit = await this.findOwned(user.id, id);
+    const core = await this.cores.findOwned(user.id, habit.coreId);
     if (core.archivedAt) {
       throw coreArchived();
     }
     await this.prisma.habit.update({ where: { id }, data: { archivedAt: null } });
-    return this.detailOf(id);
+    return this.detailOf(id, user.timezone);
   }
 
-  /** Permanently deletes the habit and its target changes (and, from S4, its logs). */
+  /** Permanently deletes the habit, its logs and its target changes. */
   async delete(userId: string, id: string): Promise<void> {
     const { count } = await this.prisma.habit.deleteMany({ where: { id, userId } });
     if (count === 0) {
@@ -208,14 +210,21 @@ export class HabitsService {
     return habit;
   }
 
-  private async detailOf(id: string): Promise<HabitDetailDto> {
+  /** With the current streak as of the local today, which needs the full log history. */
+  private async detailOf(id: string, timezone: string): Promise<HabitDetailDto> {
     const habit = await this.prisma.habit.findUniqueOrThrow({
       where: { id },
       include: {
-        targetChanges: { orderBy: [{ effectiveFrom: 'desc' }, { createdAt: 'desc' }], take: 10 },
+        targetChanges: { orderBy: [{ effectiveFrom: 'desc' }, { createdAt: 'desc' }] },
+        logs: true,
       },
     });
-    return { ...toHabitDto(habit), recentChanges: habit.targetChanges.map(toTargetChangeDto) };
+    const today = todayIn(timezone, this.clock.now());
+    return {
+      ...toHabitDto(habit),
+      currentStreak: currentStreak(historyOf(habit, habit.targetChanges, habit.logs), today),
+      recentChanges: habit.targetChanges.slice(0, 10).map(toTargetChangeDto),
+    };
   }
 
   /**
