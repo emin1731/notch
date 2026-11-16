@@ -67,6 +67,7 @@ model User {
   goals    Goal[]
   habits   Habit[]
   logs     HabitLog[]
+  reviews  WeeklyReview[]
 }
 
 model Session {
@@ -182,23 +183,26 @@ model Habit {
 }
 
 /// Every change to a habit's target, weekly frequency or weekdays. History is read with
-/// targetOn() / scheduleOn(). S5 adds the link to the weekly review for LEVEL_UP / DELOAD.
+/// targetOn() / scheduleOn(). LEVEL_UP / DELOAD changes come from a weekly review.
 model TargetChange {
-  id            String           @id @default(uuid())
-  habitId       String
-  kind          TargetChangeKind
-  field         TargetField
-  fromValue     Int
-  toValue       Int
-  effectiveFrom DateTime         @db.Date
-  reason        Json? // { rule, rates: { current, previous } }
-  undoDeadline  DateTime?        @db.Timestamptz(3)
-  undoneAt      DateTime?        @db.Timestamptz(3)
-  createdAt     DateTime         @default(now()) @db.Timestamptz(3)
+  id             String           @id @default(uuid())
+  habitId        String
+  weeklyReviewId String? // null for MANUAL changes
+  kind           TargetChangeKind
+  field          TargetField
+  fromValue      Int
+  toValue        Int
+  effectiveFrom  DateTime         @db.Date
+  reason         Json? // { rule, rates: { current, previous } }
+  undoDeadline   DateTime?        @db.Timestamptz(3)
+  undoneAt       DateTime?        @db.Timestamptz(3)
+  createdAt      DateTime         @default(now()) @db.Timestamptz(3)
 
-  habit Habit @relation(fields: [habitId], references: [id], onDelete: Cascade)
+  habit  Habit         @relation(fields: [habitId], references: [id], onDelete: Cascade)
+  review WeeklyReview? @relation(fields: [weeklyReviewId], references: [id], onDelete: SetNull)
 
   @@index([habitId, effectiveFrom])
+  @@index([weeklyReviewId])
 }
 
 /// One per habit per user-local date. A write that leaves value 0 deletes the row, so a log
@@ -218,4 +222,21 @@ model HabitLog {
 
   @@unique([habitId, date])
   @@index([userId, date])
+}
+
+/// The review of one week (Monday–Sunday in the user's timezone), created lazily by ensureDue().
+/// The unique (userId, weekStart) makes creation idempotent across concurrent requests.
+model WeeklyReview {
+  id        String    @id @default(uuid())
+  userId    String
+  weekStart DateTime  @db.Date // Monday of the evaluated week
+  inactive  Boolean   @default(false)
+  summary   Json // WeeklyReviewSummary (plan 5.3)
+  seenAt    DateTime? @db.Timestamptz(3)
+  createdAt DateTime  @default(now()) @db.Timestamptz(3)
+
+  user    User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  changes TargetChange[]
+
+  @@unique([userId, weekStart])
 }
