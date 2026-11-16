@@ -6,7 +6,6 @@
 import { timezoneSchema, todayIn } from '@notch/shared';
 import { parseArgs } from 'node:util';
 import { PasswordService } from '../auth/password.service.js';
-import { PrismaService } from '../prisma/prisma.service.js';
 import { DEMO_PASSWORD, DEMO_USERNAME, seedDemo } from './demo-seed.js';
 import { CliError, runCli } from './run-cli.js';
 
@@ -19,7 +18,7 @@ await runCli(async (app) => {
   const today = todayIn(timezone, new Date());
 
   const passwordHash = await app.get(PasswordService).hash(DEMO_PASSWORD);
-  const { habitIds } = await seedDemo(app.get(PrismaService), { today, timezone, passwordHash });
+  const { habitIds } = await seedDemo(app, { today, timezone, passwordHash });
   console.log(
     `Seeded "${DEMO_USERNAME}" / "${DEMO_PASSWORD}" (${timezone}) with ${Object.keys(habitIds).length} habits and 8 weeks of logs.`,
   );
