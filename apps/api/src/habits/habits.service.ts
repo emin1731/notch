@@ -28,6 +28,7 @@ import { applyOrder } from '../common/ordering.js';
 import { CoresService } from '../cores/cores.service.js';
 import type { Habit, Prisma } from '../generated/prisma/client.js';
 import { PrismaService } from '../prisma/prisma.service.js';
+import { ReviewsService } from '../reviews/reviews.service.js';
 import { toHabitDto, toTargetChangeDto } from './habit-dto.js';
 import { historyOf } from './habit-history.js';
 
@@ -47,6 +48,7 @@ export class HabitsService {
     private readonly prisma: PrismaService,
     private readonly cores: CoresService,
     private readonly clock: Clock,
+    private readonly reviews: ReviewsService,
   ) {}
 
   async list(userId: string, query: ListHabitsQuery): Promise<HabitDto[]> {
@@ -111,6 +113,8 @@ export class HabitsService {
    * weekdays is recorded as a MANUAL TargetChange effective from the local today.
    */
   async update(user: AuthUser, id: string, input: UpdateHabitInput): Promise<HabitDetailDto> {
+    // Last week's review decides on last week's values, so it runs before they can change.
+    await this.reviews.ensureDue(user);
     const today = todayIn(user.timezone, this.clock.now());
     await this.prisma.$transaction(async (tx) => {
       const habit = await this.findOwned(user.id, id, tx);

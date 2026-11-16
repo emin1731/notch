@@ -24,6 +24,7 @@ import { habitNotFound } from '../common/not-found.js';
 import type { Habit, HabitLog, Prisma, TargetChange } from '../generated/prisma/client.js';
 import { historyOf, toChangeLite } from '../habits/habit-history.js';
 import { PrismaService } from '../prisma/prisma.service.js';
+import { ReviewsService } from '../reviews/reviews.service.js';
 
 type Tx = Prisma.TransactionClient;
 type Mutation = (tx: Tx, habit: Habit, changes: TargetChange[]) => Promise<void>;
@@ -44,6 +45,7 @@ export class LogsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly clock: Clock,
+    private readonly reviews: ReviewsService,
   ) {}
 
   /** Defaults to the 30 days up to the local today. */
@@ -111,12 +113,14 @@ export class LogsService {
     });
   }
 
-  private write(
+  private async write(
     user: AuthUser,
     habitId: string,
     date: LocalDate,
     mutate: Mutation,
   ): Promise<LogWriteResult> {
+    // A new week's review runs before its first log, so the snapshot uses the new target.
+    await this.reviews.ensureDue(user);
     const today = todayIn(user.timezone, this.clock.now());
     return this.prisma.$transaction(async (tx) => {
       const habit = await this.lockHabit(tx, user.id, habitId);
@@ -128,7 +132,6 @@ export class LogsService {
         );
       }
       assertInWindow(habit, date, today);
-      // S5: WeeklyReviewService.ensureDue(user) runs here, before the first log of a new week.
 
       const changes = await tx.targetChange.findMany({ where: { habitId } });
       await mutate(tx, habit, changes);

@@ -12,15 +12,19 @@ import {
   type TodayHabit,
   type TodayResponse,
   todayIn,
+  toDateString,
+  undoBlockReason,
   weekStartOf,
   weekStats,
 } from '@notch/shared';
 import type { AuthUser } from '../auth/request-auth.js';
 import { Clock } from '../clock/clock.js';
-import type { HabitLog, TargetChange } from '../generated/prisma/client.js';
+import type { Habit, HabitLog, TargetChange } from '../generated/prisma/client.js';
 import { historyOf } from '../habits/habit-history.js';
 import { assertInWindow } from '../logs/logs.service.js';
 import { PrismaService } from '../prisma/prisma.service.js';
+import { currentValueOf } from '../reviews/review-dto.js';
+import { ReviewsService } from '../reviews/reviews.service.js';
 
 function groupBy<T>(rows: readonly T[], key: (row: T) => string): Map<string, T[]> {
   const groups = new Map<string, T[]>();
@@ -44,12 +48,15 @@ export class TodayService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly clock: Clock,
+    private readonly reviews: ReviewsService,
   ) {}
 
   async forDate(user: AuthUser, requested?: string): Promise<TodayResponse> {
-    const today = todayIn(user.timezone, this.clock.now());
+    const now = this.clock.now();
+    const today = todayIn(user.timezone, now);
     const date = requested ?? today;
     assertInWindow(null, date, today);
+    await this.reviews.ensureDue(user);
 
     const habits = await this.prisma.habit.findMany({
       where: { userId: user.id, archivedAt: null, startDate: { lte: fromDateString(date) } },
@@ -60,12 +67,19 @@ export class TodayService {
       orderBy: [{ sortOrder: 'asc' }, { createdAt: 'asc' }],
     });
     const habitIds = habits.map((habit) => habit.id);
-    const [logs, changes] = await Promise.all([
+    const [logs, changes, latestReview] = await Promise.all([
+      // Up to today, not just `date`: whether a change can still be undone depends on later logs.
       this.prisma.habitLog.findMany({
-        where: { habitId: { in: habitIds }, date: { lte: fromDateString(date) } },
+        where: { habitId: { in: habitIds }, date: { lte: fromDateString(today) } },
       }),
       this.prisma.targetChange.findMany({ where: { habitId: { in: habitIds } } }),
+      this.prisma.weeklyReview.findFirst({
+        where: { userId: user.id },
+        orderBy: { weekStart: 'desc' },
+        select: { id: true, weekStart: true, inactive: true, seenAt: true },
+      }),
     ]);
+    const weekStart = weekStartOf(date);
     const logsByHabit = groupBy<HabitLog>(logs, (log) => log.habitId);
     const changesByHabit = groupBy<TargetChange>(changes, (change) => change.habitId);
 
@@ -90,6 +104,10 @@ export class TodayService {
         progress: log ? computeProgress(log.value, log.targetSnapshot) : 0,
         currentStreak: currentStreak(history, date),
       };
+      const change = this.weekChange(habit, habitChanges, history.logs, weekStart, now);
+      if (change) {
+        item.change = change;
+      }
 
       if (habit.scheduleType === 'TIMES_PER_WEEK') {
         const stats = weekStats(history, weekStartOf(date), date);
@@ -109,11 +127,50 @@ export class TodayService {
       date,
       dayProgress:
         due.length === 0 ? null : due.reduce((sum, habit) => sum + habit.progress, 0) / due.length,
-      // S5: the unseen weekly review and the "welcome back" flag.
-      pendingReview: null,
-      welcomeBack: false,
+      pendingReview:
+        latestReview && !latestReview.seenAt
+          ? { id: latestReview.id, weekStart: toDateString(latestReview.weekStart) }
+          : null,
+      // After an inactive week, until its review is opened.
+      welcomeBack: Boolean(latestReview?.inactive && !latestReview.seenAt),
       groups,
       weeklyQuota,
+    };
+  }
+
+  /** The level-up or deload that took effect this week (the badge on the card), if any. */
+  private weekChange(
+    habit: Habit,
+    changes: readonly TargetChange[],
+    logs: ReadonlyMap<string, unknown>,
+    weekStart: string,
+    now: Date,
+  ): TodayHabit['change'] {
+    const change = changes
+      .filter(
+        (candidate) =>
+          candidate.kind !== 'MANUAL' &&
+          candidate.undoneAt === null &&
+          candidate.field !== 'DAYS_OF_WEEK' &&
+          toDateString(candidate.effectiveFrom) === weekStart,
+      )
+      .at(-1);
+    if (!change || change.kind === 'MANUAL' || change.field === 'DAYS_OF_WEEK') {
+      return undefined;
+    }
+    const effectiveFrom = toDateString(change.effectiveFrom);
+    const blocked = undoBlockReason(change, {
+      now,
+      hasLogSinceEffective: [...logs.keys()].some((date) => date >= effectiveFrom),
+      currentValue: currentValueOf(habit, change.field),
+    });
+    return {
+      id: change.id,
+      kind: change.kind,
+      field: change.field,
+      fromValue: change.fromValue,
+      toValue: change.toValue,
+      canUndo: blocked === null,
     };
   }
 }
