@@ -45,6 +45,12 @@ pnpm --filter @notch/api build
 pnpm --filter @notch/api seed --timezone=Asia/Baku     # log in as demo / demo-password
 ```
 
+Weekly reviews run on the first visit of a new week. To try one without waiting for a Monday:
+
+```bash
+pnpm --filter @notch/api review:run demo --week=2026-11-09   # development only; idempotent
+```
+
 ## Accounts
 
 Registration is invite-only: `INVITE_CODE` in `apps/api/.env`, and it closes once `MAX_USERS`

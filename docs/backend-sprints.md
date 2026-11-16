@@ -255,37 +255,43 @@ Optional: deploy this skeleton to `notch.emindabakhov.com` now. That checks earl
 
 **Goal:** reviews appear on the first visit after Monday 00:00 local time, apply the right decisions, and undo behaves exactly as specified. Spec: [plan 2.7, 2.8, 6.5, 6.6](habit-tracker-implementation-plan.md#27-adaptive-difficulty).
 
-**Decide**
+**Decided** (written back into the plan)
 
-- [ ] **First week for new users:** no review is created (and no "welcome back" shown) for a week in which no habit counted for levelling. Recommendation: yes.
+- [x] **First week:** no review (and no "welcome back") for a week in which no active habit existed for the whole week.
+- [x] **Undo vs a manual edit:** the edit wins; undo is refused with `CHANGED_SINCE`.
+- [x] **Welcome back:** shows while the latest review is inactive and unseen.
+- [x] "Changed during the week" = a non-undone change of any field effective after the Monday; a Monday change keeps the week eligible. Cooldown = an undone change of that kind effective on W's Monday.
+- [x] `ensureDue` also runs before habit edits; `runForUser` locks the user's habit rows and claims the week before deciding.
+- [x] The demo seed simulates its history by running the real review every Monday.
 
 **Data**
 
-- [ ] `WeeklyReview` + migration; link `TargetChange` to reviews
+- [x] `WeeklyReview` + migration; `TargetChange` linked to reviews
 
 **Shared**
 
-- [ ] `isEligibleWeek`, inactive-week detection, cooldown derivation
-- [ ] `decideForHabit()` with `PROGRESSION_CONFIG`
-- [ ] Reason codes → sentences (for the web app later)
-- [ ] `WeeklyReviewSummary` type
+- [x] `isEligibleWeek`, inactive-week detection, `isUnderCooldown`
+- [x] `decideForHabit()` with `PROGRESSION_CONFIG`
+- [x] `undoBlockReason()`; reason codes → sentences (for the web app later); `startOfDayIn` for deadlines
+- [x] `WeeklyReviewSummary` and review response types
 
 **API**
 
-- [ ] `WeeklyReviewService.runForUser` in one transaction; duplicate-key error caught outside it for idempotency
-- [ ] `ensureDue` called from `/today`, `/reviews/latest` and before every log write
-- [ ] Undo with all four checks and `details.reason` (`EXPIRED`, `ALREADY_LOGGED`, `ALREADY_UNDONE`, `NOT_AUTOMATIC`); deadline `effectiveFrom + 7 days`
-- [ ] `GET /reviews`, `/reviews/latest`, `/reviews/:weekStart`, `POST /reviews/:id/seen`, `GET /habits/:id/target-history`
-- [ ] `/today` adds `change`, `pendingReview`, `welcomeBack`
-- [ ] Dev-only CLI: `review:run --user <username> --week <date>`
-- [ ] Seed: one habit that levelled up twice and one that deloaded
+- [x] `ReviewsService.runForUser` in one transaction; duplicate-key error caught outside it for idempotency
+- [x] `ensureDue` called from `/today`, `/reviews/latest`, before every log write and before habit edits
+- [x] Undo with all checks and `details.reason` (`NOT_AUTOMATIC`, `ALREADY_UNDONE`, `EXPIRED`, `ALREADY_LOGGED`, `CHANGED_SINCE`); deadline `effectiveFrom + 7 days`, local midnight
+- [x] `GET /reviews`, `/reviews/latest`, `/reviews/:weekStart`, `POST /reviews/:id/seen` (`GET /habits/:id/target-history` came in S3)
+- [x] `/today` adds `change`, `pendingReview`, `welcomeBack`
+- [x] Dev-only CLI: `review:run <username> --week=<date>`
+- [x] Seed: Meditate levels up twice, Deep work levels up twice and deloads back; `pendingMonday` for the Monday test
 
 **Tests**
 
-- [ ] All 12 decision cases from [plan section 11](habit-tracker-implementation-plan.md#11-testing-strategy), plus the decisions made in S3 and S4 (day-of-week edits, zero-value logs)
-- [ ] Concurrent `ensureDue` calls produce exactly one review
-- [ ] Review timing across timezones and a DST week
-- [ ] Each undo rejection reason; undo blocked after logging at the new level
+- [x] All 12 decision cases from [plan section 11](habit-tracker-implementation-plan.md#11-testing-strategy), plus weekday edits, Monday edits, undone changes, the edit-after-the-week guard, and zero-value logs vs undo
+- [x] Concurrent `ensureDue` calls produce exactly one review and one change
+- [x] Review timing across timezones (Los Angeles) and the Berlin DST week, including the undo deadline
+- [x] Each undo rejection reason; undo blocked after logging at the new level, allowed after a log set back to 0
+- [x] Mutation checks: disabling the cooldown or the "same value in W − 1" rule fails tests
 
 **Done when:** with the seed and a fake clock, Monday produces the expected level-ups and deloads, `/today` shows them, and undo works and locks exactly as specified.
 

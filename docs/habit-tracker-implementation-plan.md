@@ -173,8 +173,9 @@ else                                  → HOLD
 ```
 
 - **Level-up** sets the target to `current + increment`, clamped to `maxTarget`.
-- **Deload:** if the current value came from a non-undone `LEVEL_UP`, it returns to that change's `fromValue`. Otherwise it sets `current − increment`. Either way, the result is clamped to `minTarget`.
-- **Cooldown:** if a change of kind K was undone during the previous review cycle, the habit cannot receive another change of kind K in this review. It gets a `HOLD` instead, with the reason `"cooldown after undo"`.
+- **Deload:** if the current value came from a non-undone `LEVEL_UP` (the latest non-undone change of the progressing field is a level-up whose `toValue` is the current value), it returns to that change's `fromValue`. Otherwise it sets `current − increment`. Either way, the result is clamped to `minTarget`.
+- **Cooldown:** if a change of kind K was undone during the previous review cycle, the habit cannot receive another change of kind K in this review. It gets a `HOLD` instead, with the reason `"cooldown after undo"`. The previous review's changes took effect on the Monday of the week under review, so this is "an undone change of kind K with `effectiveFrom` = W's Monday".
+- **"Changed during the week"** means a non-undone change of any field (target, quota or weekdays) with `effectiveFrom` after W's Monday and on or before its Sunday. A change taking effect on the Monday itself (last review's level-up, or an edit made that Monday) leaves the whole week at one value. As a guard, a habit whose value was edited after W ended but before the review ran is also not eligible.
 - **Inactive week:** if the user logged **nothing at all** across all habits during W, every habit gets a `HOLD` and the review is flagged `inactive`. This avoids punishing vacations. The app shows a "welcome back" message instead of deloading everything.
 - Only the most recent completed week is evaluated. If the user was away for several weeks, the missed weeks are not evaluated one by one.
 
@@ -184,12 +185,14 @@ All thresholds live in one config object in the shared package (`PROGRESSION_CON
 
 - A review is created for the week that just ended (Monday–Sunday in the **user's timezone**) the first time the user opens or logs anything in the new week. There is no background job. See [6.6](#66-weekly-review-creation) for the mechanics.
 - All decisions are **applied automatically**. Each applied change becomes a `TargetChange` row with `effectiveFrom = Monday of the new week`.
-- **Undo** is available while **both** of these are true:
+- **Undo** is available while **all** of these are true:
   - the week the change took effect hasn't ended yet (`now < effectiveFrom + 7 days`, local midnight), and
-  - the habit has **no log dated on or after `effectiveFrom`** (no log at the new level yet).
+  - the habit has **no log dated on or after `effectiveFrom`** (no log at the new level yet; a log set back to 0 is deleted, so it doesn't count), and
+  - the habit hasn't been edited since (its value is still the change's `toValue`). A manual edit wins over undo.
 - Undoing restores `fromValue` on the habit and sets `undoneAt` on the change.
 - The Today screen shows a badge on every habit whose target changed this week (e.g. "↑ 12 min", "↓ 3× / week"). Tapping it opens a popover with the reason and an Undo button if undo is still allowed.
-- A banner on the Today screen links to the review until the user opens it (`seenAt`).
+- A banner on the Today screen links to the review until the user opens it (`seenAt`). After an inactive week, the "welcome back" message shows with it, also until the review is opened.
+- No review is created for a week in which no active habit existed for the whole week (such as a new user's first, partial week): there's nothing to judge yet.
 
 ### 2.9 Goals and milestones
 
@@ -789,11 +792,11 @@ Everything is computed **as of `date`** (streaks and the week's hits), so browsi
 
 | Method | Path | Notes |
 |---|---|---|
-| GET | `/reviews?limit=&cursor=` | list, newest first |
-| GET | `/reviews/latest` | runs `ensureDue` first; returns the latest review with changes and their `canUndo` |
-| GET | `/reviews/:weekStart` | |
-| POST | `/reviews/:id/seen` | sets `seenAt` |
-| POST | `/target-changes/:id/undo` | `409 UNDO_NOT_ALLOWED` with `details.reason`: `EXPIRED`, `ALREADY_LOGGED`, `ALREADY_UNDONE`, or `NOT_AUTOMATIC` |
+| GET | `/reviews?limit=&cursor=` | newest first; `limit` 1–52 (default 10), `cursor` = the `nextCursor` of the previous page. Returns `{ items, nextCursor }` |
+| GET | `/reviews/latest` | runs `ensureDue` first; returns `{ review }`: the latest review with its changes and their `canUndo`, or `null` before the first one |
+| GET | `/reviews/:weekStart` | `404 REVIEW_NOT_FOUND` |
+| POST | `/reviews/:id/seen` | sets `seenAt` (once); returns the review |
+| POST | `/target-changes/:id/undo` | returns `{ change, habit }`. `409 UNDO_NOT_ALLOWED` with `details.reason`: `NOT_AUTOMATIC`, `ALREADY_UNDONE`, `EXPIRED`, `ALREADY_LOGGED` or `CHANGED_SINCE`; `404 TARGET_CHANGE_NOT_FOUND` |
 | GET | `/habits/:id/target-history` | all changes, for the chart |
 
 #### Stats
@@ -922,11 +925,13 @@ export const PROGRESSION_CONFIG = {
 
 **Undo** (`POST /target-changes/:id/undo`), also in one transaction:
 
-1. Check that `kind ∈ {LEVEL_UP, DELOAD}` and that `undoneAt` is null.
-2. Check that `now < undoDeadline`.
-3. Check that no `HabitLog` exists for the habit with `date >= effectiveFrom`.
-4. Check that the habit's current value equals `toValue`, so there was no manual edit since.
+1. Lock the habit row. Check that `kind ∈ {LEVEL_UP, DELOAD}` (`NOT_AUTOMATIC`) and that `undoneAt` is null (`ALREADY_UNDONE`).
+2. Check that `now < undoDeadline` (`EXPIRED`).
+3. Check that no `HabitLog` exists for the habit with `date >= effectiveFrom` (`ALREADY_LOGGED`).
+4. Check that the habit's current value equals `toValue`, so there was no manual edit since (`CHANGED_SINCE`).
 5. Set the habit field back to `fromValue` and set `undoneAt = now`.
+
+Steps 1–4 are one pure shared function, `undoBlockReason()`, which also computes `canUndo` for Today and the reviews.
 
 The cooldown is derived at decision time from `changes` (an undone change whose review was the previous one). No extra column is needed.
 
@@ -935,11 +940,12 @@ The cooldown is derived at decision time from `changes` (an undone change whose 
 Reviews are created **lazily**. There is no background job.
 
 - `ensureDue(userId)` checks whether a review exists for the last completed week in the user's timezone, and runs `runForUser` if not.
-- It is called from `GET /today`, `GET /reviews/latest`, and before any log write. The user can't see a review or log at a new target without passing through one of these, so the result is the same as running it at Monday 00:00. This also covers downtime, timezone changes and deployments.
+- It is called from `GET /today`, `GET /reviews/latest`, before any log write and before a habit edit (`PATCH /habits/:id`), always before the caller's own transaction. The user can't see a review, log at a new target or change last week's values without passing through one of these, so the result is the same as running it at Monday 00:00. This also covers downtime, timezone changes and deployments.
+- `runForUser` locks the user's habit rows (`SELECT … FOR UPDATE`, serialising with log writes and edits), inserts the review row first to claim the week, then decides, applies and writes the summary.
 - The check is a single indexed lookup on `(userId, weekStart)`.
 - Concurrent calls (two tabs, or a page load plus a log write) are made safe by the unique `(userId, weekStart)` constraint. The losing call catches the unique-violation error **outside** its aborted transaction and reads the review that won.
 
-A review is **not** created for a week in which the user had no active habits at any point.
+A review is **not** created for a week in which no active habit existed for the whole week (`startDate <= weekStart`): a new user's first week, or a user without habits. Archived habits are never reviewed. After several weeks away, only the most recent week is reviewed.
 
 A scheduled job is only needed once something has to happen without the user opening the app, such as notifications. See [section 15](#15-out-of-scope-and-future-work).
 
