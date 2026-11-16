@@ -1,6 +1,7 @@
 import type { CoreColor } from '../constants.js';
 import type { LocalDate } from '../dates/local-date.js';
 import type { GoalStatus } from '../goals/goal-progress.js';
+import type { LinkedHabitDto } from './habit.js';
 
 export interface CoreDto {
   id: string;
@@ -9,8 +10,8 @@ export interface CoreDto {
   icon: string;
   sortOrder: number;
   archivedAt: string | null;
-  /** Non-archived goals. */
-  counts: { goals: number };
+  /** Non-archived goals and habits. */
+  counts: { goals: number; habits: number };
 }
 
 export interface MilestoneDto {
@@ -38,6 +39,8 @@ export interface GoalDto {
 
 export interface GoalDetailDto extends GoalDto {
   milestones: MilestoneDto[];
+  /** Linked habits, archived ones included. */
+  habits: LinkedHabitDto[];
 }
 
 /** Returned by milestone deletion: the goal's status may have changed. */

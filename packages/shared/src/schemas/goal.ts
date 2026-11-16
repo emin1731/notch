@@ -23,10 +23,14 @@ export const updateGoalSchema = z
     title: goalTitleSchema.optional(),
     description: goalDescriptionSchema.nullable().optional(),
     deadline: localDateSchema.nullable().optional(),
+    /** Confirms moving the goal's linked habits along with it to the new core. */
+    moveHabits: z.boolean().optional(),
   })
-  .refine((value) => Object.values(value).some((field) => field !== undefined), {
-    message: 'Nothing to update',
-  });
+  .refine(
+    ({ moveHabits: _moveHabits, ...value }) =>
+      Object.values(value).some((field) => field !== undefined),
+    { message: 'Nothing to update' },
+  );
 export type UpdateGoalInput = z.infer<typeof updateGoalSchema>;
 
 export const listGoalsQuerySchema = z.object({
