@@ -26,8 +26,10 @@ describe('CsrfService', () => {
   });
 
   it('rejects a tampered signature or nonce', () => {
-    const [nonce, signature] = csrf.issue(binding).split('.');
-    expect(csrf.verify(`${nonce}.${signature?.slice(0, -1)}A`, binding)).toBe(false);
+    const [nonce = '', signature = ''] = csrf.issue(binding).split('.');
+    // Always change the last character (a fixed replacement would match it 1 time in 64).
+    const last = signature.at(-1) === 'A' ? 'B' : 'A';
+    expect(csrf.verify(`${nonce}.${signature.slice(0, -1)}${last}`, binding)).toBe(false);
     expect(csrf.verify(`x${nonce}.${signature}`, binding)).toBe(false);
   });
 
