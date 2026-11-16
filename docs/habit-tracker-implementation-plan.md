@@ -92,7 +92,9 @@ User
 
 **Time of day** (`MORNING`, `AFTERNOON`, `EVENING`, `ANYTIME`) is used only for grouping on the Today screen. It is the "custom timeline". It has no effect on logic.
 
-A habit has a `startDate` (the local date it was created, or a chosen later date). It is never scheduled before that date.
+A habit has a `startDate`: the local today by default, up to 6 days back (the backfill window, so days already done this week can be logged), or a later date. It is never scheduled before that date, and it can't be changed afterwards.
+
+**Editing a schedule.** The habit type and the schedule type are fixed: to change either, create a new habit. The weekdays of a `SPECIFIC_DAYS` habit and the quota of a `TIMES_PER_WEEK` habit can be edited. Like target edits, each edit is recorded as a `MANUAL` `TargetChange` (field `DAYS_OF_WEEK` as a bitmask, Mon = 1 … Sun = 64, or `TIMES_PER_WEEK`) effective from the local today, so history is read with `scheduleOn(date)` / `targetOn(date)` and past weeks keep the schedule they had.
 
 ### 2.4 Logging
 
@@ -154,7 +156,7 @@ For stats over arbitrary ranges, the same logic applies per day (`DAILY`, `SPECI
 A week counts as **eligible** for a habit only if:
 
 1. the habit existed and was not archived for the whole week (`startDate <= weekStart`), and
-2. the progressing field had the **same value for the whole week**. Undone changes are treated as if they never happened. Manual edits do count as changes.
+2. the progressing field had the **same value for the whole week**, and the weekdays didn't change during it. Undone changes are treated as if they never happened. Manual edits do count as changes.
 
 #### Decision rules (evaluated for the week that just ended, W)
 
@@ -372,7 +374,7 @@ enum TimeOfDay        { MORNING AFTERNOON EVENING ANYTIME }
 enum StepType         { PERCENT ABSOLUTE }
 enum GoalStatus       { ACTIVE COMPLETED }      // archiving is Goal.archivedAt
 enum TargetChangeKind { LEVEL_UP DELOAD MANUAL }
-enum TargetField      { TARGET_VALUE TIMES_PER_WEEK }
+enum TargetField      { TARGET_VALUE TIMES_PER_WEEK DAYS_OF_WEEK }   // DAYS_OF_WEEK values are bitmasks
 
 model User {
   id             String    @id @default(uuid())
@@ -671,9 +673,9 @@ A wrong `currentPassword` or `password` returns **403** `INVALID_CREDENTIALS`, n
 | Method | Path | Body | Notes |
 |---|---|---|---|
 | GET | `/goals?coreId=&status=&includeArchived=` | — | `status` is `ACTIVE` or `COMPLETED`; includes `progress` and `milestoneCounts` |
-| GET | `/goals/:id` | — | goal with milestones and linked habits |
+| GET | `/goals/:id` | — | goal with milestones and linked habits (archived ones included) |
 | POST | `/goals` | `{ coreId, title, description?, deadline?, milestones?: string[] }` | milestones can be created inline (≤ 50); `409 CORE_ARCHIVED`; returns the goal with milestones |
-| PATCH | `/goals/:id` | `{ title?, description?, deadline?, coreId? }` | changing core is only allowed if no habits are linked, or the linked habits move with it (confirmation) |
+| PATCH | `/goals/:id` | `{ title?, description?, deadline?, coreId?, moveHabits? }` | changing core while habits are linked needs `moveHabits: true` (else `409 GOAL_CORE_MISMATCH` with `details.linkedHabits`); the habits move with it |
 | POST | `/goals/:id/complete` | — | only for goals without milestones, else `409 GOAL_HAS_MILESTONES` |
 | POST | `/goals/:id/reopen` | — | same rule |
 | POST | `/goals/:id/archive` | — | keeps the status |
@@ -691,8 +693,9 @@ A wrong `currentPassword` or `password` returns **403** `INVALID_CREDENTIALS`, n
 |---|---|---|---|
 | GET | `/habits?coreId=&goalId=&includeArchived=` | — | |
 | GET | `/habits/:id` | — | habit with current streak, recent target changes, and `adaptiveApplicable` |
-| POST | `/habits` | `CreateHabitDto` | sets `initial*` fields, `startDate = today (local)` unless given |
-| PATCH | `/habits/:id` | `UpdateHabitDto` | changing `targetValue`/`timesPerWeek` writes a `MANUAL` TargetChange; changing `type` is **not allowed** (create a new habit instead) |
+| POST | `/habits` | `CreateHabitDto` | sets `initial*` fields and a default `minTarget` (half the initial value); `startDate = today (local)` unless given. `409 CORE_ARCHIVED`, `409 GOAL_CORE_MISMATCH` |
+| PATCH | `/habits/:id` | `UpdateHabitDto` | changing `targetValue`, `timesPerWeek` or `daysOfWeek` writes a `MANUAL` TargetChange effective from the local today (several edits on one day fold into one change). `type`, `scheduleType` and `startDate` can't change (400). The merged habit is re-validated. Moving to another core needs a goal in that core, or `goalId: null` |
+| GET | `/habits/:id/target-history` | — | every change, oldest first |
 | PUT | `/habits/order` | `{ ids: string[] }` | |
 | POST | `/habits/:id/archive` / `/unarchive` | — | |
 | DELETE | `/habits/:id` | — | |
@@ -716,7 +719,7 @@ A wrong `currentPassword` or `password` returns **403** `INVALID_CREDENTIALS`, n
   stepValue?: number;
   minTarget?: number | null;
   maxTarget?: number | null;
-  startDate?: string;                 // "YYYY-MM-DD", today or later
+  startDate?: string;                 // "YYYY-MM-DD", at most 6 days back
 }
 ```
 

@@ -161,43 +161,44 @@ Optional: deploy this skeleton to `notch.emindabakhov.com` now. That checks earl
 
 **Goal:** you can create every combination of habit type × schedule, with level settings.
 
-**Decide**
+**Decided** (written back into the plan)
 
-- [ ] **Schedule edits.** Changing the schedule currently rewrites history (rates, streaks, heatmaps). Recommendation:
-  - `scheduleType` can't be changed, just like `type`. To change it, create a new habit.
-  - `daysOfWeek` can be changed. The change is recorded as a `TargetChange` with field `DAYS_OF_WEEK` (stored as a bitmask, Mon = 1 … Sun = 64), effective from the local today. History is then read with `scheduleOn(date)`, the same way `targetOn(date)` reads targets, and the week of the edit isn't counted for levelling.
-- [ ] **`effectiveFrom` for manual target edits:** the user's local today. Recommendation: yes.
-- [ ] **Past start dates:** allow `startDate` up to 6 days in the past, so a habit created today can be backfilled to when you actually started it. Recommendation: yes.
+- [x] **Schedule edits:** `scheduleType` can't change, just like `type` and `startDate`. `daysOfWeek` and `timesPerWeek` can; each edit is a `MANUAL` `TargetChange` (field `DAYS_OF_WEEK` as a bitmask, Mon = 1 … Sun = 64, or `TIMES_PER_WEEK`), read back with `scheduleOn(date)`. A week whose weekdays changed isn't eligible for levelling (S5).
+- [x] **`effectiveFrom` for manual edits:** the user's local today. Several edits on one day fold into one change, and editing back to the start value removes it.
+- [x] **Past start dates:** up to 6 days back (the backfill window); future dates up to a year ahead.
+- [x] A goal moves to another core only with `moveHabits: true` when habits are linked (`409 GOAL_CORE_MISMATCH` otherwise); the habits move with it.
+- [x] Services read the time from an injectable `Clock`, so S4/S5 tests can move time.
 
 **Data**
 
-- [ ] `Habit` and `TargetChange` (manual changes only for now) + migration, CHECK constraints from plan 5.2
+- [x] `Habit` and `TargetChange` (manual changes only for now; the review link comes in S5) + migration, CHECK constraints from plan 5.2
 
-**Carried over from S2** (needs the `Habit` model)
+**Carried over from S2**
 
-- [ ] Core archive cascades to its active habits; habits count toward `CORE_NOT_EMPTY`; `counts.habits` in the core list
-- [ ] Goal delete unlinks its habits (`goalId → null`); goal detail lists linked habits
-- [ ] Moving a goal with linked habits to another core moves the habits too
-- [ ] Creating or unarchiving a habit in an archived core → `409 CORE_ARCHIVED`; habit routes added to `test/ownership.e2e-spec.ts`
+- [x] Core archive cascades to its active habits; habits count toward `CORE_NOT_EMPTY`; `counts.habits` in the core list
+- [x] Goal delete unlinks its habits (`goalId → null`); goal detail lists linked habits
+- [x] Moving a goal with linked habits to another core moves the habits too
+- [x] Creating or unarchiving a habit in an archived core → `409 CORE_ARCHIVED`; habit routes added to `test/ownership.e2e-spec.ts`
 
 **Shared**
 
-- [ ] Date helpers: `LocalDate`, `toDateString` / `fromDateString`, `todayIn(tz)`, `weekStartOf`, `weekRange`, `isoWeekday` (with DST tests, `Europe/Berlin` in late October)
-- [ ] Lint rule banning `new Date()` / `Date.now()` in the domain folders
-- [ ] Habit schemas with cross-field refinements (toggle ⇒ target 1, specific days ⇒ non-empty days, times per week ⇒ 1–7)
-- [ ] `isScheduledOn`, `occurrencesInWeek`, `adaptiveApplicable`
-- [ ] Step math (`nextLevelUp`, `nextDeload`, clamping, minute rounding), default `minTarget`
-- [ ] `targetOn(date, changes)` and `scheduleOn(date, changes)`, ignoring undone changes
-- [ ] `projectLevels()` preview
+- [x] Date helpers: `toDateString` / `fromDateString`, `todayIn(tz, now)`, `weekStartOf`, `weekRange`, `isoWeekday`, `addDays`, `daysBetween` (DST tests: `Europe/Berlin`, late October)
+- [x] Lint rule banning `new Date()` / `Date.now()` in the domain folders
+- [x] Habit schemas with cross-field refinements (`habitShapeIssues`, also run by the API on the merged habit of an update)
+- [x] `isScheduledOn`, `occurrencesInWeek`, `adaptiveApplicable`, weekday bitmasks
+- [x] Step math (`nextLevelUp`, `nextDeload`, clamping, minute rounding half up), default `minTarget`
+- [x] `targetOn(date, …)` and `scheduleOn(date, …)`, ignoring undone changes
+- [x] `projectLevels()` preview
 
 **API**
 
-- [ ] Habits: list with filters, detail (with `adaptiveApplicable`), create (`initial*` fields, start date rules), update (no `type` or `scheduleType` change; target and day changes write `MANUAL` TargetChanges), `PUT /habits/order`, archive/unarchive, delete
-- [ ] Goal/core consistency check (`409 GOAL_CORE_MISMATCH`)
+- [x] Habits: list with filters, detail (with `adaptiveApplicable` and recent changes), create (`initial*` fields, start date rules), update (no `type`, `scheduleType` or `startDate` change; target, quota and day changes write `MANUAL` TargetChanges), `PUT /habits/order`, archive/unarchive, delete, `GET /habits/:id/target-history`
+- [x] Goal/core consistency check (`409 GOAL_CORE_MISMATCH`)
 
 **Tests**
 
-- [ ] Every refinement, every schedule helper, step math including rounding and bounds, manual change recording, `targetOn` across several changes including undone ones
+- [x] Every refinement, every schedule helper, step math including rounding and bounds, manual change recording, `targetOn` across several changes including undone ones
+- [x] All nine type × schedule combinations created through the API; a history spanning several days read back with `targetOn`
 
 **Done when:** every type × schedule combination can be created and edited, and every edit leaves a correct, queryable history.
 
@@ -220,6 +221,7 @@ Optional: deploy this skeleton to `notch.emindabakhov.com` now. That checks earl
 **Shared**
 
 - [ ] `computeProgress`, `isHit`, `weeklyRate`, `currentStreak`, `longestStreak` (all three schedules, unscheduled-day bonus logs excluded)
+- [ ] Rates and streaks read each day's schedule and target from the history (`scheduleOn`, `targetOn`), so weekday and quota edits don't rewrite the past
 - [ ] Response types: `TodayResponse`, `TodayHabit`, log write result
 
 **API**
@@ -230,6 +232,7 @@ Optional: deploy this skeleton to `notch.emindabakhov.com` now. That checks earl
 - [ ] `targetSnapshot` set on create from `targetOn(date)`
 - [ ] `longestStreak` recomputed in the same transaction; response `{ log, habitProgress, currentStreak, longestStreak }`
 - [ ] `GET /today?date=`: active habits, their logs and this week's changes in three queries, then computed in memory
+- [ ] `currentStreak` in `GET /habits/:id` (left out in S3: there were no logs yet)
 - [ ] Seed script: a demo user with several weeks of realistic logs
 
 **Tests**
