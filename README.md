@@ -38,6 +38,13 @@ with other local Postgres instances.
 Run `pnpm --filter @notch/api exec prisma migrate dev` once after cloning, and again whenever a
 pull brings new migrations.
 
+For a populated account, seed the demo user (development only; it replaces an existing `demo`):
+
+```bash
+pnpm --filter @notch/api build
+pnpm --filter @notch/api seed --timezone=Asia/Baku     # log in as demo / demo-password
+```
+
 ## Accounts
 
 Registration is invite-only: `INVITE_CODE` in `apps/api/.env`, and it closes once `MAX_USERS`

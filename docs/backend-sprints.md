@@ -208,39 +208,44 @@ Optional: deploy this skeleton to `notch.emindabakhov.com` now. That checks earl
 
 **Goal:** you can log every habit type for today and the past 6 days, and `/today` returns correct progress and streaks.
 
-**Decide**
+**Decided** (written back into the plan)
 
-- [ ] **Zero-value logs:** a write that leaves `value = 0` deletes the log (toggle off, counting down to 0). Then "has a log" always means "did something", which the undo and inactive-week rules rely on. Recommendation: yes.
-- [ ] **Streak window:** drop the ~120-day window and load each active habit's full log history. At personal scale that's a few thousand rows per year, and streaks are never cut off. Recommendation: yes; add a cap only if profiling shows a need.
-- [ ] **Times-per-week habits on Today:** they appear only in the "This week" section, not in the time-of-day groups. `dayProgress` is `null` when no daily or specific-days habit is scheduled. Recommendation: yes.
+- [x] **Zero-value logs:** a write that leaves `value = 0` deletes the log, so "has a log" always means "did something".
+- [x] **Streak window:** none. Each habit's full log history is loaded.
+- [x] **Times-per-week habits on Today:** only in `weeklyQuota`. `dayProgress` is `null` when no daily or specific-days habit is due.
+- [x] Rates and streaks read each day's schedule from the change history; Today is computed as of the requested date.
+- [x] `BACKFILL_OUT_OF_RANGE` is a 400 with `{ earliest, latest }`; logging an archived habit is `409 HABIT_ARCHIVED`; values are capped per type.
+- [x] Log writes lock the habit row, so concurrent writes serialise and the stored longest streak is always consistent.
+- [x] The seed is a compiled CLI (`pnpm --filter @notch/api seed`), deterministic for a given today; its core (`seedDemo`) is the Today e2e fixture.
 
 **Data**
 
-- [ ] `HabitLog` + migration
+- [x] `HabitLog` + migration (CHECK `value >= 0`)
 
 **Shared**
 
-- [ ] `computeProgress`, `isHit`, `weeklyRate`, `currentStreak`, `longestStreak` (all three schedules, unscheduled-day bonus logs excluded)
-- [ ] Rates and streaks read each day's schedule and target from the history (`scheduleOn`, `targetOn`), so weekday and quota edits don't rewrite the past
-- [ ] Response types: `TodayResponse`, `TodayHabit`, log write result
+- [x] `computeProgress`, `isHit`, `weekStats` (weekly rate), `currentStreak`, `longestStreak` (all three schedules, unscheduled-day bonus logs excluded)
+- [x] Rates and streaks read each day's schedule and target from the history (`scheduleOn`, `targetOn`), so weekday and quota edits don't rewrite the past
+- [x] Response types: `TodayResponse`, `TodayHabit`, `LogWriteResult`; log schemas and `LOG_LIMITS`
 
 **API**
 
-- [ ] `GET /habits/:id/logs?from=&to=`
-- [ ] `PUT /habits/:id/logs/:date` (upsert), `POST .../increment` (raw `INSERT … ON CONFLICT DO UPDATE SET value = GREATEST(value + delta, 0)`), `DELETE`
-- [ ] Backfill window check against the server's local today and `startDate` (`BACKFILL_OUT_OF_RANGE`)
-- [ ] `targetSnapshot` set on create from `targetOn(date)`
-- [ ] `longestStreak` recomputed in the same transaction; response `{ log, habitProgress, currentStreak, longestStreak }`
-- [ ] `GET /today?date=`: active habits, their logs and this week's changes in three queries, then computed in memory
-- [ ] `currentStreak` in `GET /habits/:id` (left out in S3: there were no logs yet)
-- [ ] Seed script: a demo user with several weeks of realistic logs
+- [x] `GET /habits/:id/logs?from=&to=`
+- [x] `PUT /habits/:id/logs/:date` (upsert), `POST .../increment` (raw `INSERT … ON CONFLICT DO UPDATE SET value = LEAST(GREATEST(value + delta, 0), cap)`), `DELETE`
+- [x] Backfill window check against the user's local today and `startDate` (`BACKFILL_OUT_OF_RANGE`)
+- [x] `targetSnapshot` set on create from `targetOn(date)`
+- [x] `longestStreak` recomputed in the same transaction; response `{ log, habitProgress, currentStreak, longestStreak }`
+- [x] `GET /today?date=`: active habits, their logs and their changes in three queries, then computed in memory
+- [x] `currentStreak` in `GET /habits/:id`
+- [x] Seed script: a demo user with 8 weeks of realistic logs; `createTestApp({ now })` freezes the clock
 
 **Tests**
 
-- [ ] Streak rules for every schedule, including "today not yet hit doesn't break the streak" and unfinished weeks
-- [ ] Backfill edges (today − 6, today − 7, future, before `startDate`) across a timezone where the server's UTC date differs
-- [ ] Snapshot taken from the old target when backfilling across a target change
-- [ ] Concurrent increments don't lose updates
+- [x] Streak rules for every schedule, including "today not yet hit doesn't break the streak", unfinished weeks, mid-week starts and a weekday edit
+- [x] Backfill edges (today − 6, today − 7, future, before `startDate`), also in `Pacific/Kiritimati`, where the local date is ahead of UTC
+- [x] Snapshot taken from the old target when backfilling across a target change
+- [x] Concurrent increments don't lose updates
+- [x] Ownership matrix: habit and log routes (32 routes). The habit rows meant for S3 had silently not been added; they are now.
 
 **Done when:** a seeded user's `/today` matches hand-computed expectations for every habit type and schedule.
 

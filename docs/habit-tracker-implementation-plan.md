@@ -98,7 +98,8 @@ A habit has a `startDate`: the local today by default, up to 6 days back (the ba
 
 ### 2.4 Logging
 
-- One log per habit per local calendar date (`unique(habitId, date)`).
+- One log per habit per local calendar date (`unique(habitId, date)`). A write that leaves the value at `0` deletes the log, so "has a log" always means "did something".
+- Values are capped per type: toggle 1, count 100 000, duration 24 h. An archived habit can't be logged (`409 HABIT_ARCHIVED`).
 - `TOGGLE`: tapping flips between `0` and `1`.
 - `COUNT`: `+` / `−` buttons and direct number entry. Floor is `0`.
 - `DURATION`: start/stop timer that adds elapsed time, or manual minutes entry. Both add to the day's value. Manual entry can also overwrite the value.
@@ -125,7 +126,8 @@ For stats over arbitrary ranges, the same logic applies per day (`DAILY`, `SPECI
 
 - **`DAILY` / `SPECIFIC_DAYS`:** number of consecutive *scheduled* days that were hits, counting back from today. If today is scheduled but not yet hit, counting starts from the previous scheduled day, so today doesn't break a streak until it's over.
 - **`TIMES_PER_WEEK`:** number of consecutive weeks where hits ≥ `timesPerWeek`. The current week counts only once the quota is met, and an unfinished week doesn't break the streak.
-- **Current streak** is computed on read. **Longest streak** is stored on the habit and recomputed whenever a log for that habit changes.
+- Each day's schedule is read from the change history (`scheduleOn`), so editing a habit's weekdays or weekly quota doesn't rewrite past streaks.
+- **Current streak** is computed on read, from the habit's full log history. **Longest streak** is stored on the habit and recomputed (in the same transaction) whenever a log for that habit changes.
 
 ### 2.7 Adaptive difficulty
 
@@ -728,17 +730,19 @@ A wrong `currentPassword` or `password` returns **403** `INVALID_CREDENTIALS`, n
 | Method | Path | Body | Notes |
 |---|---|---|---|
 | GET | `/habits/:id/logs?from=&to=` | — | |
-| PUT | `/habits/:id/logs/:date` | `{ value }` | upsert (toggle, manual entry) |
-| POST | `/habits/:id/logs/:date/increment` | `{ delta }` | counter buttons, timer stop; atomic `value = GREATEST(value + delta, 0)` |
-| DELETE | `/habits/:id/logs/:date` | — | |
+| PUT | `/habits/:id/logs/:date` | `{ value }` | upsert (toggle, manual entry); `0` deletes the log |
+| POST | `/habits/:id/logs/:date/increment` | `{ delta }` | counter buttons, timer stop; atomic `value = LEAST(GREATEST(value + delta, 0), cap)`; reaching `0` deletes the log |
+| DELETE | `/habits/:id/logs/:date` | — | idempotent |
+
+`GET` takes an optional `from`/`to` (at most 366 days; the default is the 30 days up to the local today). Every write returns 200 with the result below. A date outside the window is `400 BACKFILL_OUT_OF_RANGE` with `details: { earliest, latest }`.
 
 Every log write runs these steps in order:
 
-1. Validate that the date is within `[today − 6, today]` in the user's timezone and on or after `startDate`. Otherwise return `BACKFILL_OUT_OF_RANGE`.
+1. Lock the habit row (`SELECT … FOR UPDATE`), so writes to one habit run one at a time. Validate that the date is within `[today − 6, today]` in the user's timezone and on or after `startDate`. Otherwise return `BACKFILL_OUT_OF_RANGE`.
 2. Call `WeeklyReviewService.ensureDue(userId)`, so that a new week's review always runs **before** the first log of that week. This keeps `targetSnapshot` correct.
 3. Upsert the log. `targetSnapshot` is set only on create, from the habit's target **effective on that date**, which may be an older target when backfilling across a change.
 4. Recompute `longestStreak` for the habit in the same transaction.
-5. Return `{ log, habitProgress, currentStreak, longestStreak }` so the client can reconcile its optimistic update.
+5. Return `{ log | null, habitProgress, currentStreak, longestStreak }` so the client can reconcile its optimistic update. Streaks are as of the local today.
 
 #### Today
 
@@ -751,18 +755,19 @@ Response:
 ```ts
 {
   date: string;
-  dayProgress: number;               // avg progress of DAILY/SPECIFIC_DAYS habits scheduled today
+  dayProgress: number | null;        // avg progress of DAILY/SPECIFIC_DAYS habits due on `date`; null if none
   pendingReview: { id: string; weekStart: string } | null;   // unseen review banner
   welcomeBack: boolean;              // last review was inactive
-  groups: Array<{
+  groups: Array<{                    // DAILY/SPECIFIC_DAYS habits due on `date`; empty groups left out
     timeOfDay: 'MORNING' | 'AFTERNOON' | 'EVENING' | 'ANYTIME';
     habits: TodayHabit[];
   }>;
-  weeklyQuota: TodayHabit[];         // TIMES_PER_WEEK habits, with weekHits / timesPerWeek
+  weeklyQuota: TodayHabit[];         // TIMES_PER_WEEK habits (only here, never in groups)
 }
 
 type TodayHabit = {
   id: string; name: string; type: HabitType; unit: string | null;
+  scheduleType: ScheduleType; timeOfDay: TimeOfDay;
   core: { id: string; name: string; color: string; icon: string };
   goal: { id: string; title: string } | null;
   target: number;                    // effective on `date`
@@ -778,7 +783,7 @@ type TodayHabit = {
 };
 ```
 
-The service loads all active habits, the logs for the last ~120 days (for current streaks), and this week's target changes, in **three queries**. It then computes everything in memory with the shared functions. There are no per-habit queries.
+Everything is computed **as of `date`** (streaks and the week's hits), so browsing back shows each day as it was. The service loads the active habits that had started by `date` (with core and goal), their full log history up to `date`, and all their target changes, in **three queries**. It then computes everything in memory with the shared functions. There are no per-habit queries. At personal scale a full history is a few thousand rows per year; add a window only if profiling shows a need.
 
 #### Reviews and target changes
 
@@ -1249,7 +1254,7 @@ pnpm install
 cp apps/api/.env.example apps/api/.env
 docker compose up -d --wait       # postgres:16 on localhost:5434
 pnpm --filter @notch/api exec prisma migrate dev
-pnpm --filter @notch/api exec prisma db seed
+pnpm --filter @notch/api build && pnpm --filter @notch/api seed   # demo / demo-password
 pnpm dev                          # turbo runs api (3000) and web (5173) in parallel
 ```
 
