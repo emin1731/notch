@@ -45,6 +45,10 @@ export class TestClient {
     return this.send('patch', path, body, options);
   }
 
+  put(path: string, body?: object, options?: SendOptions): Promise<Response> {
+    return this.send('put', path, body, options);
+  }
+
   delete(path: string, body?: object, options?: SendOptions): Promise<Response> {
     return this.send('delete', path, body, options);
   }
