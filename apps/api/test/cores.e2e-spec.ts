@@ -34,7 +34,7 @@ describe('cores (e2e)', () => {
       icon: 'heart-pulse',
       sortOrder: 0,
       archivedAt: null,
-      counts: { goals: 0 },
+      counts: { goals: 0, habits: 0 },
     });
     const career = await createCore(client, { name: 'Career', color: 'indigo', icon: 'briefcase' });
     expect(career.sortOrder).toBe(1);
@@ -146,7 +146,7 @@ describe('cores (e2e)', () => {
       await createGoal(client, core.id);
       const archived = await createGoal(client, core.id);
       await client.post(`/goals/${archived.id}/archive`);
-      expect((await client.get('/cores')).body[0].counts).toEqual({ goals: 1 });
+      expect((await client.get('/cores')).body[0].counts).toEqual({ goals: 1, habits: 0 });
     });
   });
 

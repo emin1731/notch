@@ -3,13 +3,14 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { PrismaService } from '../src/prisma/prisma.service.js';
 import { createTestApp } from './create-test-app.js';
 import { PASSWORD, registerUser, resetDb } from './helpers/auth.js';
-import { createCore, createGoal } from './helpers/structure.js';
+import { createCore, createGoal, createHabit } from './helpers/structure.js';
 import type { TestClient } from './helpers/test-client.js';
 
 interface AliceIds {
   core: string;
   goal: string;
   milestone: string;
+  habit: string;
   bobCore: string;
   bobGoal: string;
 }
@@ -75,10 +76,12 @@ describe('ownership (e2e)', () => {
     const goal = await createGoal(alice, core.id, { milestones: ['one'] });
     const bobCore = await createCore(bob);
     const bobGoal = await createGoal(bob, bobCore.id);
+    const habit = await createHabit(alice, core.id, { goalId: goal.id });
     ids = {
       core: core.id,
       goal: goal.id,
       milestone: goal.milestones[0]!.id,
+      habit: habit.id,
       bobCore: bobCore.id,
       bobGoal: bobGoal.id,
     };
@@ -86,6 +89,7 @@ describe('ownership (e2e)', () => {
     snapshot = async () => ({
       cores: (await alice.get('/cores?includeArchived=true')).body,
       goal: (await alice.get(`/goals/${ids.goal}`)).body,
+      habit: (await alice.get(`/habits/${ids.habit}`)).body,
     });
   });
 
@@ -109,11 +113,13 @@ describe('ownership (e2e)', () => {
 
   it('deleting an account removes everything it owns, and nothing else', async () => {
     const prisma = app.get(PrismaService);
+    await alice.patch(`/habits/${ids.habit}`, { targetValue: 30 });
     const res = await alice.delete('/me', { password: PASSWORD });
     expect(res.status).toBe(204);
     expect(await prisma.core.count({ where: { id: ids.core } })).toBe(0);
     expect(await prisma.goal.count({ where: { id: ids.goal } })).toBe(0);
     expect(await prisma.milestone.count()).toBe(0);
+    expect(await prisma.habit.count({ where: { id: ids.habit } })).toBe(0);
     expect(await prisma.goal.count({ where: { id: ids.bobGoal } })).toBe(1);
   });
 });
