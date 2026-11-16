@@ -13,6 +13,7 @@ import type { Env } from './config/env.schema.js';
 import { HealthModule } from './health/health.module.js';
 import { LogsModule } from './logs/logs.module.js';
 import { PrismaModule } from './prisma/prisma.module.js';
+import { ReviewsModule } from './reviews/reviews.module.js';
 import { TodayModule } from './today/today.module.js';
 import { UsersModule } from './users/users.module.js';
 
@@ -45,6 +46,7 @@ import { UsersModule } from './users/users.module.js';
     GoalsModule,
     HabitsModule,
     LogsModule,
+    ReviewsModule,
     TodayModule,
     HealthModule,
   ],
