@@ -5,6 +5,8 @@ import { LoggerModule } from 'nestjs-pino';
 import { AuthModule } from './auth/auth.module.js';
 import { AllExceptionsFilter } from './common/filters/all-exceptions.filter.js';
 import { ConfigModule } from './config/config.module.js';
+import { CoresModule } from './cores/cores.module.js';
+import { GoalsModule } from './goals/goals.module.js';
 import type { Env } from './config/env.schema.js';
 import { HealthModule } from './health/health.module.js';
 import { PrismaModule } from './prisma/prisma.module.js';
@@ -34,6 +36,8 @@ import { UsersModule } from './users/users.module.js';
     PrismaModule,
     AuthModule,
     UsersModule,
+    CoresModule,
+    GoalsModule,
     HealthModule,
   ],
   providers: [{ provide: APP_FILTER, useClass: AllExceptionsFilter }],
