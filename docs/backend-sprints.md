@@ -122,33 +122,36 @@ Optional: deploy this skeleton to `notch.emindabakhov.com` now. That checks earl
 
 **Goal:** you can build the full core → goal → milestone structure and complete goals.
 
-**Decide**
+**Decided** (written back into the plan)
 
-- [ ] Goal archiving: replace the `ARCHIVED` status with an `archivedAt` column (like `Core` and `Habit`), so archiving a completed goal keeps its completion. Add `POST /goals/:id/unarchive`. Recommendation: yes.
-- [ ] Adding a milestone to a completed goal reopens it. Recommendation: yes.
-- [ ] Unarchiving a habit or goal whose core is archived: block it with `409 CORE_ARCHIVED`, or unarchive the core too. Recommendation: block.
+- [x] Goal archiving is an `archivedAt` column; `GoalStatus` is `ACTIVE | COMPLETED`, so an archived completed goal stays completed. `POST /goals/:id/unarchive` added.
+- [x] Adding a milestone to a completed goal reopens it. One rule (`nextGoalStatus`) runs after every milestone change.
+- [x] Unarchiving or creating a goal in an archived core is blocked with `409 CORE_ARCHIVED` (habits follow in S3).
+- [x] Manual complete/reopen only for goals without milestones (`409 GOAL_HAS_MILESTONES`); 50 milestones per goal (`409 LIMIT_REACHED`).
+- [x] Malformed ids are 404, like unknown ones. New codes `CORE_NOT_FOUND`, `GOAL_NOT_FOUND`, `MILESTONE_NOT_FOUND`.
+- [x] Milestone create, toggle and delete return the goal and `goalJustCompleted`; milestone writes lock the goal row, so concurrent ticks complete it exactly once.
 
 **Data**
 
-- [ ] `Core`, `Goal`, `Milestone` models + migration
-- [ ] `onDelete: NoAction` (not `Restrict`) for `Goal → Core` and `Habit → Core`, so deleting an account cascades cleanly. Covered by a test.
+- [x] `Core`, `Goal`, `Milestone` models + migration
+- [x] `onDelete: NoAction` (not `Restrict`) for `Goal → Core` (and `Habit → Core` in S3). `NoAction` is checked at the end of the statement, so account deletion cascades no matter which order Postgres runs the cascades in. Covered by a test.
 
 **Shared**
 
-- [ ] Schemas for core, goal and milestone; `CORE_PRESETS`, `COLOR_PALETTE`; `goalProgress()`
+- [x] Schemas for core, goal and milestone; `CORE_PRESETS`, `COLOR_PALETTE`, `LIMITS`; `goalProgress()`, `nextGoalStatus()`; local-date helpers
 
 **API**
 
-- [ ] Cores: list with counts, create, `POST /cores/batch`, update, `PUT /cores/order`, archive (cascades to goals and habits), unarchive, delete (`409 CORE_NOT_EMPTY`)
-- [ ] Goals: list with progress, detail, create with inline milestones, update (core change rules), complete/reopen (goals without milestones), archive/unarchive, delete (unlinks habits, deletes milestones)
-- [ ] Milestones: create (appended), rename, `PUT .../order`, toggle returning `goalJustCompleted`, delete (with goal-status sync)
-- [ ] All multi-table writes in `prisma.$transaction`
+- [x] Cores: list with counts, create, `POST /cores/batch`, update, `PUT /cores/order`, archive (cascades to goals), unarchive, delete (`409 CORE_NOT_EMPTY`)
+- [x] Goals: list with progress, detail, create with inline milestones, update (core change rules), complete/reopen (goals without milestones), archive/unarchive, delete (deletes milestones)
+- [x] Milestones: create (appended), rename, `PUT .../order`, toggle returning `goalJustCompleted`, delete (with goal-status sync)
+- [x] All multi-table writes in `prisma.$transaction`
 
 **Tests**
 
-- [ ] Ticking the last milestone completes the goal; unticking reopens it; deleting the last open milestone completes it
-- [ ] Archive cascade; delete guard; account deletion with cores, goals and milestones present
-- [ ] Ownership 404s for every route; order arrays capped at 200, milestones at 50
+- [x] Ticking the last milestone completes the goal; unticking reopens it; adding one reopens it; deleting the last open milestone completes it; concurrent ticks complete it once
+- [x] Archive cascade; delete guard; account deletion with cores, goals and milestones present
+- [x] Ownership 404s for every route (`test/ownership.e2e-spec.ts`, extended by later sprints); order arrays capped at 200, milestones at 50
 
 **Done when:** the structure can be built and reorganised entirely through the API, and the goal-completion rules pass their tests.
 
@@ -169,6 +172,13 @@ Optional: deploy this skeleton to `notch.emindabakhov.com` now. That checks earl
 **Data**
 
 - [ ] `Habit` and `TargetChange` (manual changes only for now) + migration, CHECK constraints from plan 5.2
+
+**Carried over from S2** (needs the `Habit` model)
+
+- [ ] Core archive cascades to its active habits; habits count toward `CORE_NOT_EMPTY`; `counts.habits` in the core list
+- [ ] Goal delete unlinks its habits (`goalId → null`); goal detail lists linked habits
+- [ ] Moving a goal with linked habits to another core moves the habits too
+- [ ] Creating or unarchiving a habit in an archived core → `409 CORE_ARCHIVED`; habit routes added to `test/ownership.e2e-spec.ts`
 
 **Shared**
 

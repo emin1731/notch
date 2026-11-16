@@ -67,7 +67,7 @@ User
 
 - Every **habit belongs to exactly one core**. Linking to a goal is optional, and the goal must belong to the same core.
 - A **core** has a name, color and icon. Cores can be reordered and archived.
-- A **goal** has a title, optional description, optional deadline and a status (`ACTIVE`, `COMPLETED`, `ARCHIVED`).
+- A **goal** has a title, optional description, optional deadline, a status (`ACTIVE`, `COMPLETED`) and, separately, an archived flag (`archivedAt`), so an archived goal keeps its completion.
 - A **milestone** has a title, an order and a completion timestamp.
 
 ### 2.2 Habit types
@@ -192,9 +192,12 @@ All thresholds live in one config object in the shared package (`PROGRESSION_CON
 - Goal progress is `ticked milestones / total milestones`.
 - **Ticking the last open milestone** sets the goal to `COMPLETED` with `completedAt`. The API response flags this so the client can show the celebration screen.
 - **Un-ticking** a milestone of a completed goal sets the goal back to `ACTIVE`.
-- A goal **without milestones** shows no percentage and has a manual "Mark goal complete" action.
+- **Adding a milestone** to a completed goal reopens it, since it now has an open milestone.
+- One rule covers all of these, run after every milestone change (create, tick, untick, delete): all milestones ticked → `COMPLETED`; any open → `ACTIVE`; no milestones left → unchanged. It's `nextGoalStatus()` in the shared package.
+- A goal **without milestones** shows no percentage and has a manual "Mark goal complete" (and reopen) action. A goal with milestones can only complete through them (`409 GOAL_HAS_MILESTONES`).
 - Milestones can be added, renamed, reordered (drag and drop) and deleted at any time.
-- **Archiving a goal** keeps its linked habits active (they stay under the core). **Deleting a goal** unlinks its habits (`goalId → null`) and deletes its milestones.
+- **Archiving a goal** sets `archivedAt` and keeps its status and its linked habits active (they stay under the core). Archived goals are hidden from default lists but stay editable.
+- A goal's milestones are capped at 50. **Deleting a goal** unlinks its habits (`goalId → null`) and deletes its milestones.
 
 ### 2.10 Cores, archiving and deletion
 
@@ -202,6 +205,7 @@ All thresholds live in one config object in the shared package (`PROGRESSION_CON
 |---|---|
 | Archive core | Confirmation dialog, then archives the core and all its active goals and habits |
 | Unarchive core | Restores the core only. Goals and habits are restored individually |
+| Unarchive goal or habit, or create one, in an archived core | Refused with `409 CORE_ARCHIVED`: unarchive the core first |
 | Delete core | Only allowed if it has no goals and no habits (including archived ones) |
 | Archive habit | Hidden from Today, excluded from reviews, kept in stats history |
 | Delete habit | Permanently deletes the habit, its logs and its target changes (confirmation required) |
@@ -366,7 +370,7 @@ enum HabitType        { TOGGLE COUNT DURATION }
 enum ScheduleType     { DAILY SPECIFIC_DAYS TIMES_PER_WEEK }
 enum TimeOfDay        { MORNING AFTERNOON EVENING ANYTIME }
 enum StepType         { PERCENT ABSOLUTE }
-enum GoalStatus       { ACTIVE COMPLETED ARCHIVED }
+enum GoalStatus       { ACTIVE COMPLETED }      // archiving is Goal.archivedAt
 enum TargetChangeKind { LEVEL_UP DELOAD MANUAL }
 enum TargetField      { TARGET_VALUE TIMES_PER_WEEK }
 
@@ -429,16 +433,17 @@ model Goal {
   deadline    DateTime?  @db.Date
   status      GoalStatus @default(ACTIVE)
   completedAt DateTime?
+  archivedAt  DateTime?
   sortOrder   Int        @default(0)
   createdAt   DateTime   @default(now())
   updatedAt   DateTime   @updatedAt
 
   user        User       @relation(fields: [userId], references: [id], onDelete: Cascade)
-  core        Core       @relation(fields: [coreId], references: [id], onDelete: Restrict)
+  core        Core       @relation(fields: [coreId], references: [id], onDelete: NoAction)
   milestones  Milestone[]
   habits      Habit[]
 
-  @@index([userId, coreId, status])
+  @@index([userId, coreId])
 }
 
 model Milestone {
@@ -485,7 +490,7 @@ model Habit {
   updatedAt           DateTime     @updatedAt
 
   user                User         @relation(fields: [userId], references: [id], onDelete: Cascade)
-  core                Core         @relation(fields: [coreId], references: [id], onDelete: Restrict)
+  core                Core         @relation(fields: [coreId], references: [id], onDelete: NoAction)
   goal                Goal?        @relation(fields: [goalId], references: [id], onDelete: SetNull)
   logs                HabitLog[]
   targetChanges       TargetChange[]
@@ -601,9 +606,9 @@ Instants are `DateTime @db.Timestamptz(3)`. `@db.Date` columns hold a **user-loc
 - **Global prefix:** `/api/v1`.
 - **Global guards:** `SessionGuard` (authentication) and `CsrfGuard` (unsafe methods), see [6.4](#64-authentication). Public routes are marked with `@Public()`.
 - **`@CurrentUser()` decorator:** returns `{ id, username, timezone }`, loaded by `SessionGuard` together with the session in one query, so the timezone is always current.
-- **Ownership:** every service method takes `userId` and scopes every query with `where: { userId }` (or via the parent's `userId`). A record owned by another user returns **404**, never 403, so ids can't be probed.
+- **Ownership:** every service method takes `userId` and scopes every query with `where: { userId }` (or via the parent's `userId`). A record owned by another user returns **404**, never 403, so ids can't be probed. A malformed id is a 404 too.
 - **Validation:** `ZodValidationPipe` with schemas imported from `@notch/shared`.
-- **Errors:** a global exception filter returns `{ statusCode, code, message, details? }`. `code` is a stable string the client can switch on, for example `HABIT_NOT_FOUND`, `UNDO_NOT_ALLOWED`, `BACKFILL_OUT_OF_RANGE`, `CORE_NOT_EMPTY`, `GOAL_CORE_MISMATCH`, `USERNAME_TAKEN`, `INVALID_CREDENTIALS`, `INVALID_INVITE_CODE`, `REGISTRATION_CLOSED`, `UNAUTHENTICATED`, `CSRF_INVALID`.
+- **Errors:** a global exception filter returns `{ statusCode, code, message, details? }`. `code` is a stable string the client can switch on, for example `CORE_NOT_FOUND`, `GOAL_NOT_FOUND`, `MILESTONE_NOT_FOUND`, `HABIT_NOT_FOUND`, `CORE_ARCHIVED`, `GOAL_HAS_MILESTONES`, `LIMIT_REACHED`, `UNDO_NOT_ALLOWED`, `BACKFILL_OUT_OF_RANGE`, `CORE_NOT_EMPTY`, `GOAL_CORE_MISMATCH`, `USERNAME_TAKEN`, `INVALID_CREDENTIALS`, `INVALID_INVITE_CODE`, `REGISTRATION_CLOSED`, `UNAUTHENTICATED`, `CSRF_INVALID`.
 - **Transactions:** any operation touching more than one table uses `prisma.$transaction`. This includes: milestone tick plus goal status, log write plus longest-streak update, review creation plus target changes, and undo.
 - **Config:** env validated at boot by a zod schema. The app refuses to start if a value is missing.
 
@@ -652,32 +657,33 @@ A wrong `currentPassword` or `password` returns **403** `INVALID_CREDENTIALS`, n
 
 | Method | Path | Body | Notes |
 |---|---|---|---|
-| GET | `/cores?includeArchived=` | — | ordered by `sortOrder`, with goal and habit counts |
+| GET | `/cores?includeArchived=` | — | ordered by `sortOrder`, with `counts` of non-archived goals (and habits, from S3) |
 | POST | `/cores` | `{ name, color, icon }` | |
-| POST | `/cores/batch` | `{ cores: [...] }` | used by onboarding |
+| POST | `/cores/batch` | `{ cores: [...] }` | 1–20, appended in order, all or nothing; used by onboarding |
 | PATCH | `/cores/:id` | `{ name?, color?, icon? }` | |
-| PUT | `/cores/order` | `{ ids: string[] }` | |
-| POST | `/cores/:id/archive` | — | cascades to goals and habits |
+| PUT | `/cores/order` | `{ ids: string[] }` | the listed cores first, the rest after them in their current order; unknown id → 404; returns the list |
+| POST | `/cores/:id/archive` | — | cascades to its active goals and habits (same `archivedAt`) |
 | POST | `/cores/:id/unarchive` | — | |
-| DELETE | `/cores/:id` | — | `409 CORE_NOT_EMPTY` if it has goals or habits |
+| DELETE | `/cores/:id` | — | `409 CORE_NOT_EMPTY` if it has goals or habits, archived ones included |
 
 #### Goals and milestones
 
 | Method | Path | Body | Notes |
 |---|---|---|---|
-| GET | `/goals?coreId=&status=` | — | includes `progress` and `milestoneCounts` |
+| GET | `/goals?coreId=&status=&includeArchived=` | — | `status` is `ACTIVE` or `COMPLETED`; includes `progress` and `milestoneCounts` |
 | GET | `/goals/:id` | — | goal with milestones and linked habits |
-| POST | `/goals` | `{ coreId, title, description?, deadline?, milestones?: string[] }` | milestones can be created inline |
+| POST | `/goals` | `{ coreId, title, description?, deadline?, milestones?: string[] }` | milestones can be created inline (≤ 50); `409 CORE_ARCHIVED`; returns the goal with milestones |
 | PATCH | `/goals/:id` | `{ title?, description?, deadline?, coreId? }` | changing core is only allowed if no habits are linked, or the linked habits move with it (confirmation) |
-| POST | `/goals/:id/complete` | — | only for goals without milestones |
-| POST | `/goals/:id/reopen` | — | |
-| POST | `/goals/:id/archive` | — | |
+| POST | `/goals/:id/complete` | — | only for goals without milestones, else `409 GOAL_HAS_MILESTONES` |
+| POST | `/goals/:id/reopen` | — | same rule |
+| POST | `/goals/:id/archive` | — | keeps the status |
+| POST | `/goals/:id/unarchive` | — | `409 CORE_ARCHIVED` while its core is archived |
 | DELETE | `/goals/:id` | — | unlinks habits |
-| POST | `/goals/:goalId/milestones` | `{ title }` | appended at the end |
+| POST | `/goals/:goalId/milestones` | `{ title }` | appended at the end; reopens a completed goal; `409 LIMIT_REACHED` at 50. Returns `{ milestone, goal, goalJustCompleted }` |
 | PATCH | `/milestones/:id` | `{ title? }` | |
-| PUT | `/goals/:goalId/milestones/order` | `{ ids: string[] }` | |
+| PUT | `/goals/:goalId/milestones/order` | `{ ids: string[] }` | must list every milestone of the goal exactly once, else 400 |
 | POST | `/milestones/:id/toggle` | — | returns `{ milestone, goal, goalJustCompleted: boolean }` |
-| DELETE | `/milestones/:id` | — | if it was the last open one and the others are ticked, the goal completes |
+| DELETE | `/milestones/:id` | — | if it was the last open one and the others are ticked, the goal completes. Returns 200 `{ goal, goalJustCompleted }` |
 
 #### Habits
 
