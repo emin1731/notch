@@ -11,6 +11,11 @@ datasource db {
   provider = "postgresql"
 }
 
+enum GoalStatus {
+  ACTIVE
+  COMPLETED
+}
+
 model User {
   id           String    @id @default(uuid())
   username     String    @unique // trimmed + lower-cased, ^[a-z0-9_.-]{3,50}$
@@ -22,6 +27,8 @@ model User {
   updatedAt    DateTime  @updatedAt @db.Timestamptz(3)
 
   sessions Session[]
+  cores    Core[]
+  goals    Goal[]
 }
 
 model Session {
@@ -36,4 +43,58 @@ model Session {
 
   @@index([userId])
   @@index([expiresAt])
+}
+
+model Core {
+  id         String    @id @default(uuid())
+  userId     String
+  name       String
+  color      String // token from COLOR_PALETTE, e.g. "emerald"
+  icon       String // lucide icon name
+  sortOrder  Int       @default(0)
+  archivedAt DateTime? @db.Timestamptz(3)
+  createdAt  DateTime  @default(now()) @db.Timestamptz(3)
+  updatedAt  DateTime  @updatedAt @db.Timestamptz(3)
+
+  user  User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  goals Goal[]
+
+  @@index([userId, archivedAt])
+}
+
+model Goal {
+  id          String     @id @default(uuid())
+  userId      String
+  coreId      String
+  title       String
+  description String?
+  deadline    DateTime?  @db.Date
+  status      GoalStatus @default(ACTIVE)
+  completedAt DateTime?  @db.Timestamptz(3)
+  archivedAt  DateTime?  @db.Timestamptz(3)
+  sortOrder   Int        @default(0)
+  createdAt   DateTime   @default(now()) @db.Timestamptz(3)
+  updatedAt   DateTime   @updatedAt @db.Timestamptz(3)
+
+  user       User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  // NoAction, not Restrict: checked at the end of the statement, so deleting the user cascades
+  // through Core and Goal in either order. Deleting a non-empty core is blocked in the service.
+  core       Core        @relation(fields: [coreId], references: [id], onDelete: NoAction)
+  milestones Milestone[]
+
+  @@index([userId, coreId])
+}
+
+model Milestone {
+  id          String    @id @default(uuid())
+  goalId      String
+  title       String
+  sortOrder   Int
+  completedAt DateTime? @db.Timestamptz(3)
+  createdAt   DateTime  @default(now()) @db.Timestamptz(3)
+  updatedAt   DateTime  @updatedAt @db.Timestamptz(3)
+
+  goal Goal @relation(fields: [goalId], references: [id], onDelete: Cascade)
+
+  @@index([goalId, sortOrder])
 }
