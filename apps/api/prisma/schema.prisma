@@ -66,6 +66,7 @@ model User {
   cores    Core[]
   goals    Goal[]
   habits   Habit[]
+  logs     HabitLog[]
 }
 
 model Session {
@@ -172,6 +173,7 @@ model Habit {
   user          User           @relation(fields: [userId], references: [id], onDelete: Cascade)
   core          Core           @relation(fields: [coreId], references: [id], onDelete: NoAction)
   goal          Goal?          @relation(fields: [goalId], references: [id], onDelete: SetNull)
+  logs          HabitLog[]
   targetChanges TargetChange[]
 
   @@index([userId, archivedAt])
@@ -197,4 +199,23 @@ model TargetChange {
   habit Habit @relation(fields: [habitId], references: [id], onDelete: Cascade)
 
   @@index([habitId, effectiveFrom])
+}
+
+/// One per habit per user-local date. A write that leaves value 0 deletes the row, so a log
+/// always means "did something". CHECK (value >= 0) is in the migration SQL.
+model HabitLog {
+  id             String   @id @default(uuid())
+  habitId        String
+  userId         String
+  date           DateTime @db.Date // user-local calendar date
+  value          Int // TOGGLE 0/1, COUNT units, DURATION seconds
+  targetSnapshot Int // the habit's target on `date`, set when the log is created
+  createdAt      DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt      DateTime @updatedAt @db.Timestamptz(3)
+
+  habit Habit @relation(fields: [habitId], references: [id], onDelete: Cascade)
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([habitId, date])
+  @@index([userId, date])
 }
