@@ -75,34 +75,44 @@ S5 holds most of the product's risk. S3 and S4 exist mostly to give it solid fou
 
 **Goal:** you can register with the invite code, stay logged in, and manage your account. Spec: [plan 6.4](habit-tracker-implementation-plan.md#64-authentication).
 
+**Decided** (written back into the plan)
+
+- [x] `TRUST_PROXY` is a hop count (`1` in production), not `true`: with `true` the client controls the IP the throttle sees.
+- [x] A wrong current password on `POST /me/password` and `DELETE /me` is **403** `INVALID_CREDENTIALS`, so the SPA doesn't read it as a lost session.
+- [x] The CSRF token is bound to the SHA-256 of the `SESSION` cookie (or `"anon"`): stateless, no DB lookup.
+- [x] Instants are `timestamptz` (`@db.Timestamptz(3)`), not Prisma's default `timestamp`.
+- [x] `POST /auth/logout` is public, so an expired session can still clear its cookie.
+- [x] The CLI runs from the build (`dist/cli/`); no seed script until there's data worth seeding (S4).
+
 **Data**
 
-- [ ] `User` (username, argon2id hash, timezone, onboardedAt) and `Session` models + migration
+- [x] `User` (username, argon2id hash, timezone, onboardedAt) and `Session` models + the first migration
 
 **Shared**
 
-- [ ] zod schemas: username (normalised, regex), password (8–128), register, login, update profile, change password, delete account
-- [ ] IANA timezone validation
+- [x] zod schemas: username (normalised, regex), password (8–128), register, login, update profile, change password, delete account; `UserDto`
+- [x] IANA timezone validation
 
 **API**
 
-- [ ] `SessionGuard` (global), `@Public()`, `@CurrentUser()` returning `{ id, username, timezone }`
-- [ ] `CsrfGuard` (global): signed, session-bound `XSRF-TOKEN`; reissued on login, register and logout
-- [ ] `GET /auth/csrf`, `POST /auth/register`, `POST /auth/login`, `GET /auth/me`, `POST /auth/logout`, `POST /auth/logout-all`
-- [ ] Invite code (constant-time compare), `MAX_USERS`, dummy-hash verify for unknown usernames
-- [ ] Sliding expiry (at most one write per day), expired-session cleanup on login
-- [ ] Throttler on login and register (10/min/IP)
-- [ ] `PATCH /me`, `POST /me/password` (drops other sessions), `DELETE /me` (password required), `POST /me/onboarding/complete`
-- [ ] CLI scripts: `user:create`, `user:set-password`
+- [x] `SessionGuard` (global), `@Public()`, `@CurrentUser()` returning `{ id, username, timezone }`, `@CurrentSessionId()`
+- [x] `CsrfGuard` (global): signed, session-bound `XSRF-TOKEN`; reissued on login, register, logout and when the session slides
+- [x] `GET /auth/csrf`, `POST /auth/register`, `POST /auth/login`, `GET /auth/me`, `POST /auth/logout`, `POST /auth/logout-all`
+- [x] Invite code (constant-time compare), `MAX_USERS`, dummy-hash verify for unknown usernames, rehash on login when the argon2 parameters change
+- [x] Sliding expiry (at most one write per day), expired-session cleanup on login
+- [x] Throttler on login and register (10/min/IP)
+- [x] `PATCH /me`, `POST /me/password` (drops other sessions), `DELETE /me` (password required), `POST /me/onboarding/complete`
+- [x] CLI scripts: `user:create`, `user:set-password` (in `AuthService`, next to registration)
 
 **Tests**
 
-- [ ] Register: wrong invite code, registration closed, username taken, case-insensitive usernames
-- [ ] Login: identical 401 for unknown user and wrong password; throttling returns 429
-- [ ] CSRF: missing header, wrong token, token from before login all rejected with 403
-- [ ] Session: expired session returns 401; logout and logout-all revoke; password change keeps only the current session
+- [x] Register: wrong invite code, registration closed, username taken, case-insensitive usernames, validation
+- [x] Login: identical 401 for unknown user and wrong password; throttling returns 429 per IP; new token on every login
+- [x] CSRF: missing header, header ≠ cookie, forged token, token from before login all rejected with 403
+- [x] Session: unknown and expired sessions return 401; sliding expiry; logout and logout-all revoke; password change keeps only the current session; survives an app restart
+- [x] Account: profile update, onboarding, deletion (cascade, other users untouched), CLI operations
 
-**Done when:** the full auth flow works through e2e tests and an `.http` file (or Swagger), and sessions survive an API restart.
+**Done when:** the full auth flow works through e2e tests and by hand with curl (see the README), and sessions survive an API restart.
 
 Optional: deploy this skeleton to `notch.emindabakhov.com` now. That checks early that the `Secure` cookie and the client IP work behind your host's proxy.
 

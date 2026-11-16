@@ -359,6 +359,9 @@ datasource db {
   provider = "postgresql"   // URL comes from prisma.config.ts (Prisma 7)
 }
 
+// Every DateTime below without @db.Date is an instant and carries @db.Timestamptz(3) in the real
+// schema; the attribute is left out here to keep the listing readable.
+
 enum HabitType        { TOGGLE COUNT DURATION }
 enum ScheduleType     { DAILY SPECIFIC_DAYS TIMES_PER_WEEK }
 enum TimeOfDay        { MORNING AFTERNOON EVENING ANYTIME }
@@ -587,7 +590,7 @@ The summary is a snapshot: it keeps habit names as they were, so renames don't r
 
 ### 5.4 Date column convention
 
-`@db.Date` columns hold a **user-local calendar date**, not an instant. The API always sends and receives them as `"YYYY-MM-DD"` strings. Prisma returns them as `Date` objects at UTC midnight, so conversion happens in exactly one place, the shared helpers `toDateString()` and `fromDateString()`. Never call `new Date()` on these values in business logic.
+Instants are `DateTime @db.Timestamptz(3)`. `@db.Date` columns hold a **user-local calendar date**, not an instant. The API always sends and receives them as `"YYYY-MM-DD"` strings. Prisma returns them as `Date` objects at UTC midnight, so conversion happens in exactly one place, the shared helpers `toDateString()` and `fromDateString()`. Never call `new Date()` on these values in business logic.
 
 ---
 
@@ -631,17 +634,19 @@ All routes are under `/api/v1` and require auth unless marked public.
 | POST | `/auth/register` | `{ username, password, inviteCode, name?, timezone }` | public; throttled; creates the user and starts a session, returns 201 + the user. `403 INVALID_INVITE_CODE`, `403 REGISTRATION_CLOSED`, `409 USERNAME_TAKEN` |
 | POST | `/auth/login` | `{ username, password }` | public; throttled; starts a session, returns 200 + the user. `401 INVALID_CREDENTIALS` for a wrong username or password alike |
 | GET | `/auth/me` | — | the current user (`id`, `username`, `name`, `timezone`, `onboardedAt`), or 401 |
-| POST | `/auth/logout` | — | deletes the current session, clears the cookie, returns 204 |
-| POST | `/auth/logout-all` | — | deletes every session of the user, including the current one, returns 204 |
+| POST | `/auth/logout` | — | public, so an expired session can still clear its cookie; deletes the current session, clears the cookie, issues an anonymous CSRF token, returns 204 |
+| POST | `/auth/logout-all` | — | deletes every session of the user, including the current one, clears the cookie, returns 204 |
 
 #### Users
 
 | Method | Path | Body | Notes |
 |---|---|---|---|
-| PATCH | `/me` | `{ name?, timezone? }` | a new timezone applies from the next request |
-| POST | `/me/password` | `{ currentPassword, newPassword }` | deletes the user's other sessions |
-| POST | `/me/onboarding/complete` | — | sets `onboardedAt` |
-| DELETE | `/me` | `{ password }` | hard delete via cascade |
+| PATCH | `/me` | `{ name?, timezone? }` | at least one field; `name: null` clears it. A new timezone applies from the next request. Returns the user |
+| POST | `/me/password` | `{ currentPassword, newPassword }` | deletes the user's other sessions, returns 204 |
+| POST | `/me/onboarding/complete` | — | sets `onboardedAt` (once), returns the user |
+| DELETE | `/me` | `{ password }` | hard delete via cascade, clears the cookie, returns 204 |
+
+A wrong `currentPassword` or `password` returns **403** `INVALID_CREDENTIALS`, not 401: the session is still valid, and a 401 would make the SPA treat the user as logged out.
 
 #### Cores
 
@@ -827,9 +832,9 @@ Browser (SPA)                         NestJS (same origin)                    Po
 **CSRF**
 
 - `GET /auth/csrf` sets an `XSRF-TOKEN` cookie that JavaScript can read (`Secure; SameSite=Lax; Path=/`, not `HttpOnly`).
-- The token is `random.HMAC(CSRF_SECRET, random + sessionTokenHash | "anon")`, so it's bound to the current session and can't be planted from elsewhere.
+- The token is `nonce.HMAC(CSRF_SECRET, nonce + binding)`, where the binding is the SHA-256 of the `SESSION` cookie, or `"anon"` without one. It's bound to the current session and can't be planted from elsewhere, and checking it needs no database lookup. A token issued before login stops working after it.
 - `CsrfGuard` (global) requires the `X-XSRF-TOKEN` header to equal the cookie and the signature to verify, on every POST, PUT, PATCH and DELETE, **including** login, register and logout. A failure returns `403 CSRF_INVALID` ("Invalid or missing CSRF token").
-- The token is reissued on login, register and logout (a new `Set-Cookie` in the same response), so the client reads the cookie fresh before every request instead of caching it.
+- The token is reissued on login, register, logout and whenever the session's expiry slides (a new `Set-Cookie` in the same response), so the client reads the cookie fresh before every request instead of caching it.
 
 **Registration rules**
 
@@ -838,12 +843,13 @@ Browser (SPA)                         NestJS (same origin)                    Po
 - A taken username gives `409 USERNAME_TAKEN` on the `username` field.
 - Register starts a session straight away, just like login.
 
-**Brute-force protection:** `@nestjs/throttler` on `POST /auth/login` and `POST /auth/register` only: 10 requests per minute per IP, then 429. `/auth/me` and `/auth/csrf` run on every page load and are not throttled. Express has `trust proxy` set, so the client IP comes from `X-Forwarded-For` behind the host's reverse proxy.
+**Brute-force protection:** `@nestjs/throttler` on `POST /auth/login` and `POST /auth/register` only: 10 requests per minute per IP, then 429. `/auth/me` and `/auth/csrf` run on every page load and are not throttled. Express's `trust proxy` is set to the **number of proxies** in front of the app (`TRUST_PROXY=1`), so the client IP is the address the host's reverse proxy appended to `X-Forwarded-For`. With `true`, Express would take the left-most entry, which the client controls, and the throttle could be bypassed.
 
 **Account recovery without email:** CLI scripts run on the server (or locally against the production database):
 
 - `pnpm --filter @notch/api user:set-password <username>` prompts for a new password and deletes that user's sessions.
-- `pnpm --filter @notch/api user:create <username>` creates a user without an invite code, which is useful for the first account.
+- `pnpm --filter @notch/api user:create <username> [--timezone=Asia/Baku] [--name=…]` creates a user without an invite code or the `MAX_USERS` check, which is useful for the first account.
+- Both run from the build (`dist/cli/`), so run `pnpm --filter @notch/api build` first locally. The password is asked twice without echo, or read from the first line of stdin when piped.
 
 **Authorization** is unchanged: there are no roles, every query is scoped by `userId`, and another user's record returns 404.
 
@@ -1251,11 +1257,11 @@ DATABASE_URL=postgresql://postgres:postgres@localhost:5434/notch
 SHADOW_DATABASE_URL=postgresql://postgres:postgres@localhost:5434/notch_shadow   # drift check only
 LOG_LEVEL=info
 SESSION_TTL_DAYS=30
-COOKIE_SECURE=false              # true in production
-CSRF_SECRET=change-me            # 32+ random bytes
-INVITE_CODE=change-me
+COOKIE_SECURE=false              # defaults to true; false only for local plain HTTP
+CSRF_SECRET=change-me            # 32+ characters, e.g. `openssl rand -base64 48`
+INVITE_CODE=change-me            # 8+ characters
 MAX_USERS=1                      # raise to invite someone
-TRUST_PROXY=false                # true behind the host's reverse proxy
+TRUST_PROXY=false                # number of proxies in front of the app; 1 behind the host's reverse proxy
 WEB_DIST_DIR=                    # production only: path to the built SPA
 ```
 
@@ -1279,7 +1285,7 @@ On every push to `main` and every PR (`.github/workflows/ci.yml`):
 
 - **Domain:** `https://notch.emindabakhov.com`, on the existing hosting.
 - **One app, one origin:** a single Docker image (multi-stage build, `node:26-slim`) contains the API and the built SPA. NestJS serves the SPA with `@nestjs/serve-static` (falling back to `index.html` for client routes) and the API under `/api/v1`. There's no separate web host and no CORS.
-- **TLS:** terminated by the host's reverse proxy, which forwards `X-Forwarded-Proto` and `X-Forwarded-For`. Set `TRUST_PROXY=true` so Express sees HTTPS (required for the `Secure` cookies) and the real client IP (required for throttling). The cookies are never sent over plain HTTP.
+- **TLS:** terminated by the host's reverse proxy, which forwards `X-Forwarded-Proto` and `X-Forwarded-For`. Set `TRUST_PROXY=1` (one proxy hop) so Express sees HTTPS (required for the `Secure` cookies) and the real client IP (required for throttling). The cookies are never sent over plain HTTP.
 - **Release:** the container runs `prisma migrate deploy` on start. `GET /api/v1/health` checks the DB connection.
 - **First user:** after the first deploy, run `user:create` (or register with the invite code).
 - **Database:** PostgreSQL 16 on the same host or a managed instance, with daily backups (`pg_dump` on a schedule is enough).
