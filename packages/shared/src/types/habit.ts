@@ -51,6 +51,8 @@ export interface TargetChangeDto {
 }
 
 export interface HabitDetailDto extends HabitDto {
+  /** As of the local today. */
+  currentStreak: number;
   /** The 10 most recent target changes, newest first. */
   recentChanges: TargetChangeDto[];
 }
