@@ -40,6 +40,11 @@ export interface ReviewListDto {
   nextCursor: LocalDate | null;
 }
 
+/** `review` is null until the first week has been reviewed. */
+export interface LatestReviewDto {
+  review: ReviewDto | null;
+}
+
 export interface UndoResult {
   change: TargetChangeDto;
   habit: HabitDto;
