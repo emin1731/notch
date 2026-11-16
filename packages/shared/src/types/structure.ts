@@ -40,9 +40,14 @@ export interface GoalDetailDto extends GoalDto {
   milestones: MilestoneDto[];
 }
 
-export interface MilestoneToggleResult {
-  milestone: MilestoneDto;
+/** Returned by milestone deletion: the goal's status may have changed. */
+export interface GoalChangeResult {
   goal: GoalDto;
-  /** True when this tick completed the goal: the client shows the celebration. */
+  /** True when this change completed the goal: the client shows the celebration. */
   goalJustCompleted: boolean;
+}
+
+/** Returned by milestone create and toggle. */
+export interface MilestoneChangeResult extends GoalChangeResult {
+  milestone: MilestoneDto;
 }
