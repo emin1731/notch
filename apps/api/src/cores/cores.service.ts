@@ -1,5 +1,6 @@
 import { HttpStatus, Injectable } from '@nestjs/common';
 import type { CoreDto, CreateCoreInput, UpdateCoreInput } from '@notch/shared';
+import { Clock } from '../clock/clock.js';
 import { AppException } from '../common/errors/app-exception.js';
 import { coreNotFound } from '../common/not-found.js';
 import { applyOrder } from '../common/ordering.js';
@@ -16,7 +17,10 @@ const ORDER = [
 
 @Injectable()
 export class CoresService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly clock: Clock,
+  ) {}
 
   async list(userId: string, includeArchived: boolean): Promise<CoreDto[]> {
     const cores = await this.prisma.core.findMany({
@@ -84,15 +88,16 @@ export class CoresService {
     return this.list(userId, false);
   }
 
-  /** Archives the core and its active goals with the same timestamp (plan 2.10). */
+  /** Archives the core and its active goals and habits with the same timestamp (plan 2.10). */
   async archive(userId: string, id: string): Promise<CoreDto> {
     const core = await this.prisma.$transaction(async (tx) => {
       const existing = await this.findOwned(userId, id, tx);
       if (existing.archivedAt) {
         return existing;
       }
-      const archivedAt = new Date();
+      const archivedAt = this.clock.now();
       await tx.goal.updateMany({ where: { coreId: id, archivedAt: null }, data: { archivedAt } });
+      await tx.habit.updateMany({ where: { coreId: id, archivedAt: null }, data: { archivedAt } });
       return tx.core.update({ where: { id }, data: { archivedAt } });
     });
     return this.dto(core.id);
@@ -105,11 +110,15 @@ export class CoresService {
     return this.dto(id);
   }
 
-  /** Only an empty core can be deleted: no goals, archived ones included. */
+  /** Only an empty core can be deleted: no goals or habits, archived ones included. */
   async delete(userId: string, id: string): Promise<void> {
     await this.prisma.$transaction(async (tx) => {
       await this.findOwned(userId, id, tx);
-      if ((await tx.goal.count({ where: { coreId: id } })) > 0) {
+      const [goals, habits] = await Promise.all([
+        tx.goal.count({ where: { coreId: id } }),
+        tx.habit.count({ where: { coreId: id } }),
+      ]);
+      if (goals + habits > 0) {
         throw new AppException(
           'CORE_NOT_EMPTY',
           HttpStatus.CONFLICT,

@@ -6,6 +6,7 @@ import {
   type MilestoneDto,
   nextGoalStatus,
 } from '@notch/shared';
+import { Clock } from '../clock/clock.js';
 import { AppException } from '../common/errors/app-exception.js';
 import { goalNotFound, milestoneNotFound } from '../common/not-found.js';
 import { applyOrder } from '../common/ordering.js';
@@ -21,7 +22,10 @@ type Tx = Prisma.TransactionClient;
  */
 @Injectable()
 export class MilestonesService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly clock: Clock,
+  ) {}
 
   /** Appended at the end. Reopens a completed goal, since it now has an open milestone. */
   create(userId: string, goalId: string, title: string): Promise<MilestoneChangeResult> {
@@ -94,7 +98,7 @@ export class MilestonesService {
       const current = await tx.milestone.findUniqueOrThrow({ where: { id } });
       const milestone = await tx.milestone.update({
         where: { id },
-        data: { completedAt: current.completedAt ? null : new Date() },
+        data: { completedAt: current.completedAt ? null : this.clock.now() },
       });
       return { milestone: toMilestoneDto(milestone), ...(await this.syncGoal(tx, goalId)) };
     });
@@ -139,7 +143,7 @@ export class MilestonesService {
     }
     const updated = await tx.goal.update({
       where: { id: goalId },
-      data: { status, completedAt: status === 'COMPLETED' ? new Date() : null },
+      data: { status, completedAt: status === 'COMPLETED' ? this.clock.now() : null },
     });
     return {
       goal: toGoalDto(updated, goal.milestones),

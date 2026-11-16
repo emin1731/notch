@@ -5,7 +5,7 @@ import {
   type MilestoneDto,
   toDateString,
 } from '@notch/shared';
-import type { Goal, Milestone } from '../generated/prisma/client.js';
+import type { Goal, Habit, Milestone } from '../generated/prisma/client.js';
 
 export function toMilestoneDto(milestone: Milestone): MilestoneDto {
   return {
@@ -38,7 +38,22 @@ export function toGoalDto(
   };
 }
 
-/** `milestones` must be in display order. */
-export function toGoalDetailDto(goal: Goal, milestones: readonly Milestone[]): GoalDetailDto {
-  return { ...toGoalDto(goal, milestones), milestones: milestones.map(toMilestoneDto) };
+type LinkedHabit = Pick<Habit, 'id' | 'name' | 'type' | 'archivedAt'>;
+
+/** `milestones` and `habits` must be in display order. */
+export function toGoalDetailDto(
+  goal: Goal,
+  milestones: readonly Milestone[],
+  habits: readonly LinkedHabit[],
+): GoalDetailDto {
+  return {
+    ...toGoalDto(goal, milestones),
+    milestones: milestones.map(toMilestoneDto),
+    habits: habits.map((habit) => ({
+      id: habit.id,
+      name: habit.name,
+      type: habit.type,
+      archivedAt: habit.archivedAt?.toISOString() ?? null,
+    })),
+  };
 }

@@ -7,7 +7,9 @@ import {
   type ListGoalsQuery,
   type UpdateGoalInput,
 } from '@notch/shared';
+import { Clock } from '../clock/clock.js';
 import { AppException } from '../common/errors/app-exception.js';
+import { coreArchived, goalCoreMismatch } from '../common/errors/conflicts.js';
 import { goalNotFound } from '../common/not-found.js';
 import { CoresService } from '../cores/cores.service.js';
 import type { Goal, Prisma } from '../generated/prisma/client.js';
@@ -21,13 +23,6 @@ const MILESTONE_ORDER = [
   { createdAt: 'asc' },
 ] as const satisfies Prisma.MilestoneOrderByWithRelationInput[];
 
-const coreArchived = () =>
-  new AppException(
-    'CORE_ARCHIVED',
-    HttpStatus.CONFLICT,
-    'The core is archived. Unarchive it first.',
-  );
-
 const hasMilestones = () =>
   new AppException(
     'GOAL_HAS_MILESTONES',
@@ -40,6 +35,7 @@ export class GoalsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly cores: CoresService,
+    private readonly clock: Clock,
   ) {}
 
   async list(userId: string, query: ListGoalsQuery): Promise<GoalDto[]> {
@@ -82,12 +78,23 @@ export class GoalsService {
     return this.detailOf(goal.id);
   }
 
-  // S3: moving a goal with linked habits to another core moves the habits too (plan 6.3).
+  /**
+   * Moving a goal to another core needs `moveHabits: true` when habits are linked to it: they move
+   * with it, since a habit's goal must be in the habit's core.
+   */
   async update(userId: string, id: string, input: UpdateGoalInput): Promise<GoalDetailDto> {
     await this.prisma.$transaction(async (tx) => {
       const goal = await this.findOwned(userId, id, tx);
       if (input.coreId !== undefined && input.coreId !== goal.coreId) {
         await this.assertCoreUsable(userId, input.coreId, tx);
+        const linkedHabits = await tx.habit.count({ where: { goalId: id } });
+        if (linkedHabits > 0 && !input.moveHabits) {
+          throw goalCoreMismatch(
+            'Habits are linked to this goal. Confirm moving them to the new core too.',
+            { linkedHabits },
+          );
+        }
+        await tx.habit.updateMany({ where: { goalId: id }, data: { coreId: input.coreId } });
       }
       await tx.goal.update({
         where: { id },
@@ -117,7 +124,7 @@ export class GoalsService {
   async archive(userId: string, id: string): Promise<GoalDetailDto> {
     const goal = await this.findOwned(userId, id);
     if (!goal.archivedAt) {
-      await this.prisma.goal.update({ where: { id }, data: { archivedAt: new Date() } });
+      await this.prisma.goal.update({ where: { id }, data: { archivedAt: this.clock.now() } });
     }
     return this.detailOf(id);
   }
@@ -129,7 +136,7 @@ export class GoalsService {
     return this.detailOf(id);
   }
 
-  /** Milestones cascade. S3: linked habits are unlinked (goalId → null), not deleted. */
+  /** Milestones cascade; linked habits are unlinked (goalId → null by the foreign key), not deleted. */
   async delete(userId: string, id: string): Promise<void> {
     const { count } = await this.prisma.goal.deleteMany({ where: { id, userId } });
     if (count === 0) {
@@ -149,9 +156,15 @@ export class GoalsService {
   async detailOf(id: string, db: Db = this.prisma): Promise<GoalDetailDto> {
     const goal = await db.goal.findUniqueOrThrow({
       where: { id },
-      include: { milestones: { orderBy: MILESTONE_ORDER } },
+      include: {
+        milestones: { orderBy: MILESTONE_ORDER },
+        habits: {
+          select: { id: true, name: true, type: true, archivedAt: true },
+          orderBy: [{ sortOrder: 'asc' }, { createdAt: 'asc' }],
+        },
+      },
     });
-    return toGoalDetailDto(goal, goal.milestones);
+    return toGoalDetailDto(goal, goal.milestones, goal.habits);
   }
 
   private async setManualStatus(
@@ -167,7 +180,7 @@ export class GoalsService {
       if (goal.status !== status) {
         await tx.goal.update({
           where: { id },
-          data: { status, completedAt: status === 'COMPLETED' ? new Date() : null },
+          data: { status, completedAt: status === 'COMPLETED' ? this.clock.now() : null },
         });
       }
     });
