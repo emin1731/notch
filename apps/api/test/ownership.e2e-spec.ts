@@ -1,3 +1,4 @@
+import { todayIn } from '@notch/shared';
 import type { NestExpressApplication } from '@nestjs/platform-express';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { PrismaService } from '../src/prisma/prisma.service.js';
@@ -11,6 +12,7 @@ interface AliceIds {
   goal: string;
   milestone: string;
   habit: string;
+  today: string;
   bobCore: string;
   bobGoal: string;
 }
@@ -57,6 +59,50 @@ const ROUTES: [Method, (ids: AliceIds) => string, (ids: AliceIds) => object | un
       'MILESTONE_NOT_FOUND',
     ],
     ['delete', (ids) => `/milestones/${ids.milestone}`, () => undefined, 'MILESTONE_NOT_FOUND'],
+    [
+      'post',
+      () => '/habits',
+      (ids) => ({ coreId: ids.core, name: 'X', type: 'TOGGLE', scheduleType: 'DAILY' }),
+      'CORE_NOT_FOUND',
+    ],
+    [
+      'post',
+      () => '/habits',
+      (ids) => ({
+        coreId: ids.bobCore,
+        goalId: ids.goal,
+        name: 'X',
+        type: 'TOGGLE',
+        scheduleType: 'DAILY',
+      }),
+      'GOAL_NOT_FOUND',
+    ],
+    ['get', (ids) => `/habits/${ids.habit}`, () => undefined, 'HABIT_NOT_FOUND'],
+    ['get', (ids) => `/habits/${ids.habit}/target-history`, () => undefined, 'HABIT_NOT_FOUND'],
+    ['patch', (ids) => `/habits/${ids.habit}`, () => ({ targetValue: 99 }), 'HABIT_NOT_FOUND'],
+    ['put', () => '/habits/order', (ids) => ({ ids: [ids.habit] }), 'HABIT_NOT_FOUND'],
+    ['post', (ids) => `/habits/${ids.habit}/archive`, () => undefined, 'HABIT_NOT_FOUND'],
+    ['post', (ids) => `/habits/${ids.habit}/unarchive`, () => undefined, 'HABIT_NOT_FOUND'],
+    ['delete', (ids) => `/habits/${ids.habit}`, () => undefined, 'HABIT_NOT_FOUND'],
+    ['get', (ids) => `/habits/${ids.habit}/logs`, () => undefined, 'HABIT_NOT_FOUND'],
+    [
+      'put',
+      (ids) => `/habits/${ids.habit}/logs/${ids.today}`,
+      () => ({ value: 5 }),
+      'HABIT_NOT_FOUND',
+    ],
+    [
+      'post',
+      (ids) => `/habits/${ids.habit}/logs/${ids.today}/increment`,
+      () => ({ delta: 1 }),
+      'HABIT_NOT_FOUND',
+    ],
+    [
+      'delete',
+      (ids) => `/habits/${ids.habit}/logs/${ids.today}`,
+      () => undefined,
+      'HABIT_NOT_FOUND',
+    ],
   ];
 
 describe('ownership (e2e)', () => {
@@ -82,6 +128,7 @@ describe('ownership (e2e)', () => {
       goal: goal.id,
       milestone: goal.milestones[0]!.id,
       habit: habit.id,
+      today: todayIn('Asia/Baku', new Date()),
       bobCore: bobCore.id,
       bobGoal: bobGoal.id,
     };
@@ -90,6 +137,7 @@ describe('ownership (e2e)', () => {
       cores: (await alice.get('/cores?includeArchived=true')).body,
       goal: (await alice.get(`/goals/${ids.goal}`)).body,
       habit: (await alice.get(`/habits/${ids.habit}`)).body,
+      logs: (await alice.get(`/habits/${ids.habit}/logs`)).body,
     });
   });
 
@@ -114,12 +162,15 @@ describe('ownership (e2e)', () => {
   it('deleting an account removes everything it owns, and nothing else', async () => {
     const prisma = app.get(PrismaService);
     await alice.patch(`/habits/${ids.habit}`, { targetValue: 30 });
+    await alice.put(`/habits/${ids.habit}/logs/${ids.today}`, { value: 5 });
+    expect(await prisma.habitLog.count()).toBe(1);
     const res = await alice.delete('/me', { password: PASSWORD });
     expect(res.status).toBe(204);
     expect(await prisma.core.count({ where: { id: ids.core } })).toBe(0);
     expect(await prisma.goal.count({ where: { id: ids.goal } })).toBe(0);
     expect(await prisma.milestone.count()).toBe(0);
     expect(await prisma.habit.count({ where: { id: ids.habit } })).toBe(0);
+    expect(await prisma.habitLog.count()).toBe(0);
     expect(await prisma.goal.count({ where: { id: ids.bobGoal } })).toBe(1);
   });
 });
