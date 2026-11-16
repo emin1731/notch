@@ -13,6 +13,9 @@ interface AliceIds {
   milestone: string;
   habit: string;
   today: string;
+  review: string;
+  reviewWeek: string;
+  change: string;
   bobCore: string;
   bobGoal: string;
 }
@@ -103,7 +106,41 @@ const ROUTES: [Method, (ids: AliceIds) => string, (ids: AliceIds) => object | un
       () => undefined,
       'HABIT_NOT_FOUND',
     ],
+    ['get', (ids) => `/reviews/${ids.reviewWeek}`, () => undefined, 'REVIEW_NOT_FOUND'],
+    ['post', (ids) => `/reviews/${ids.review}/seen`, () => undefined, 'REVIEW_NOT_FOUND'],
+    [
+      'post',
+      (ids) => `/target-changes/${ids.change}/undo`,
+      () => undefined,
+      'TARGET_CHANGE_NOT_FOUND',
+    ],
   ];
+
+/**
+ * Alice's review of an old week with an undoable level-up, written directly: the app would only
+ * create one after a full week of history.
+ */
+async function aliceReview(app: NestExpressApplication, habitId: string) {
+  const prisma = app.get(PrismaService);
+  const habit = await prisma.habit.findUniqueOrThrow({ where: { id: habitId } });
+  const reviewWeek = '2026-01-05';
+  const review = await prisma.weeklyReview.create({
+    data: { userId: habit.userId, weekStart: new Date(`${reviewWeek}T00:00:00Z`), summary: {} },
+  });
+  const change = await prisma.targetChange.create({
+    data: {
+      habitId,
+      weeklyReviewId: review.id,
+      kind: 'LEVEL_UP',
+      field: 'TARGET_VALUE',
+      fromValue: habit.targetValue - 1,
+      toValue: habit.targetValue,
+      effectiveFrom: new Date('2026-01-12T00:00:00Z'),
+      undoDeadline: new Date('2099-01-01T00:00:00Z'),
+    },
+  });
+  return { review: review.id, reviewWeek, change: change.id };
+}
 
 describe('ownership (e2e)', () => {
   let app: NestExpressApplication;
@@ -129,6 +166,7 @@ describe('ownership (e2e)', () => {
       milestone: goal.milestones[0]!.id,
       habit: habit.id,
       today: todayIn('Asia/Baku', new Date()),
+      ...(await aliceReview(app, habit.id)),
       bobCore: bobCore.id,
       bobGoal: bobGoal.id,
     };
@@ -138,6 +176,7 @@ describe('ownership (e2e)', () => {
       goal: (await alice.get(`/goals/${ids.goal}`)).body,
       habit: (await alice.get(`/habits/${ids.habit}`)).body,
       logs: (await alice.get(`/habits/${ids.habit}/logs`)).body,
+      review: (await alice.get(`/reviews/${ids.reviewWeek}`)).body,
     });
   });
 
@@ -157,6 +196,8 @@ describe('ownership (e2e)', () => {
     expect((await bob.get(`/goals?coreId=${ids.core}`)).body).toEqual([]);
     const bobCores = (await bob.get('/cores?includeArchived=true')).body;
     expect(bobCores.map((core: { id: string }) => core.id)).toEqual([ids.bobCore]);
+    expect((await bob.get('/reviews')).body).toEqual({ items: [], nextCursor: null });
+    expect((await bob.get('/reviews/latest')).body).toEqual({ review: null });
   });
 
   it('deleting an account removes everything it owns, and nothing else', async () => {
@@ -171,6 +212,8 @@ describe('ownership (e2e)', () => {
     expect(await prisma.milestone.count()).toBe(0);
     expect(await prisma.habit.count({ where: { id: ids.habit } })).toBe(0);
     expect(await prisma.habitLog.count()).toBe(0);
+    expect(await prisma.weeklyReview.count()).toBe(0);
+    expect(await prisma.targetChange.count()).toBe(0);
     expect(await prisma.goal.count({ where: { id: ids.bobGoal } })).toBe(1);
   });
 });

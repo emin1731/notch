@@ -4,8 +4,26 @@ import { AppModule } from '../src/app.module.js';
 import { Clock } from '../src/clock/clock.js';
 import { configureApp } from '../src/setup-app.js';
 
+/** A clock the test moves by hand. Sessions still use real time. */
+export class TestClock extends Clock {
+  private current: Date;
+
+  constructor(now: Date | string) {
+    super();
+    this.current = new Date(now);
+  }
+
+  override now(): Date {
+    return new Date(this.current);
+  }
+
+  set(now: Date | string): void {
+    this.current = new Date(now);
+  }
+}
+
 export interface TestAppOptions {
-  /** Freezes the Clock that services read "now" from. Sessions still use real time. */
+  /** Installs a TestClock at this instant; read it back with `testClock(app)` to move it. */
   now?: Date | string;
 }
 
@@ -13,12 +31,19 @@ export interface TestAppOptions {
 export async function createTestApp(options: TestAppOptions = {}): Promise<NestExpressApplication> {
   let builder = Test.createTestingModule({ imports: [AppModule] });
   if (options.now !== undefined) {
-    const now = new Date(options.now);
-    builder = builder.overrideProvider(Clock).useValue({ now: () => new Date(now) });
+    builder = builder.overrideProvider(Clock).useValue(new TestClock(options.now));
   }
   const moduleRef = await builder.compile();
   const app = moduleRef.createNestApplication<NestExpressApplication>({ bufferLogs: true });
   configureApp(app);
   await app.init();
   return app;
+}
+
+export function testClock(app: NestExpressApplication): TestClock {
+  const clock = app.get(Clock);
+  if (!(clock instanceof TestClock)) {
+    throw new Error('Create the app with `now` to get a TestClock');
+  }
+  return clock;
 }

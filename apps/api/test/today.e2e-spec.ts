@@ -3,7 +3,6 @@ import type { TodayHabit, TodayResponse } from '@notch/shared';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { PasswordService } from '../src/auth/password.service.js';
 import { DEMO_PASSWORD, DEMO_USERNAME, seedDemo } from '../src/cli/demo-seed.js';
-import { PrismaService } from '../src/prisma/prisma.service.js';
 import { createTestApp } from './create-test-app.js';
 import { loginAs, registerUser, resetDb } from './helpers/auth.js';
 import type { TestClient } from './helpers/test-client.js';
@@ -39,7 +38,7 @@ describe('today (e2e)', () => {
     app = await createTestApp({ now: NOW });
     await resetDb(app);
     const passwordHash = await app.get(PasswordService).hash(DEMO_PASSWORD);
-    ({ habitIds } = await seedDemo(app.get(PrismaService), {
+    ({ habitIds } = await seedDemo(app, {
       today: '2026-11-19',
       timezone: 'Europe/Berlin',
       passwordHash,
@@ -80,16 +79,31 @@ describe('today (e2e)', () => {
     expect(summary(today.weeklyQuota)).toEqual({
       // Mon/Wed/Fri for 8 weeks; Mon/Tue so far this week, which doesn't break it.
       Gym: { target: 1, value: null, progress: 0, streak: 8, week: { hits: 2, quota: 3 } },
-      // Only 2 of 4 last week. Half an hour today isn't a hit.
+      // Only 1 of 4 last week, so Monday's review deloaded it from 3600 back to 3300 (the value
+      // before its last level-up). Half an hour today isn't a hit.
       'Deep work': {
-        target: 3600,
+        target: 3300,
         value: 1800,
-        progress: 0.5,
+        progress: 1800 / 3300,
         streak: 0,
         week: { hits: 3, quota: 4 },
       },
     });
-    expect(today).toMatchObject({ pendingReview: null, welcomeBack: false });
+    // Logged at the new level since Monday, so the deload can't be undone any more.
+    expect(today.weeklyQuota[1]!.change).toEqual({
+      id: expect.any(String),
+      kind: 'DELOAD',
+      field: 'TARGET_VALUE',
+      fromValue: 3600,
+      toValue: 3300,
+      canUndo: false,
+    });
+    expect(today.weeklyQuota[0]!.change).toBeUndefined();
+    // Monday's review hasn't been opened yet; the earlier ones have.
+    expect(today).toMatchObject({
+      pendingReview: { id: expect.any(String), weekStart: '2026-11-09' },
+      welcomeBack: false,
+    });
     expect(today.weeklyQuota[0]).toMatchObject({
       core: { name: 'Health', color: 'emerald' },
       goal: { title: 'Run a half marathon' },
@@ -117,8 +131,8 @@ describe('today (e2e)', () => {
     });
     expect(yesterday.dayProgress).toBeCloseTo((1 + 1 + 0.4 + 1) / 4);
     expect(summary(yesterday.weeklyQuota)['Deep work']).toEqual({
-      target: 3600,
-      value: 3600,
+      target: 3300,
+      value: 3300,
       progress: 1,
       streak: 0,
       week: { hits: 3, quota: 4 },
