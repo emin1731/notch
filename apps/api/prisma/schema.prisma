@@ -1,5 +1,5 @@
-// Models arrive sprint by sprint, starting with User and Session in S1.
 // The connection URL lives in prisma.config.ts.
+// Instants are timestamptz; user-local calendar dates will be @db.Date (plan 5.4).
 
 generator client {
   provider     = "prisma-client"
@@ -9,4 +9,31 @@ generator client {
 
 datasource db {
   provider = "postgresql"
+}
+
+model User {
+  id           String    @id @default(uuid())
+  username     String    @unique // trimmed + lower-cased, ^[a-z0-9_.-]{3,50}$
+  passwordHash String // argon2id encoded string
+  name         String?
+  timezone     String    @default("UTC") // IANA, e.g. "Asia/Baku"
+  onboardedAt  DateTime? @db.Timestamptz(3)
+  createdAt    DateTime  @default(now()) @db.Timestamptz(3)
+  updatedAt    DateTime  @updatedAt @db.Timestamptz(3)
+
+  sessions Session[]
+}
+
+model Session {
+  id         String   @id @default(uuid())
+  tokenHash  String   @unique // SHA-256 of the cookie value; the raw token is never stored
+  userId     String
+  expiresAt  DateTime @db.Timestamptz(3)
+  lastSeenAt DateTime @default(now()) @db.Timestamptz(3)
+  userAgent  String?
+  createdAt  DateTime @default(now()) @db.Timestamptz(3)
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
 }
