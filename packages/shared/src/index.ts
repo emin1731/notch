@@ -1,5 +1,13 @@
+export * from './constants.js';
+export * from './dates/local-date.js';
 export * from './errors.js';
+export * from './goals/goal-progress.js';
 export * from './schemas/auth.js';
+export * from './schemas/common.js';
+export * from './schemas/core.js';
+export * from './schemas/goal.js';
+export * from './schemas/milestone.js';
 export * from './schemas/user.js';
 export * from './timezone.js';
+export type * from './types/structure.js';
 export type * from './types/user.js';
