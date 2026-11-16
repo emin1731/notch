@@ -11,6 +11,7 @@ import type { Habit, HabitLog, TargetChange } from '../generated/prisma/client.j
 /** Prisma rows → the inputs of the shared rate, streak and history functions. */
 export function toChangeLite(change: TargetChange): ChangeLite {
   return {
+    kind: change.kind,
     field: change.field,
     fromValue: change.fromValue,
     toValue: change.toValue,

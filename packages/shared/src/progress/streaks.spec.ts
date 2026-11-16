@@ -107,6 +107,7 @@ describe('weekStats', () => {
     // Was Tue/Thu until Wednesday, Mon/Wed/Fri from Wednesday on.
     const changes: ChangeLite[] = [
       {
+        kind: 'MANUAL',
         field: 'DAYS_OF_WEEK',
         fromValue: daysToMask([2, 4]),
         toValue: daysToMask([1, 3, 5]),

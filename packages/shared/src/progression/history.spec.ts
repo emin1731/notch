@@ -9,6 +9,7 @@ const change = (
   toValue: number,
   extra: Partial<ChangeLite> = {},
 ): ChangeLite => ({
+  kind: 'MANUAL',
   field: 'TARGET_VALUE',
   fromValue,
   toValue,

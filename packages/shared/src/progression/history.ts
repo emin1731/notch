@@ -1,9 +1,10 @@
 import type { LocalDate } from '../dates/local-date.js';
-import type { TargetField } from '../enums.js';
+import type { TargetChangeKind, TargetField } from '../enums.js';
 import type { ScheduleSnapshot } from '../schedule/is-scheduled.js';
 import { daysToMask, maskToDays } from '../schedule/days.js';
 
 export interface ChangeLite {
+  kind: TargetChangeKind;
   field: TargetField;
   fromValue: number;
   toValue: number;

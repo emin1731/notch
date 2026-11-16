@@ -9,3 +9,12 @@ export function todayIn(timeZone: string, now: Date): LocalDate {
   }
   return local.toISODate()!;
 }
+
+/** The instant local midnight starts `date` in `timeZone` (DST-aware). */
+export function startOfDayIn(timeZone: string, date: LocalDate): Date {
+  const local = DateTime.fromISO(date, { zone: timeZone }).startOf('day');
+  if (!local.isValid) {
+    throw new RangeError(`Invalid date or timezone: ${date} ${timeZone}`);
+  }
+  return local.toJSDate();
+}
