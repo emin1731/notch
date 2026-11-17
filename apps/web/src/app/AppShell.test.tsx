@@ -47,7 +47,9 @@ describe('app shell', () => {
 
   it('shows a not-found page for unknown paths', async () => {
     renderApp('/nope');
-    expect(await screen.findByRole('heading', { name: 'Nothing here' })).toBeInTheDocument();
+    expect(
+      await screen.findByRole('heading', { level: 1, name: 'Page not found' }),
+    ).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Go to Today' })).toHaveAttribute('href', '/today');
   });
 
