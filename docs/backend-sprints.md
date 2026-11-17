@@ -301,22 +301,26 @@ Optional: deploy this skeleton to `notch.emindabakhov.com` now. That checks earl
 
 **Goal:** accurate statistics for 7, 30, 90 and 365 days.
 
-**Decide**
+**Decided** (written back into the plan)
 
-- [ ] **Times-per-week habits in ranges that don't line up with weeks:** count partial weeks at the edges in proportion to the days included, or only count full weeks. Recommendation: full weeks only, using a range rounded out to whole weeks.
+- [x] **Times-per-week habits:** every week the range touches counts as a whole week (rounded out to Monday–Sunday).
+- [x] **Unfinished periods:** a habit's last day (today or its archive date) counts only once it's a hit; the current week only once its quota is met.
+- [x] **Overall and per-core rates:** the average of the habits' rates, like the review.
+- [x] Ranges end today (local), today included; archived habits count up to their archive date; the daily series covers daily and specific-day habits only; stats don't trigger a review.
 
 **Shared**
 
-- [ ] Range helpers, heatmap builder (`{ date, value, target, hit, scheduled }`), target-series builder
+- [x] Range helpers (`rangeDates`, `habitWindow`), `rangeStats`, `averageRate`, `dailySeries`, heatmap builder (`{ date, value, target, hit, scheduled }`), target-series builder
 
 **API**
 
-- [ ] `GET /stats/overview?range=`: overall rate, daily series, per-core rates, top 5 current streaks, goals summary, level-ups vs deloads
-- [ ] `GET /stats/habits/:id?range=`: rate, streaks, total value, heatmap, target history
+- [x] `GET /stats/overview?range=`: overall rate, daily series, per-core rates, top 5 current streaks, goals summary, level-ups vs deloads
+- [x] `GET /stats/habits/:id?range=`: rate, hits/occurrences, streaks, total value, heatmap, target history
 
 **Tests**
 
-- [ ] Every number checked against the seeded fixture; archived habits kept in history; bonus logs shown but not counted
+- [x] Every number checked against the seeded fixture at 7d, 30d, 90d and 365d; archived habits kept in history; bonus logs shown but not counted
+- [x] Mutation checks: counting an unfinished week or a bonus log fails tests
 
 **Done when:** the seeded user's stats match hand-computed values at every range.
 

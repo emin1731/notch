@@ -803,14 +803,28 @@ Everything is computed **as of `date`** (streaks and the week's hits), so browsi
 
 | Method | Path | Notes |
 |---|---|---|
-| GET | `/stats/overview?range=7d\|30d\|90d\|365d` | see below |
-| GET | `/stats/habits/:id?range=` | see below |
+| GET | `/stats/overview?range=7d\|30d\|90d\|365d` | see below; `range` defaults to `30d` |
+| GET | `/stats/habits/:id?range=` | see below; archived habits included |
 
-Overview response: `overallRate`, a daily series `[{ date, rate }]`, per-core rates, the top 5 current streaks, a goals summary (`active`, `completed in range`, list with progress), and the count of level-ups vs deloads in the range.
+**Rules** (the same as streaks and reviews):
 
-Per-habit response: `rate`, `currentStreak`, `longestStreak`, `totalValue` (e.g. total minutes or pages), a heatmap `[{ date, value, target, hit, scheduled }]`, and the target history series `[{ date, target }]`.
+- A range `Nd` is the N days ending today in the user's timezone, today included. A habit counts from its `startDate`, up to its archive date if archived: archived habits keep their history, deleted ones are gone.
+- **Daily / specific days:** hits on due days ÷ due days, each day judged by the schedule it had then. A habit's last day (today, or its archive date) counts only once it's a hit.
+- **Times per week:** every week the range touches counts as a whole week (the range is rounded out to Monday–Sunday), each `min(hit days, quota) ÷ quota`. The current week counts only once its quota is met.
+- Bonus logs (on days the habit wasn't due) are shown but never counted.
+- **Overall and per-core rates** are the average of the habits' rates (each habit counts equally, like the review's `overallRate`); habits with nothing due in the range are skipped.
 
-For the MVP, stats are computed on request from logs. With an index on `(userId, date)`, a year of data for ~20 habits is about 7k rows, which is fast. Add caching only if profiling shows a need.
+Overview response: `{ range, from, to, overallRate, daily: [{ date, rate }], cores: [{ coreId, name, color, icon, rate }], topStreaks: [{ habitId, name, currentStreak }], goals: { active, completedInRange, items }, changes: { levelUps, deloads } }`.
+
+- `daily` covers daily and specific-day habits only (times-per-week habits have no daily obligation); `rate` is `null` on days with nothing due.
+- `cores` lists every core with a habit in the range, archived cores included, in core order.
+- `topStreaks` are the 5 best current streaks above 0 among active habits.
+- `goals.items` are the active goals, then the goals completed in the range, with progress.
+- `changes` counts level-ups and deloads that took effect in the range and weren't undone.
+
+Per-habit response: `{ habitId, range, from, to, rate, hits, occurrences, currentStreak, longestStreak, totalValue, heatmap, field, targetSeries }`. `from`/`to` are the habit's window inside the range. `totalValue` sums everything logged (total minutes or pages), bonus logs included. `heatmap` is `[{ date, value, target, hit, scheduled }]` for every day of the window. `targetSeries` is step points `[{ date, target }]` for the progressing `field` (`TARGET_VALUE`, or `TIMES_PER_WEEK` for a weekly toggle): the value at the window start, then each change inside the window.
+
+For the MVP, stats are computed on request from the full history, in four queries (habits, logs, target changes, goals). With an index on `(userId, date)`, a year of data for ~20 habits is about 7k rows, which is fast. Add caching only if profiling shows a need. Stats are read-only: they don't trigger a weekly review.
 
 ### 6.4 Authentication
 
@@ -1119,7 +1133,7 @@ Validation uses the shared zod schema, so the same errors appear client-side and
 #### Stats (`/stats`)
 
 - Range tabs: 7d / 30d / 90d / 365d.
-- **KPI row:** overall completion rate, best current streak, goals completed in range, and level-ups vs deloads.
+- **KPI row:** overall completion rate (the average of the habits' rates), best current streak, goals completed in range, and level-ups vs deloads. Unfinished days and weeks don't count until they're done, so the rate doesn't dip every morning.
 - **Completion over time:** a line chart of the daily rate.
 - **By core:** horizontal bars per core.
 - **Streak leaderboard:** your top 5 habits.
