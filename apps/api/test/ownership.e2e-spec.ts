@@ -106,6 +106,7 @@ const ROUTES: [Method, (ids: AliceIds) => string, (ids: AliceIds) => object | un
       () => undefined,
       'HABIT_NOT_FOUND',
     ],
+    ['get', (ids) => `/stats/habits/${ids.habit}`, () => undefined, 'HABIT_NOT_FOUND'],
     ['get', (ids) => `/reviews/${ids.reviewWeek}`, () => undefined, 'REVIEW_NOT_FOUND'],
     ['post', (ids) => `/reviews/${ids.review}/seen`, () => undefined, 'REVIEW_NOT_FOUND'],
     [
@@ -198,6 +199,9 @@ describe('ownership (e2e)', () => {
     expect(bobCores.map((core: { id: string }) => core.id)).toEqual([ids.bobCore]);
     expect((await bob.get('/reviews')).body).toEqual({ items: [], nextCursor: null });
     expect((await bob.get('/reviews/latest')).body).toEqual({ review: null });
+    const stats = (await bob.get('/stats/overview?range=365d')).body;
+    expect(stats).toMatchObject({ overallRate: null, cores: [], topStreaks: [] });
+    expect(JSON.stringify(stats)).not.toContain(ids.goal);
   });
 
   it('deleting an account removes everything it owns, and nothing else', async () => {
