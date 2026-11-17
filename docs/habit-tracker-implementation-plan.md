@@ -272,20 +272,20 @@ All thresholds live in one config object in the shared package (`PROGRESSION_CON
 
 | Concern | Choice |
 |---|---|
-| Build | Vite + React 19 + TypeScript |
-| Routing | React Router (data router, `createBrowserRouter`) |
+| Build | Vite 8 + React 19 + TypeScript 6 |
+| Routing | React Router 8 (data router, `createBrowserRouter`; every page a lazy route chunk) |
 | Server state | TanStack Query |
 | Client state | Zustand (only for the duration timer and small UI state) |
 | HTTP | `fetch` wrapper: same-origin cookies, CSRF header, global 401 handler |
 | Forms | react-hook-form + `@hookform/resolvers/zod` (same schemas as the API) |
-| UI | Tailwind CSS + shadcn/ui (Radix primitives) |
+| UI | Tailwind CSS 4 + shadcn/ui (`radix-nova` style, Radix primitives via `radix-ui`, neutral base, CSS variables). System font stack. Core accents as `--core-<color>` variables. Light/dark/system theme, applied before first paint by `public/theme.js` (external, so the CSP keeps `script-src 'self'`) |
 | Icons | lucide-react |
 | Charts | Recharts; heatmap as a custom CSS grid |
 | Drag and drop | dnd-kit (reordering cores, habits, milestones) |
 | Toasts | sonner |
 | Celebration | canvas-confetti |
 | Dates | luxon (same helpers as the server, from `packages/shared`) |
-| Tests | Vitest + React Testing Library; Playwright for e2e |
+| Tests | Vitest + React Testing Library + MSW 3; Playwright for e2e |
 
 ---
 
