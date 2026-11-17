@@ -1,0 +1,11 @@
+{
+  "name": "@notch/config",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    "./eslint": "./eslint.js",
+    "./prettier": "./prettier.js",
+    "./tsconfig/*.json": "./tsconfig/*.json"
+  }
+}

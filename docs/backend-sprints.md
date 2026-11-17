@@ -34,36 +34,38 @@ S5 holds most of the product's risk. S3 and S4 exist mostly to give it solid fou
 
 **Goal:** an empty but production-shaped API that runs, tests and builds.
 
-**Decide**
+**Decided** (versions checked on 2026-11-14)
 
-- [ ] Node 24 (current LTS) or Node 22 (maintenance LTS until April 2027). Recommendation: 24.
-- [ ] Prisma major version (7 changes the generator and moves the connection URL to `prisma.config.ts`). Recommendation: latest stable.
-- [ ] One test runner (Vitest everywhere, SWC for Nest decorators) or Jest for the API as planned. Recommendation: Vitest everywhere.
-- [ ] `tsup` or its successor `tsdown` for the shared package's dual ESM/CJS build.
+- [x] Node **26** (the latest LTS; 24 is in maintenance), pnpm 12.
+- [x] Prisma **7.10** (stable; npm's `latest` tag points at an 8.0 release candidate).
+- [x] **Vitest everywhere**, with `unplugin-swc` for Nest decorator metadata.
+- [x] **tsdown**, building `packages/shared` as **ESM only**: NestJS 12 is ESM-only, so no dual build is needed.
+- [x] NestJS **12** and TypeScript **6.0** (typescript-eslint doesn't support TypeScript 7 yet).
+- [x] Custom `ZodValidationPipe` (`nestjs-zod` doesn't declare NestJS 12 support).
 
 **Monorepo**
 
-- [ ] pnpm workspaces, Turborepo (`build`, `dev`, `lint`, `typecheck`, `test`), `.nvmrc`, `engines`
-- [ ] `packages/config`: tsconfig bases, ESLint flat config, Prettier
-- [ ] `packages/shared`: skeleton, dual build, `exports` map, one function imported and tested by the API
-- [ ] Husky + lint-staged
+- [x] pnpm workspaces, Turborepo (`generate`, `build`, `dev`, `lint`, `typecheck`, `test`), `.nvmrc`, `engines`
+- [x] `packages/config`: tsconfig bases, ESLint flat config, Prettier
+- [x] `packages/shared`: skeleton, ESM build, `exports` map; `ERROR_CODES` / `ApiErrorBody` used by the API's exception filter
+- [x] Husky + lint-staged
 
 **API skeleton**
 
-- [ ] NestJS app with global prefix `/api/v1`
-- [ ] Config module with a zod env schema; the app refuses to start on a missing value
-- [ ] Prisma module and service; first (empty) migration
-- [ ] `nestjs-pino`, `helmet`, `cookie-parser`, `trust proxy` from env
-- [ ] `ZodValidationPipe` using schemas from `@notch/shared`
-- [ ] Global exception filter returning `{ statusCode, code, message, details? }`, with the shared error-code list
-- [ ] `GET /api/v1/health` (checks the DB)
-- [ ] Swagger at `/docs` in development
+- [x] NestJS app with global prefix `/api/v1`, shared by `main.ts` and the e2e tests through `configureApp()`
+- [x] Config module with a zod env schema; the app refuses to start on a missing value
+- [x] Prisma module and service. No migration yet: Prisma can't create one without models, so the first lands in S1. `migration_lock.toml` is committed so the drift check works.
+- [x] `nestjs-pino` (cookies, CSRF header and `Set-Cookie` redacted), `helmet`, `cookie-parser`, `trust proxy` from env, 100 kB JSON limit
+- [x] `ZodValidationPipe` with `@ZodBody` / `@ZodQuery`
+- [x] Global exception filter returning `{ statusCode, code, message, details? }`, with the shared error-code list
+- [x] `GET /api/v1/health` (checks the DB; 503 `SERVICE_UNAVAILABLE` when it's down)
+- [x] Swagger at `/docs` in development
 
 **Infrastructure**
 
-- [ ] `docker-compose.yml` with Postgres 16
-- [ ] Test database setup (Testcontainers, or a per-run schema on the compose Postgres)
-- [ ] GitHub Actions: install with cache, lint, typecheck, test with a Postgres service, build, `prisma migrate diff` drift check
+- [x] `docker-compose.yml` with Postgres 16, on host port **5434** (5432 and 5433 are taken by other local databases)
+- [x] Test database: Testcontainers starts one Postgres per e2e run and applies migrations
+- [x] GitHub Actions: install with cache, Prettier check, lint, typecheck, test, build, `prisma migrate diff` drift check
 
 **Done when:** `pnpm dev` starts the API, `/api/v1/health` returns ok, an e2e test hits it, and CI is green.
 

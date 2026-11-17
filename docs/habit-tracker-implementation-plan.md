@@ -233,20 +233,20 @@ All thresholds live in one config object in the shared package (`PROGRESSION_CON
 
 | Concern | Choice | Notes |
 |---|---|---|
-| Package manager | pnpm workspaces | |
+| Package manager | pnpm 12 workspaces | version pinned via `packageManager`; build scripts allow-listed in `pnpm-workspace.yaml` |
 | Task runner | Turborepo | cached `build`, `lint`, `typecheck`, `test` |
 | Language | TypeScript (strict) everywhere | |
 | Lint / format | ESLint (flat config) + Prettier | shared in `packages/config` |
 | Commit hooks | Husky + lint-staged | |
-| Node | Node 22 LTS, pinned in `.nvmrc` and `engines` | |
+| Node | Node 26 LTS, pinned in `.nvmrc` and `engines` | |
 
 ### 3.2 Backend
 
 | Concern | Choice |
 |---|---|
-| Framework | NestJS 11 |
-| ORM / DB | Prisma + PostgreSQL 16 |
-| Validation | zod schemas from `packages/shared`, applied through a `ZodValidationPipe` (`nestjs-zod` or a ~30-line custom pipe) |
+| Framework | NestJS 12 (ESM-only; relative imports use `.js` extensions) |
+| ORM / DB | Prisma 7 (`prisma-client` generator, `@prisma/adapter-pg`, connection URL in `prisma.config.ts`) + PostgreSQL 16 |
+| Validation | zod 4 schemas from `packages/shared`, applied through a custom `ZodValidationPipe` (`@ZodBody` / `@ZodQuery`); `nestjs-zod` doesn't support NestJS 12 |
 | Auth | Server-side sessions in Postgres (custom `Session` table + global guard, see [6.4](#64-authentication)), `cookie-parser`, `argon2` for password hashing |
 | Rate limiting | `@nestjs/throttler` (login and register only) |
 | Security headers | `helmet` |
@@ -255,7 +255,7 @@ All thresholds live in one config object in the shared package (`PROGRESSION_CON
 | Config | `@nestjs/config` with zod-validated env |
 | Logging | `nestjs-pino` |
 | API docs | `@nestjs/swagger` at `/docs` (dev only) |
-| Tests | Jest (Nest default) + Supertest; Testcontainers for Postgres in e2e |
+| Tests | Vitest (with `unplugin-swc` for decorator metadata) + Supertest; Testcontainers for Postgres in e2e |
 
 ### 3.3 Frontend
 
@@ -281,7 +281,7 @@ All thresholds live in one config object in the shared package (`PROGRESSION_CON
 ## 4. Monorepo structure
 
 ```
-habit-tracker/
+notch/
 ├── apps/
 │   ├── api/                      # NestJS
 │   │   ├── prisma/
@@ -350,12 +350,13 @@ Each `modules/<name>/` folder in the API contains `<name>.module.ts`, `<name>.co
 
 ```prisma
 generator client {
-  provider = "prisma-client-js"
+  provider     = "prisma-client"
+  output       = "../src/generated/prisma"
+  moduleFormat = "esm"
 }
 
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider = "postgresql"   // URL comes from prisma.config.ts (Prisma 7)
 }
 
 enum HabitType        { TOGGLE COUNT DURATION }
@@ -598,7 +599,7 @@ The summary is a snapshot: it keeps habit names as they were, so renames don't r
 - **Global guards:** `SessionGuard` (authentication) and `CsrfGuard` (unsafe methods), see [6.4](#64-authentication). Public routes are marked with `@Public()`.
 - **`@CurrentUser()` decorator:** returns `{ id, username, timezone }`, loaded by `SessionGuard` together with the session in one query, so the timezone is always current.
 - **Ownership:** every service method takes `userId` and scopes every query with `where: { userId }` (or via the parent's `userId`). A record owned by another user returns **404**, never 403, so ids can't be probed.
-- **Validation:** `ZodValidationPipe` with schemas imported from `@app/shared`.
+- **Validation:** `ZodValidationPipe` with schemas imported from `@notch/shared`.
 - **Errors:** a global exception filter returns `{ statusCode, code, message, details? }`. `code` is a stable string the client can switch on, for example `HABIT_NOT_FOUND`, `UNDO_NOT_ALLOWED`, `BACKFILL_OUT_OF_RANGE`, `CORE_NOT_EMPTY`, `GOAL_CORE_MISMATCH`, `USERNAME_TAKEN`, `INVALID_CREDENTIALS`, `INVALID_INVITE_CODE`, `REGISTRATION_CLOSED`, `UNAUTHENTICATED`, `CSRF_INVALID`.
 - **Transactions:** any operation touching more than one table uses `prisma.$transaction`. This includes: milestone tick plus goal status, log write plus longest-streak update, review creation plus target changes, and undo.
 - **Config:** env validated at boot by a zod schema. The app refuses to start if a value is missing.
@@ -841,8 +842,8 @@ Browser (SPA)                         NestJS (same origin)                    Po
 
 **Account recovery without email:** CLI scripts run on the server (or locally against the production database):
 
-- `pnpm --filter api user:set-password <username>` prompts for a new password and deletes that user's sessions.
-- `pnpm --filter api user:create <username>` creates a user without an invite code, which is useful for the first account.
+- `pnpm --filter @notch/api user:set-password <username>` prompts for a new password and deletes that user's sessions.
+- `pnpm --filter @notch/api user:create <username>` creates a user without an invite code, which is useful for the first account.
 
 **Authorization** is unchanged: there are no roles, every query is scoped by `userId`, and another user's record returns 404.
 
@@ -1124,7 +1125,7 @@ Sections:
 
 ## 8. Shared package
 
-`packages/shared` is the single source of truth for types and rules. It is built with `tsup` to **both ESM and CJS**, because NestJS compiles to CommonJS by default while Vite consumes ESM. Expose it via `exports` in `package.json`.
+`packages/shared` is the single source of truth for types and rules. It is ESM-only (NestJS 12 and Vite both consume ESM), built with `tsdown`, and exposed via `exports` in `package.json`.
 
 ```
 packages/shared/src/
@@ -1192,8 +1193,8 @@ Getting this wrong causes the subtlest bugs, so the rules are strict:
 | Layer | Tool | What |
 |---|---|---|
 | Shared domain logic | Vitest | **Highest priority.** Table-driven tests for schedules, weekly rate, streaks, eligibility, every decision branch, step math, rounding, bounds, cooldown, inactive week, DST weeks, and backfill across a target change |
-| API services | Jest | Services with a real test database (Testcontainers) rather than mocked Prisma |
-| API e2e | Jest + Supertest | Auth flow (invite code, max users, same 401 for unknown user and wrong password, session expiry, logout and logout-all, CSRF rejected without or with a stale token), ownership isolation, log write → streak update, milestone tick → goal complete, review creation idempotency, undo rules, `ensureDue` before log writes |
+| API services | Vitest | Services with a real test database (Testcontainers) rather than mocked Prisma |
+| API e2e | Vitest + Supertest | Auth flow (invite code, max users, same 401 for unknown user and wrong password, session expiry, logout and logout-all, CSRF rejected without or with a stale token), ownership isolation, log write → streak update, milestone tick → goal complete, review creation idempotency, undo rules, `ensureDue` before log writes |
 | Web components | Vitest + RTL | `HabitCard` variants, optimistic update rollback, `TargetChangeBadge`, habit form validation and type/schedule switching |
 | Web e2e | Playwright | Golden paths (below) against a seeded API |
 
@@ -1230,9 +1231,10 @@ Seed script (`prisma/seed.ts`): creates a demo user with 8 weeks of realistic lo
 
 ```bash
 pnpm install
-docker compose up -d              # postgres:16 on 5432
-pnpm --filter api prisma migrate dev
-pnpm --filter api prisma db seed
+cp apps/api/.env.example apps/api/.env
+docker compose up -d --wait       # postgres:16 on localhost:5434
+pnpm --filter @notch/api exec prisma migrate dev
+pnpm --filter @notch/api exec prisma db seed
 pnpm dev                          # turbo runs api (3000) and web (5173) in parallel
 ```
 
@@ -1245,7 +1247,9 @@ The Vite dev server proxies `/api` to `http://localhost:3000`, so the session an
 ```
 NODE_ENV=development
 PORT=3000
-DATABASE_URL=postgresql://postgres:postgres@localhost:5432/habits
+DATABASE_URL=postgresql://postgres:postgres@localhost:5434/notch
+SHADOW_DATABASE_URL=postgresql://postgres:postgres@localhost:5434/notch_shadow   # drift check only
+LOG_LEVEL=info
 SESSION_TTL_DAYS=30
 COOKIE_SECURE=false              # true in production
 CSRF_SECRET=change-me            # 32+ random bytes
@@ -1263,19 +1267,18 @@ VITE_API_URL=/api/v1
 
 ### 12.3 CI (GitHub Actions)
 
-On every PR:
+On every push to `main` and every PR (`.github/workflows/ci.yml`):
 
-1. pnpm install, with cache.
-2. `turbo run lint typecheck`.
-3. `turbo run test`. Unit and API tests use a Postgres service container.
-4. `turbo run build`.
-5. Playwright, on `main` and on PRs labelled `e2e`.
-6. Check that `prisma migrate diff` has no drift.
+1. pnpm install (`--frozen-lockfile`), with cache.
+2. `prettier --check .`
+3. `turbo run lint typecheck test build`. The e2e tests start their own Postgres with Testcontainers.
+4. Check that `prisma migrate diff` has no drift (against a Postgres service used as the shadow database).
+5. Later, with the web app: Playwright, on `main` and on PRs labelled `e2e`.
 
 ### 12.4 Deployment
 
 - **Domain:** `https://notch.emindabakhov.com`, on the existing hosting.
-- **One app, one origin:** a single Docker image (multi-stage build, `node:22-slim`) contains the API and the built SPA. NestJS serves the SPA with `@nestjs/serve-static` (falling back to `index.html` for client routes) and the API under `/api/v1`. There's no separate web host and no CORS.
+- **One app, one origin:** a single Docker image (multi-stage build, `node:26-slim`) contains the API and the built SPA. NestJS serves the SPA with `@nestjs/serve-static` (falling back to `index.html` for client routes) and the API under `/api/v1`. There's no separate web host and no CORS.
 - **TLS:** terminated by the host's reverse proxy, which forwards `X-Forwarded-Proto` and `X-Forwarded-For`. Set `TRUST_PROXY=true` so Express sees HTTPS (required for the `Secure` cookies) and the real client IP (required for throttling). The cookies are never sent over plain HTTP.
 - **Release:** the container runs `prisma migrate deploy` on start. `GET /api/v1/health` checks the DB connection.
 - **First user:** after the first deploy, run `user:create` (or register with the invite code).
@@ -1293,7 +1296,7 @@ Each phase ends in a working, demo-able state. Shared-package logic for a phase 
 ### Phase 0: Foundation
 
 - [ ] Monorepo: pnpm workspaces, Turborepo, `packages/config` (tsconfig, eslint, prettier)
-- [ ] `packages/shared` skeleton with tsup dual build; imported successfully by both apps
+- [ ] `packages/shared` skeleton (ESM, tsdown); imported successfully by both apps
 - [ ] NestJS app: config module with zod env validation, Prisma module, pino, helmet, cookie-parser, global prefix, exception filter, health endpoint, Swagger, serve-static for the SPA in production
 - [ ] Vite app: Tailwind, shadcn/ui init, router, TanStack Query provider, layout shell (sidebar + bottom nav), theme, `/api` dev proxy
 - [ ] docker-compose (Postgres); first migration
@@ -1351,7 +1354,7 @@ Each phase ends in a working, demo-able state. Shared-package logic for a phase 
 - [ ] `/today` returns `change`, `pendingReview` and `welcomeBack`
 - [ ] Web: target-change badge and popover with undo; review banner; weekly review page (levelled up / eased off / holding steady / inactive variant); review history
 - [ ] Tests: the full decision table (section 11); idempotency under concurrent `ensureDue` calls; undo rules; review timing across timezones and DST
-- [ ] Dev-only endpoint/CLI: `pnpm --filter api review:run --user <id> --week <date>` to trigger reviews manually during QA
+- [ ] Dev-only endpoint/CLI: `pnpm --filter @notch/api review:run --user <id> --week <date>` to trigger reviews manually during QA
 
 **Done when:** seeded data produces correct level-ups and deloads on the first visit after Monday 00:00 in the user's timezone, the user sees them on Today and in the review, and undo behaves exactly as specified.
 

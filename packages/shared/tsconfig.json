@@ -1,0 +1,8 @@
+{
+  "extends": "@notch/config/tsconfig/library.json",
+  "compilerOptions": {
+    "rootDir": ".",
+    "outDir": "dist"
+  },
+  "include": ["src", "*.config.ts"]
+}
