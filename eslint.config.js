@@ -32,8 +32,14 @@ export default [
   },
   {
     files: ['apps/web/**/*.{ts,tsx}'],
+    ignores: ['apps/web/e2e/**', 'apps/web/playwright.config.ts'],
     ...reactHooks.configs.flat.recommended,
     languageOptions: { globals: globals.browser },
+  },
+  {
+    // Playwright: runs in Node, and its fixtures' `use()` is not React's.
+    files: ['apps/web/e2e/**/*.{ts,mjs}', 'apps/web/playwright.config.ts'],
+    languageOptions: { globals: globals.node },
   },
   {
     files: ['apps/web/src/**/*.tsx'],
