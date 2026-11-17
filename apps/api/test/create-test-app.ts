@@ -23,6 +23,8 @@ export class TestClock extends Clock {
 }
 
 export interface TestAppOptions {
+  /** Serve a web build from this directory (WEB_DIST_DIR). */
+  webDistDir?: string;
   /** Installs a TestClock at this instant; read it back with `testClock(app)` to move it. */
   now?: Date | string;
 }
@@ -35,7 +37,7 @@ export async function createTestApp(options: TestAppOptions = {}): Promise<NestE
   }
   const moduleRef = await builder.compile();
   const app = moduleRef.createNestApplication<NestExpressApplication>({ bufferLogs: true });
-  configureApp(app);
+  configureApp(app, { webDistDir: options.webDistDir });
   await app.init();
   return app;
 }
