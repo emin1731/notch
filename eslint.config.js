@@ -1,4 +1,7 @@
 import config from '@notch/config/eslint';
+import reactHooks from 'eslint-plugin-react-hooks';
+import reactRefresh from 'eslint-plugin-react-refresh';
+import globals from 'globals';
 
 const READS_THE_CLOCK = 'Pass `now` in instead of reading the clock, so the logic stays testable.';
 
@@ -21,5 +24,24 @@ export default [
         },
       ],
     },
+  },
+  {
+    files: ['apps/web/public/**/*.js'],
+    languageOptions: { globals: globals.browser, sourceType: 'script' },
+    rules: { 'no-var': 'off' },
+  },
+  {
+    files: ['apps/web/**/*.{ts,tsx}'],
+    ...reactHooks.configs.flat.recommended,
+    languageOptions: { globals: globals.browser },
+  },
+  {
+    files: ['apps/web/src/**/*.tsx'],
+    ...reactRefresh.configs.vite,
+  },
+  {
+    // shadcn/ui components export their variants next to the component.
+    files: ['apps/web/src/components/ui/**/*.tsx'],
+    rules: { 'react-refresh/only-export-components': 'off' },
   },
 ];
