@@ -16,11 +16,12 @@ WORKDIR /repo
 # Manifests first, so the dependency layer is reused until they change.
 COPY pnpm-lock.yaml pnpm-workspace.yaml package.json turbo.json .npmrc* ./
 COPY apps/api/package.json apps/api/
+COPY apps/web/package.json apps/web/
 COPY packages/shared/package.json packages/shared/
 COPY packages/config/package.json packages/config/
 RUN --mount=type=cache,id=pnpm,target=/pnpm/store pnpm install --frozen-lockfile
 COPY . .
-RUN pnpm turbo run build --filter=@notch/api...
+RUN pnpm turbo run build --filter=@notch/api... --filter=@notch/web...
 # A self-contained folder with production dependencies only, @notch/shared included.
 RUN --mount=type=cache,id=pnpm,target=/pnpm/store pnpm --filter @notch/api deploy --prod /out
 
@@ -28,6 +29,8 @@ FROM base AS runtime
 ENV NODE_ENV=production PORT=3000 WEB_DIST_DIR=/app/static
 WORKDIR /app
 COPY --from=build --chown=node:node /out ./
+# The web app, served by the API on the same origin.
+COPY --from=build --chown=node:node /repo/apps/web/dist ./static
 USER node
 EXPOSE 3000
 HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=3 \

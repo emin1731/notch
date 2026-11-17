@@ -7,7 +7,6 @@
     "dist",
     "prisma",
     "prisma.config.ts",
-    "static",
     "docker-entrypoint.sh"
   ],
   "scripts": {

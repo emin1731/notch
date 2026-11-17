@@ -6,10 +6,11 @@ is built in the sprints listed in [docs/backend-sprints.md](docs/backend-sprints
 
 ## Stack
 
-pnpm + Turborepo monorepo · NestJS 12 (ESM) · Prisma 7 + PostgreSQL 16 · zod · Vitest + Testcontainers
+pnpm + Turborepo monorepo · NestJS 12 (ESM) · Prisma 7 + PostgreSQL 16 · React 19 + Vite 8 + Tailwind 4 + shadcn/ui · zod · Vitest + Testcontainers
 
 ```
 apps/api          NestJS API, served under /api/v1
+apps/web          React app (Vite), served by the API in production
 packages/shared   domain logic, schemas and types shared by the API and (later) the web app
 packages/config   tsconfig bases, ESLint and Prettier
 ```
@@ -26,9 +27,10 @@ packages/config   tsconfig bases, ESLint and Prettier
 pnpm install
 cp apps/api/.env.example apps/api/.env
 docker compose up -d --wait        # Postgres 16 on localhost:5434
-pnpm dev                           # builds shared, then watches shared + api
+pnpm dev                           # builds shared, then watches shared + api + web
 ```
 
+- App: http://localhost:5173 (Vite proxies `/api` to the API, so cookies work as in production)
 - API: http://localhost:3000/api/v1/health
 - Swagger: http://localhost:3000/docs (development only)
 

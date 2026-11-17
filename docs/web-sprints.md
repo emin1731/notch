@@ -55,28 +55,31 @@ W4 holds most of the web risk: optimistic updates, debounced counters and the ti
 
 **Goal:** an empty but production-shaped web app that runs next to the API, builds into the Docker image, and has the design system in place.
 
-**Decide**
+**Decided**
 
-- [ ] **Dark-mode bootstrap under the CSP.** To set the theme before first paint without a flash, a script must run in `<head>`. The API's helmet CSP blocks inline scripts. Recommendation: put it in a tiny external `/theme.js` (allowed by `script-src 'self'`) rather than loosening the CSP.
-- [ ] **Font.** Recommendation: the system font stack. It's fast and native on every device. A webfont (e.g. Inter) only if you want a specific look.
+- [x] **Dark-mode bootstrap:** an external `public/theme.js` in `<head>` applies the saved theme (light / dark / system) before first paint; the CSP keeps `script-src 'self'`.
+- [x] **Font:** the system font stack (Tailwind's default `font-sans`).
+- [x] shadcn/ui CLI 4 with the `radix-nova` preset on Radix (`radix-ui`), neutral base. Its Geist font and `next-themes` were removed in favour of the system font and our own `ThemeProvider`. `cn` comes from shadcn's `cn` package.
+- [x] `@notch/shared` is built unbundled with `sideEffects: false`, so the web bundle only includes the modules it imports (Today's chunk went from 164 kB to 71 kB).
 
 **App**
 
-- [ ] `apps/web`: Vite 8, React 19, TypeScript 6 (extends `@notch/config`), ESLint with the React hooks and refresh rules
-- [ ] Tailwind 4, shadcn/ui init (neutral base, CSS variables), core palette tokens mapped from `COLOR_PALETTE`, light and dark themes following the system, with an override
-- [ ] React Router data router with every route from plan 7.1 as a placeholder page; TanStack Query provider; sonner toaster
-- [ ] **Layout shell:** a sidebar on desktop and a bottom tab bar on narrow screens, with `PageHeader` and `EmptyState`
-- [ ] Vite dev proxy `/api` → `localhost:3000`, so cookies work exactly as in production; `pnpm dev` runs the API and web together
+- [x] `apps/web`: Vite 8, React 19, TypeScript 6 (`@notch/config/tsconfig/react.json`), ESLint with the React hooks and refresh rules
+- [x] Tailwind 4, shadcn/ui, core palette tokens (`--core-<color>`, lighter in dark mode), light and dark themes following the system, with an override
+- [x] React Router data router with every route from plan 7.1 as a lazy placeholder page; TanStack Query provider; sonner toaster
+- [x] **Layout shell:** a sidebar on desktop, and a top bar plus a bottom tab bar on narrow screens; `PageHeader`, `EmptyState`, a 404 page
+- [x] Vite dev proxy `/api` → `localhost:3000`; `pnpm dev` runs the API, the web app and the shared watcher
 
 **Integration**
 
-- [ ] `@notch/shared` imported in the browser (ESM; luxon in the bundle)
-- [ ] Dockerfile: build the web app and copy `dist` to `/app/static`, replacing the placeholder page; route-level code splitting from the start
-- [ ] CI: lint, typecheck, test and build for `web`
+- [x] `@notch/shared` imported in the browser (Today shows the local date from `todayIn`)
+- [x] Dockerfile builds the web app and copies its `dist` to `/app/static`; the API's placeholder page is gone
+- [x] CI: lint, typecheck, test and build for `web` (through Turbo)
 
 **Tests**
 
-- [ ] Vitest + Testing Library + MSW set up; a smoke test that renders the shell at the three widths
+- [x] Vitest + Testing Library + MSW set up (`onUnhandledFrame: 'error'`)
+- [x] The shell: both navs, navigation with `aria-current`, the redirect from `/`, 404, guest layout; the theme: system-following, explicit choice, persistence
 
 **Done when:** `pnpm dev` shows the shell with working navigation in light and dark, and the Docker image serves the built app at `/`.
 
