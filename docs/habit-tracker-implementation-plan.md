@@ -1332,7 +1332,7 @@ On every push to `main` and every PR (`.github/workflows/ci.yml`):
 
 Each phase ends in a working, demo-able state. Shared-package logic for a phase is written **before** the API and UI that use it.
 
-> The backend is built first, in the sprints described in [backend-sprints.md](backend-sprints.md). That document replaces the API and shared-package items of the phases below; the web items still apply once the backend is done.
+> The backend was built first, in the sprints described in [backend-sprints.md](backend-sprints.md). The web app follows in the sprints of [web-sprints.md](web-sprints.md). Together they replace the phases below, which are kept for reference.
 
 ### Phase 0: Foundation
 
@@ -1467,6 +1467,7 @@ Listed so the architecture leaves room for them without building them now:
 | Email and self-service password reset | Add an `email` column and a reset-token table; until then, `user:set-password` covers it |
 | Error tracking and performance budgets | Sentry, Lighthouse and latency targets if the app ever has users beyond a few |
 | Pause / vacation mode | Add `pausedFrom`/`pausedTo` on Habit; paused weeks become NOT_ELIGIBLE and don't break streaks |
+| Phone installation (PWA) | A web app manifest and icons so the app opens full-screen from the home screen; offline logging would need a sync queue |
 | Mobile apps | API is already client-agnostic; the shared package can be reused in React Native |
 | Configurable week start (Sunday) | `weekStartOf` already centralizes this |
 | Social / accountability partners, payments, i18n | Not planned for MVP |
