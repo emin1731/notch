@@ -6,7 +6,7 @@ export default [
   ...config,
   {
     // Plan 9.4: domain logic never reads the clock.
-    files: ['packages/shared/src/{progress,progression,schedule}/**/*.ts'],
+    files: ['packages/shared/src/{progress,progression,schedule,stats}/**/*.ts'],
     ignores: ['**/*.spec.ts'],
     rules: {
       'no-restricted-syntax': [
