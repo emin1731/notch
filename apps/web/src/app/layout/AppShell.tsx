@@ -3,6 +3,7 @@ import { cn } from '@/lib/utils';
 import { NAV_ITEMS } from '../nav';
 import { Logo } from './Logo';
 import { ThemeMenu } from './ThemeMenu';
+import { UserMenu } from './UserMenu';
 
 /** Sidebar from `md` up; a top bar and a bottom tab bar on phones. */
 export function AppShell() {
@@ -31,14 +32,18 @@ export function AppShell() {
             </NavLink>
           ))}
         </nav>
-        <div className="flex items-center justify-end px-1">
+        <div className="flex items-center gap-1">
+          <UserMenu />
           <ThemeMenu />
         </div>
       </aside>
 
       <header className="sticky top-0 z-10 flex h-14 items-center justify-between border-b bg-background/90 px-4 backdrop-blur md:hidden">
         <Logo />
-        <ThemeMenu />
+        <div className="flex items-center gap-1">
+          <ThemeMenu />
+          <UserMenu variant="compact" />
+        </div>
       </header>
 
       <main className="min-w-0 flex-1 pb-24 md:pb-0">

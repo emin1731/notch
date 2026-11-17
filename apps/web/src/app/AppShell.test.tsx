@@ -1,10 +1,13 @@
 import { screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it } from 'vitest';
+import { signedIn, signedOut } from '@/test/auth';
 import { renderApp } from '@/test/render';
 import { NAV_ITEMS } from './nav';
 
 describe('app shell', () => {
+  beforeEach(() => signedIn());
+
   it('redirects / to Today', async () => {
     const { router } = renderApp('/');
     expect(await screen.findByRole('heading', { level: 1, name: 'Today' })).toBeInTheDocument();
@@ -54,6 +57,7 @@ describe('app shell', () => {
   });
 
   it('renders guest pages without the app navigation', async () => {
+    signedOut();
     renderApp('/login');
     expect(await screen.findByRole('heading', { level: 1, name: 'Log in' })).toBeInTheDocument();
     expect(screen.queryByRole('navigation', { name: 'Main' })).not.toBeInTheDocument();
