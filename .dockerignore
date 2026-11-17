@@ -1,0 +1,11 @@
+**/node_modules
+**/dist
+**/.turbo
+**/coverage
+**/.env
+**/src/generated
+.git
+.github
+.husky
+docs
+deploy
