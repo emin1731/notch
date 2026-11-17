@@ -31,6 +31,7 @@ test('register, stay logged in across a reload, log out, and log back in', async
   // Logged out, a protected page goes to login, and login comes back to it.
   await page.goto('/stats');
   await expect(page).toHaveURL('/login');
+  await expect(pageHeading(page, 'Log in')).toBeVisible();
   await page.getByLabel('Username').fill(username.toUpperCase());
   await page.getByLabel('Password', { exact: true }).fill(E2E_PASSWORD);
   await page.getByRole('button', { name: 'Log in' }).click();
@@ -52,6 +53,8 @@ test('shows a wrong invite code and a wrong password on the form', async ({ page
   await expect(page.getByText("That invite code doesn't work.")).toBeVisible();
 
   await page.getByRole('link', { name: 'Log in' }).click();
+  // The register page has a Username field too: wait for the login page to replace it.
+  await expect(pageHeading(page, 'Log in')).toBeVisible();
   await page.getByLabel('Username').fill(username);
   await page.getByLabel('Password', { exact: true }).fill('not the password');
   await page.getByRole('button', { name: 'Log in' }).click();
