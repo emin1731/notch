@@ -19,6 +19,8 @@ export default defineConfig({
           name: 'e2e',
           include: ['test/**/*.e2e-spec.ts'],
           globalSetup: ['test/global-setup.ts'],
+          // The files share one database (and MAX_USERS counts every user), so run them one by one.
+          fileParallelism: false,
           setupFiles: ['test/setup-env.ts'],
           hookTimeout: 120_000,
           testTimeout: 30_000,

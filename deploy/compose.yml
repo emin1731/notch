@@ -1,0 +1,59 @@
+# Production stack for notch.emindabakhov.com (docs/deploy.md). Lives on the server next to `.env`.
+# The host's reverse proxy terminates TLS and forwards to 127.0.0.1:3000.
+name: notch
+
+services:
+  api:
+    image: ${NOTCH_IMAGE:-ghcr.io/emin1731/notch}:${NOTCH_TAG:-latest}
+    restart: unless-stopped
+    init: true
+    env_file: .env
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: postgresql://notch:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}@db:5432/notch
+    ports:
+      # Only the reverse proxy on this host can reach it.
+      - '127.0.0.1:${NOTCH_PORT:-3000}:3000'
+    depends_on:
+      db:
+        condition: service_healthy
+    logging:
+      driver: json-file
+      options: { max-size: 10m, max-file: '5' }
+
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: notch
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+      POSTGRES_DB: notch
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U notch -d notch']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  # Daily pg_dump into ./backups, keeping the last BACKUP_KEEP_DAYS days.
+  backup:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    entrypoint: ['sh', '/scripts/backup.sh']
+    environment:
+      PGHOST: db
+      PGUSER: notch
+      PGPASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+      PGDATABASE: notch
+      BACKUP_KEEP_DAYS: ${BACKUP_KEEP_DAYS:-14}
+      BACKUP_HOUR_UTC: ${BACKUP_HOUR_UTC:-3}
+    volumes:
+      - ./backups:/backups
+      - ./scripts:/scripts:ro
+    depends_on:
+      db:
+        condition: service_healthy
+
+volumes:
+  pgdata:

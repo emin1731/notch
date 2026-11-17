@@ -1,5 +1,5 @@
-// Models arrive sprint by sprint, starting with User and Session in S1.
 // The connection URL lives in prisma.config.ts.
+// Instants are timestamptz; user-local calendar dates will be @db.Date (plan 5.4).
 
 generator client {
   provider     = "prisma-client"
@@ -9,4 +9,234 @@ generator client {
 
 datasource db {
   provider = "postgresql"
+}
+
+enum GoalStatus {
+  ACTIVE
+  COMPLETED
+}
+
+enum HabitType {
+  TOGGLE
+  COUNT
+  DURATION
+}
+
+enum ScheduleType {
+  DAILY
+  SPECIFIC_DAYS
+  TIMES_PER_WEEK
+}
+
+enum TimeOfDay {
+  MORNING
+  AFTERNOON
+  EVENING
+  ANYTIME
+}
+
+enum StepType {
+  PERCENT
+  ABSOLUTE
+}
+
+enum TargetChangeKind {
+  LEVEL_UP
+  DELOAD
+  MANUAL
+}
+
+enum TargetField {
+  TARGET_VALUE
+  TIMES_PER_WEEK
+  DAYS_OF_WEEK // values are bitmasks, Mon = 1 … Sun = 64
+}
+
+model User {
+  id           String    @id @default(uuid())
+  username     String    @unique // trimmed + lower-cased, ^[a-z0-9_.-]{3,50}$
+  passwordHash String // argon2id encoded string
+  name         String?
+  timezone     String    @default("UTC") // IANA, e.g. "Asia/Baku"
+  onboardedAt  DateTime? @db.Timestamptz(3)
+  createdAt    DateTime  @default(now()) @db.Timestamptz(3)
+  updatedAt    DateTime  @updatedAt @db.Timestamptz(3)
+
+  sessions Session[]
+  cores    Core[]
+  goals    Goal[]
+  habits   Habit[]
+  logs     HabitLog[]
+  reviews  WeeklyReview[]
+}
+
+model Session {
+  id         String   @id @default(uuid())
+  tokenHash  String   @unique // SHA-256 of the cookie value; the raw token is never stored
+  userId     String
+  expiresAt  DateTime @db.Timestamptz(3)
+  lastSeenAt DateTime @default(now()) @db.Timestamptz(3)
+  userAgent  String?
+  createdAt  DateTime @default(now()) @db.Timestamptz(3)
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
+}
+
+model Core {
+  id         String    @id @default(uuid())
+  userId     String
+  name       String
+  color      String // token from COLOR_PALETTE, e.g. "emerald"
+  icon       String // lucide icon name
+  sortOrder  Int       @default(0)
+  archivedAt DateTime? @db.Timestamptz(3)
+  createdAt  DateTime  @default(now()) @db.Timestamptz(3)
+  updatedAt  DateTime  @updatedAt @db.Timestamptz(3)
+
+  user   User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  goals  Goal[]
+  habits Habit[]
+
+  @@index([userId, archivedAt])
+}
+
+model Goal {
+  id          String     @id @default(uuid())
+  userId      String
+  coreId      String
+  title       String
+  description String?
+  deadline    DateTime?  @db.Date
+  status      GoalStatus @default(ACTIVE)
+  completedAt DateTime?  @db.Timestamptz(3)
+  archivedAt  DateTime?  @db.Timestamptz(3)
+  sortOrder   Int        @default(0)
+  createdAt   DateTime   @default(now()) @db.Timestamptz(3)
+  updatedAt   DateTime   @updatedAt @db.Timestamptz(3)
+
+  user       User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  // NoAction, not Restrict: checked at the end of the statement, so deleting the user cascades
+  // through Core and Goal in either order. Deleting a non-empty core is blocked in the service.
+  core       Core        @relation(fields: [coreId], references: [id], onDelete: NoAction)
+  milestones Milestone[]
+  habits     Habit[]
+
+  @@index([userId, coreId])
+}
+
+model Milestone {
+  id          String    @id @default(uuid())
+  goalId      String
+  title       String
+  sortOrder   Int
+  completedAt DateTime? @db.Timestamptz(3)
+  createdAt   DateTime  @default(now()) @db.Timestamptz(3)
+  updatedAt   DateTime  @updatedAt @db.Timestamptz(3)
+
+  goal Goal @relation(fields: [goalId], references: [id], onDelete: Cascade)
+
+  @@index([goalId, sortOrder])
+}
+
+// CHECK constraints (target ≥ 1, timesPerWeek 1–7) live in the migration SQL: Prisma can't express
+// them. Cross-field rules are in habitShapeIssues() in @notch/shared.
+model Habit {
+  id                  String       @id @default(uuid())
+  userId              String
+  coreId              String
+  goalId              String?
+  name                String
+  type                HabitType
+  unit                String? // COUNT only
+  targetValue         Int // TOGGLE = 1, COUNT = units, DURATION = seconds
+  initialTargetValue  Int
+  scheduleType        ScheduleType
+  daysOfWeek          Int[] // SPECIFIC_DAYS only, ISO 1..7
+  timesPerWeek        Int? // TIMES_PER_WEEK only
+  initialTimesPerWeek Int?
+  timeOfDay           TimeOfDay    @default(ANYTIME)
+
+  adaptiveEnabled Boolean  @default(true)
+  stepType        StepType @default(PERCENT)
+  stepValue       Int      @default(10) // percent, or units/seconds when ABSOLUTE
+  minTarget       Int? // applies to the progressing field
+  maxTarget       Int?
+
+  longestStreak Int       @default(0)
+  startDate     DateTime  @db.Date // user-local date
+  sortOrder     Int       @default(0)
+  archivedAt    DateTime? @db.Timestamptz(3)
+  createdAt     DateTime  @default(now()) @db.Timestamptz(3)
+  updatedAt     DateTime  @updatedAt @db.Timestamptz(3)
+
+  user          User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  core          Core           @relation(fields: [coreId], references: [id], onDelete: NoAction)
+  goal          Goal?          @relation(fields: [goalId], references: [id], onDelete: SetNull)
+  logs          HabitLog[]
+  targetChanges TargetChange[]
+
+  @@index([userId, archivedAt])
+  @@index([coreId])
+  @@index([goalId])
+}
+
+/// Every change to a habit's target, weekly frequency or weekdays. History is read with
+/// targetOn() / scheduleOn(). LEVEL_UP / DELOAD changes come from a weekly review.
+model TargetChange {
+  id             String           @id @default(uuid())
+  habitId        String
+  weeklyReviewId String? // null for MANUAL changes
+  kind           TargetChangeKind
+  field          TargetField
+  fromValue      Int
+  toValue        Int
+  effectiveFrom  DateTime         @db.Date
+  reason         Json? // { rule, rates: { current, previous } }
+  undoDeadline   DateTime?        @db.Timestamptz(3)
+  undoneAt       DateTime?        @db.Timestamptz(3)
+  createdAt      DateTime         @default(now()) @db.Timestamptz(3)
+
+  habit  Habit         @relation(fields: [habitId], references: [id], onDelete: Cascade)
+  review WeeklyReview? @relation(fields: [weeklyReviewId], references: [id], onDelete: SetNull)
+
+  @@index([habitId, effectiveFrom])
+  @@index([weeklyReviewId])
+}
+
+/// One per habit per user-local date. A write that leaves value 0 deletes the row, so a log
+/// always means "did something". CHECK (value >= 0) is in the migration SQL.
+model HabitLog {
+  id             String   @id @default(uuid())
+  habitId        String
+  userId         String
+  date           DateTime @db.Date // user-local calendar date
+  value          Int // TOGGLE 0/1, COUNT units, DURATION seconds
+  targetSnapshot Int // the habit's target on `date`, set when the log is created
+  createdAt      DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt      DateTime @updatedAt @db.Timestamptz(3)
+
+  habit Habit @relation(fields: [habitId], references: [id], onDelete: Cascade)
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([habitId, date])
+  @@index([userId, date])
+}
+
+/// The review of one week (Monday–Sunday in the user's timezone), created lazily by ensureDue().
+/// The unique (userId, weekStart) makes creation idempotent across concurrent requests.
+model WeeklyReview {
+  id        String    @id @default(uuid())
+  userId    String
+  weekStart DateTime  @db.Date // Monday of the evaluated week
+  inactive  Boolean   @default(false)
+  summary   Json // WeeklyReviewSummary (plan 5.3)
+  seenAt    DateTime? @db.Timestamptz(3)
+  createdAt DateTime  @default(now()) @db.Timestamptz(3)
+
+  user    User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  changes TargetChange[]
+
+  @@unique([userId, weekStart])
 }

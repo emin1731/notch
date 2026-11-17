@@ -75,34 +75,44 @@ S5 holds most of the product's risk. S3 and S4 exist mostly to give it solid fou
 
 **Goal:** you can register with the invite code, stay logged in, and manage your account. Spec: [plan 6.4](habit-tracker-implementation-plan.md#64-authentication).
 
+**Decided** (written back into the plan)
+
+- [x] `TRUST_PROXY` is a hop count (`1` in production), not `true`: with `true` the client controls the IP the throttle sees.
+- [x] A wrong current password on `POST /me/password` and `DELETE /me` is **403** `INVALID_CREDENTIALS`, so the SPA doesn't read it as a lost session.
+- [x] The CSRF token is bound to the SHA-256 of the `SESSION` cookie (or `"anon"`): stateless, no DB lookup.
+- [x] Instants are `timestamptz` (`@db.Timestamptz(3)`), not Prisma's default `timestamp`.
+- [x] `POST /auth/logout` is public, so an expired session can still clear its cookie.
+- [x] The CLI runs from the build (`dist/cli/`); no seed script until there's data worth seeding (S4).
+
 **Data**
 
-- [ ] `User` (username, argon2id hash, timezone, onboardedAt) and `Session` models + migration
+- [x] `User` (username, argon2id hash, timezone, onboardedAt) and `Session` models + the first migration
 
 **Shared**
 
-- [ ] zod schemas: username (normalised, regex), password (8–128), register, login, update profile, change password, delete account
-- [ ] IANA timezone validation
+- [x] zod schemas: username (normalised, regex), password (8–128), register, login, update profile, change password, delete account; `UserDto`
+- [x] IANA timezone validation
 
 **API**
 
-- [ ] `SessionGuard` (global), `@Public()`, `@CurrentUser()` returning `{ id, username, timezone }`
-- [ ] `CsrfGuard` (global): signed, session-bound `XSRF-TOKEN`; reissued on login, register and logout
-- [ ] `GET /auth/csrf`, `POST /auth/register`, `POST /auth/login`, `GET /auth/me`, `POST /auth/logout`, `POST /auth/logout-all`
-- [ ] Invite code (constant-time compare), `MAX_USERS`, dummy-hash verify for unknown usernames
-- [ ] Sliding expiry (at most one write per day), expired-session cleanup on login
-- [ ] Throttler on login and register (10/min/IP)
-- [ ] `PATCH /me`, `POST /me/password` (drops other sessions), `DELETE /me` (password required), `POST /me/onboarding/complete`
-- [ ] CLI scripts: `user:create`, `user:set-password`
+- [x] `SessionGuard` (global), `@Public()`, `@CurrentUser()` returning `{ id, username, timezone }`, `@CurrentSessionId()`
+- [x] `CsrfGuard` (global): signed, session-bound `XSRF-TOKEN`; reissued on login, register, logout and when the session slides
+- [x] `GET /auth/csrf`, `POST /auth/register`, `POST /auth/login`, `GET /auth/me`, `POST /auth/logout`, `POST /auth/logout-all`
+- [x] Invite code (constant-time compare), `MAX_USERS`, dummy-hash verify for unknown usernames, rehash on login when the argon2 parameters change
+- [x] Sliding expiry (at most one write per day), expired-session cleanup on login
+- [x] Throttler on login and register (10/min/IP)
+- [x] `PATCH /me`, `POST /me/password` (drops other sessions), `DELETE /me` (password required), `POST /me/onboarding/complete`
+- [x] CLI scripts: `user:create`, `user:set-password` (in `AuthService`, next to registration)
 
 **Tests**
 
-- [ ] Register: wrong invite code, registration closed, username taken, case-insensitive usernames
-- [ ] Login: identical 401 for unknown user and wrong password; throttling returns 429
-- [ ] CSRF: missing header, wrong token, token from before login all rejected with 403
-- [ ] Session: expired session returns 401; logout and logout-all revoke; password change keeps only the current session
+- [x] Register: wrong invite code, registration closed, username taken, case-insensitive usernames, validation
+- [x] Login: identical 401 for unknown user and wrong password; throttling returns 429 per IP; new token on every login
+- [x] CSRF: missing header, header ≠ cookie, forged token, token from before login all rejected with 403
+- [x] Session: unknown and expired sessions return 401; sliding expiry; logout and logout-all revoke; password change keeps only the current session; survives an app restart
+- [x] Account: profile update, onboarding, deletion (cascade, other users untouched), CLI operations
 
-**Done when:** the full auth flow works through e2e tests and an `.http` file (or Swagger), and sessions survive an API restart.
+**Done when:** the full auth flow works through e2e tests and by hand with curl (see the README), and sessions survive an API restart.
 
 Optional: deploy this skeleton to `notch.emindabakhov.com` now. That checks early that the `Secure` cookie and the client IP work behind your host's proxy.
 
@@ -112,33 +122,36 @@ Optional: deploy this skeleton to `notch.emindabakhov.com` now. That checks earl
 
 **Goal:** you can build the full core → goal → milestone structure and complete goals.
 
-**Decide**
+**Decided** (written back into the plan)
 
-- [ ] Goal archiving: replace the `ARCHIVED` status with an `archivedAt` column (like `Core` and `Habit`), so archiving a completed goal keeps its completion. Add `POST /goals/:id/unarchive`. Recommendation: yes.
-- [ ] Adding a milestone to a completed goal reopens it. Recommendation: yes.
-- [ ] Unarchiving a habit or goal whose core is archived: block it with `409 CORE_ARCHIVED`, or unarchive the core too. Recommendation: block.
+- [x] Goal archiving is an `archivedAt` column; `GoalStatus` is `ACTIVE | COMPLETED`, so an archived completed goal stays completed. `POST /goals/:id/unarchive` added.
+- [x] Adding a milestone to a completed goal reopens it. One rule (`nextGoalStatus`) runs after every milestone change.
+- [x] Unarchiving or creating a goal in an archived core is blocked with `409 CORE_ARCHIVED` (habits follow in S3).
+- [x] Manual complete/reopen only for goals without milestones (`409 GOAL_HAS_MILESTONES`); 50 milestones per goal (`409 LIMIT_REACHED`).
+- [x] Malformed ids are 404, like unknown ones. New codes `CORE_NOT_FOUND`, `GOAL_NOT_FOUND`, `MILESTONE_NOT_FOUND`.
+- [x] Milestone create, toggle and delete return the goal and `goalJustCompleted`; milestone writes lock the goal row, so concurrent ticks complete it exactly once.
 
 **Data**
 
-- [ ] `Core`, `Goal`, `Milestone` models + migration
-- [ ] `onDelete: NoAction` (not `Restrict`) for `Goal → Core` and `Habit → Core`, so deleting an account cascades cleanly. Covered by a test.
+- [x] `Core`, `Goal`, `Milestone` models + migration
+- [x] `onDelete: NoAction` (not `Restrict`) for `Goal → Core` (and `Habit → Core` in S3). `NoAction` is checked at the end of the statement, so account deletion cascades no matter which order Postgres runs the cascades in. Covered by a test.
 
 **Shared**
 
-- [ ] Schemas for core, goal and milestone; `CORE_PRESETS`, `COLOR_PALETTE`; `goalProgress()`
+- [x] Schemas for core, goal and milestone; `CORE_PRESETS`, `COLOR_PALETTE`, `LIMITS`; `goalProgress()`, `nextGoalStatus()`; local-date helpers
 
 **API**
 
-- [ ] Cores: list with counts, create, `POST /cores/batch`, update, `PUT /cores/order`, archive (cascades to goals and habits), unarchive, delete (`409 CORE_NOT_EMPTY`)
-- [ ] Goals: list with progress, detail, create with inline milestones, update (core change rules), complete/reopen (goals without milestones), archive/unarchive, delete (unlinks habits, deletes milestones)
-- [ ] Milestones: create (appended), rename, `PUT .../order`, toggle returning `goalJustCompleted`, delete (with goal-status sync)
-- [ ] All multi-table writes in `prisma.$transaction`
+- [x] Cores: list with counts, create, `POST /cores/batch`, update, `PUT /cores/order`, archive (cascades to goals), unarchive, delete (`409 CORE_NOT_EMPTY`)
+- [x] Goals: list with progress, detail, create with inline milestones, update (core change rules), complete/reopen (goals without milestones), archive/unarchive, delete (deletes milestones)
+- [x] Milestones: create (appended), rename, `PUT .../order`, toggle returning `goalJustCompleted`, delete (with goal-status sync)
+- [x] All multi-table writes in `prisma.$transaction`
 
 **Tests**
 
-- [ ] Ticking the last milestone completes the goal; unticking reopens it; deleting the last open milestone completes it
-- [ ] Archive cascade; delete guard; account deletion with cores, goals and milestones present
-- [ ] Ownership 404s for every route; order arrays capped at 200, milestones at 50
+- [x] Ticking the last milestone completes the goal; unticking reopens it; adding one reopens it; deleting the last open milestone completes it; concurrent ticks complete it once
+- [x] Archive cascade; delete guard; account deletion with cores, goals and milestones present
+- [x] Ownership 404s for every route (`test/ownership.e2e-spec.ts`, extended by later sprints); order arrays capped at 200, milestones at 50
 
 **Done when:** the structure can be built and reorganised entirely through the API, and the goal-completion rules pass their tests.
 
@@ -148,36 +161,44 @@ Optional: deploy this skeleton to `notch.emindabakhov.com` now. That checks earl
 
 **Goal:** you can create every combination of habit type × schedule, with level settings.
 
-**Decide**
+**Decided** (written back into the plan)
 
-- [ ] **Schedule edits.** Changing the schedule currently rewrites history (rates, streaks, heatmaps). Recommendation:
-  - `scheduleType` can't be changed, just like `type`. To change it, create a new habit.
-  - `daysOfWeek` can be changed. The change is recorded as a `TargetChange` with field `DAYS_OF_WEEK` (stored as a bitmask, Mon = 1 … Sun = 64), effective from the local today. History is then read with `scheduleOn(date)`, the same way `targetOn(date)` reads targets, and the week of the edit isn't counted for levelling.
-- [ ] **`effectiveFrom` for manual target edits:** the user's local today. Recommendation: yes.
-- [ ] **Past start dates:** allow `startDate` up to 6 days in the past, so a habit created today can be backfilled to when you actually started it. Recommendation: yes.
+- [x] **Schedule edits:** `scheduleType` can't change, just like `type` and `startDate`. `daysOfWeek` and `timesPerWeek` can; each edit is a `MANUAL` `TargetChange` (field `DAYS_OF_WEEK` as a bitmask, Mon = 1 … Sun = 64, or `TIMES_PER_WEEK`), read back with `scheduleOn(date)`. A week whose weekdays changed isn't eligible for levelling (S5).
+- [x] **`effectiveFrom` for manual edits:** the user's local today. Several edits on one day fold into one change, and editing back to the start value removes it.
+- [x] **Past start dates:** up to 6 days back (the backfill window); future dates up to a year ahead.
+- [x] A goal moves to another core only with `moveHabits: true` when habits are linked (`409 GOAL_CORE_MISMATCH` otherwise); the habits move with it.
+- [x] Services read the time from an injectable `Clock`, so S4/S5 tests can move time.
 
 **Data**
 
-- [ ] `Habit` and `TargetChange` (manual changes only for now) + migration, CHECK constraints from plan 5.2
+- [x] `Habit` and `TargetChange` (manual changes only for now; the review link comes in S5) + migration, CHECK constraints from plan 5.2
+
+**Carried over from S2**
+
+- [x] Core archive cascades to its active habits; habits count toward `CORE_NOT_EMPTY`; `counts.habits` in the core list
+- [x] Goal delete unlinks its habits (`goalId → null`); goal detail lists linked habits
+- [x] Moving a goal with linked habits to another core moves the habits too
+- [x] Creating or unarchiving a habit in an archived core → `409 CORE_ARCHIVED`; habit routes added to `test/ownership.e2e-spec.ts`
 
 **Shared**
 
-- [ ] Date helpers: `LocalDate`, `toDateString` / `fromDateString`, `todayIn(tz)`, `weekStartOf`, `weekRange`, `isoWeekday` (with DST tests, `Europe/Berlin` in late October)
-- [ ] Lint rule banning `new Date()` / `Date.now()` in the domain folders
-- [ ] Habit schemas with cross-field refinements (toggle ⇒ target 1, specific days ⇒ non-empty days, times per week ⇒ 1–7)
-- [ ] `isScheduledOn`, `occurrencesInWeek`, `adaptiveApplicable`
-- [ ] Step math (`nextLevelUp`, `nextDeload`, clamping, minute rounding), default `minTarget`
-- [ ] `targetOn(date, changes)` and `scheduleOn(date, changes)`, ignoring undone changes
-- [ ] `projectLevels()` preview
+- [x] Date helpers: `toDateString` / `fromDateString`, `todayIn(tz, now)`, `weekStartOf`, `weekRange`, `isoWeekday`, `addDays`, `daysBetween` (DST tests: `Europe/Berlin`, late October)
+- [x] Lint rule banning `new Date()` / `Date.now()` in the domain folders
+- [x] Habit schemas with cross-field refinements (`habitShapeIssues`, also run by the API on the merged habit of an update)
+- [x] `isScheduledOn`, `occurrencesInWeek`, `adaptiveApplicable`, weekday bitmasks
+- [x] Step math (`nextLevelUp`, `nextDeload`, clamping, minute rounding half up), default `minTarget`
+- [x] `targetOn(date, …)` and `scheduleOn(date, …)`, ignoring undone changes
+- [x] `projectLevels()` preview
 
 **API**
 
-- [ ] Habits: list with filters, detail (with `adaptiveApplicable`), create (`initial*` fields, start date rules), update (no `type` or `scheduleType` change; target and day changes write `MANUAL` TargetChanges), `PUT /habits/order`, archive/unarchive, delete
-- [ ] Goal/core consistency check (`409 GOAL_CORE_MISMATCH`)
+- [x] Habits: list with filters, detail (with `adaptiveApplicable` and recent changes), create (`initial*` fields, start date rules), update (no `type`, `scheduleType` or `startDate` change; target, quota and day changes write `MANUAL` TargetChanges), `PUT /habits/order`, archive/unarchive, delete, `GET /habits/:id/target-history`
+- [x] Goal/core consistency check (`409 GOAL_CORE_MISMATCH`)
 
 **Tests**
 
-- [ ] Every refinement, every schedule helper, step math including rounding and bounds, manual change recording, `targetOn` across several changes including undone ones
+- [x] Every refinement, every schedule helper, step math including rounding and bounds, manual change recording, `targetOn` across several changes including undone ones
+- [x] All nine type × schedule combinations created through the API; a history spanning several days read back with `targetOn`
 
 **Done when:** every type × schedule combination can be created and edited, and every edit leaves a correct, queryable history.
 
@@ -187,37 +208,44 @@ Optional: deploy this skeleton to `notch.emindabakhov.com` now. That checks earl
 
 **Goal:** you can log every habit type for today and the past 6 days, and `/today` returns correct progress and streaks.
 
-**Decide**
+**Decided** (written back into the plan)
 
-- [ ] **Zero-value logs:** a write that leaves `value = 0` deletes the log (toggle off, counting down to 0). Then "has a log" always means "did something", which the undo and inactive-week rules rely on. Recommendation: yes.
-- [ ] **Streak window:** drop the ~120-day window and load each active habit's full log history. At personal scale that's a few thousand rows per year, and streaks are never cut off. Recommendation: yes; add a cap only if profiling shows a need.
-- [ ] **Times-per-week habits on Today:** they appear only in the "This week" section, not in the time-of-day groups. `dayProgress` is `null` when no daily or specific-days habit is scheduled. Recommendation: yes.
+- [x] **Zero-value logs:** a write that leaves `value = 0` deletes the log, so "has a log" always means "did something".
+- [x] **Streak window:** none. Each habit's full log history is loaded.
+- [x] **Times-per-week habits on Today:** only in `weeklyQuota`. `dayProgress` is `null` when no daily or specific-days habit is due.
+- [x] Rates and streaks read each day's schedule from the change history; Today is computed as of the requested date.
+- [x] `BACKFILL_OUT_OF_RANGE` is a 400 with `{ earliest, latest }`; logging an archived habit is `409 HABIT_ARCHIVED`; values are capped per type.
+- [x] Log writes lock the habit row, so concurrent writes serialise and the stored longest streak is always consistent.
+- [x] The seed is a compiled CLI (`pnpm --filter @notch/api seed`), deterministic for a given today; its core (`seedDemo`) is the Today e2e fixture.
 
 **Data**
 
-- [ ] `HabitLog` + migration
+- [x] `HabitLog` + migration (CHECK `value >= 0`)
 
 **Shared**
 
-- [ ] `computeProgress`, `isHit`, `weeklyRate`, `currentStreak`, `longestStreak` (all three schedules, unscheduled-day bonus logs excluded)
-- [ ] Response types: `TodayResponse`, `TodayHabit`, log write result
+- [x] `computeProgress`, `isHit`, `weekStats` (weekly rate), `currentStreak`, `longestStreak` (all three schedules, unscheduled-day bonus logs excluded)
+- [x] Rates and streaks read each day's schedule and target from the history (`scheduleOn`, `targetOn`), so weekday and quota edits don't rewrite the past
+- [x] Response types: `TodayResponse`, `TodayHabit`, `LogWriteResult`; log schemas and `LOG_LIMITS`
 
 **API**
 
-- [ ] `GET /habits/:id/logs?from=&to=`
-- [ ] `PUT /habits/:id/logs/:date` (upsert), `POST .../increment` (raw `INSERT … ON CONFLICT DO UPDATE SET value = GREATEST(value + delta, 0)`), `DELETE`
-- [ ] Backfill window check against the server's local today and `startDate` (`BACKFILL_OUT_OF_RANGE`)
-- [ ] `targetSnapshot` set on create from `targetOn(date)`
-- [ ] `longestStreak` recomputed in the same transaction; response `{ log, habitProgress, currentStreak, longestStreak }`
-- [ ] `GET /today?date=`: active habits, their logs and this week's changes in three queries, then computed in memory
-- [ ] Seed script: a demo user with several weeks of realistic logs
+- [x] `GET /habits/:id/logs?from=&to=`
+- [x] `PUT /habits/:id/logs/:date` (upsert), `POST .../increment` (raw `INSERT … ON CONFLICT DO UPDATE SET value = LEAST(GREATEST(value + delta, 0), cap)`), `DELETE`
+- [x] Backfill window check against the user's local today and `startDate` (`BACKFILL_OUT_OF_RANGE`)
+- [x] `targetSnapshot` set on create from `targetOn(date)`
+- [x] `longestStreak` recomputed in the same transaction; response `{ log, habitProgress, currentStreak, longestStreak }`
+- [x] `GET /today?date=`: active habits, their logs and their changes in three queries, then computed in memory
+- [x] `currentStreak` in `GET /habits/:id`
+- [x] Seed script: a demo user with 8 weeks of realistic logs; `createTestApp({ now })` freezes the clock
 
 **Tests**
 
-- [ ] Streak rules for every schedule, including "today not yet hit doesn't break the streak" and unfinished weeks
-- [ ] Backfill edges (today − 6, today − 7, future, before `startDate`) across a timezone where the server's UTC date differs
-- [ ] Snapshot taken from the old target when backfilling across a target change
-- [ ] Concurrent increments don't lose updates
+- [x] Streak rules for every schedule, including "today not yet hit doesn't break the streak", unfinished weeks, mid-week starts and a weekday edit
+- [x] Backfill edges (today − 6, today − 7, future, before `startDate`), also in `Pacific/Kiritimati`, where the local date is ahead of UTC
+- [x] Snapshot taken from the old target when backfilling across a target change
+- [x] Concurrent increments don't lose updates
+- [x] Ownership matrix: habit and log routes (32 routes). The habit rows meant for S3 had silently not been added; they are now.
 
 **Done when:** a seeded user's `/today` matches hand-computed expectations for every habit type and schedule.
 
@@ -227,37 +255,43 @@ Optional: deploy this skeleton to `notch.emindabakhov.com` now. That checks earl
 
 **Goal:** reviews appear on the first visit after Monday 00:00 local time, apply the right decisions, and undo behaves exactly as specified. Spec: [plan 2.7, 2.8, 6.5, 6.6](habit-tracker-implementation-plan.md#27-adaptive-difficulty).
 
-**Decide**
+**Decided** (written back into the plan)
 
-- [ ] **First week for new users:** no review is created (and no "welcome back" shown) for a week in which no habit counted for levelling. Recommendation: yes.
+- [x] **First week:** no review (and no "welcome back") for a week in which no active habit existed for the whole week.
+- [x] **Undo vs a manual edit:** the edit wins; undo is refused with `CHANGED_SINCE`.
+- [x] **Welcome back:** shows while the latest review is inactive and unseen.
+- [x] "Changed during the week" = a non-undone change of any field effective after the Monday; a Monday change keeps the week eligible. Cooldown = an undone change of that kind effective on W's Monday.
+- [x] `ensureDue` also runs before habit edits; `runForUser` locks the user's habit rows and claims the week before deciding.
+- [x] The demo seed simulates its history by running the real review every Monday.
 
 **Data**
 
-- [ ] `WeeklyReview` + migration; link `TargetChange` to reviews
+- [x] `WeeklyReview` + migration; `TargetChange` linked to reviews
 
 **Shared**
 
-- [ ] `isEligibleWeek`, inactive-week detection, cooldown derivation
-- [ ] `decideForHabit()` with `PROGRESSION_CONFIG`
-- [ ] Reason codes → sentences (for the web app later)
-- [ ] `WeeklyReviewSummary` type
+- [x] `isEligibleWeek`, inactive-week detection, `isUnderCooldown`
+- [x] `decideForHabit()` with `PROGRESSION_CONFIG`
+- [x] `undoBlockReason()`; reason codes → sentences (for the web app later); `startOfDayIn` for deadlines
+- [x] `WeeklyReviewSummary` and review response types
 
 **API**
 
-- [ ] `WeeklyReviewService.runForUser` in one transaction; duplicate-key error caught outside it for idempotency
-- [ ] `ensureDue` called from `/today`, `/reviews/latest` and before every log write
-- [ ] Undo with all four checks and `details.reason` (`EXPIRED`, `ALREADY_LOGGED`, `ALREADY_UNDONE`, `NOT_AUTOMATIC`); deadline `effectiveFrom + 7 days`
-- [ ] `GET /reviews`, `/reviews/latest`, `/reviews/:weekStart`, `POST /reviews/:id/seen`, `GET /habits/:id/target-history`
-- [ ] `/today` adds `change`, `pendingReview`, `welcomeBack`
-- [ ] Dev-only CLI: `review:run --user <username> --week <date>`
-- [ ] Seed: one habit that levelled up twice and one that deloaded
+- [x] `ReviewsService.runForUser` in one transaction; duplicate-key error caught outside it for idempotency
+- [x] `ensureDue` called from `/today`, `/reviews/latest`, before every log write and before habit edits
+- [x] Undo with all checks and `details.reason` (`NOT_AUTOMATIC`, `ALREADY_UNDONE`, `EXPIRED`, `ALREADY_LOGGED`, `CHANGED_SINCE`); deadline `effectiveFrom + 7 days`, local midnight
+- [x] `GET /reviews`, `/reviews/latest`, `/reviews/:weekStart`, `POST /reviews/:id/seen` (`GET /habits/:id/target-history` came in S3)
+- [x] `/today` adds `change`, `pendingReview`, `welcomeBack`
+- [x] Dev-only CLI: `review:run <username> --week=<date>`
+- [x] Seed: Meditate levels up twice, Deep work levels up twice and deloads back; `pendingMonday` for the Monday test
 
 **Tests**
 
-- [ ] All 12 decision cases from [plan section 11](habit-tracker-implementation-plan.md#11-testing-strategy), plus the decisions made in S3 and S4 (day-of-week edits, zero-value logs)
-- [ ] Concurrent `ensureDue` calls produce exactly one review
-- [ ] Review timing across timezones and a DST week
-- [ ] Each undo rejection reason; undo blocked after logging at the new level
+- [x] All 12 decision cases from [plan section 11](habit-tracker-implementation-plan.md#11-testing-strategy), plus weekday edits, Monday edits, undone changes, the edit-after-the-week guard, and zero-value logs vs undo
+- [x] Concurrent `ensureDue` calls produce exactly one review and one change
+- [x] Review timing across timezones (Los Angeles) and the Berlin DST week, including the undo deadline
+- [x] Each undo rejection reason; undo blocked after logging at the new level, allowed after a log set back to 0
+- [x] Mutation checks: disabling the cooldown or the "same value in W − 1" rule fails tests
 
 **Done when:** with the seed and a fake clock, Monday produces the expected level-ups and deloads, `/today` shows them, and undo works and locks exactly as specified.
 
@@ -267,22 +301,26 @@ Optional: deploy this skeleton to `notch.emindabakhov.com` now. That checks earl
 
 **Goal:** accurate statistics for 7, 30, 90 and 365 days.
 
-**Decide**
+**Decided** (written back into the plan)
 
-- [ ] **Times-per-week habits in ranges that don't line up with weeks:** count partial weeks at the edges in proportion to the days included, or only count full weeks. Recommendation: full weeks only, using a range rounded out to whole weeks.
+- [x] **Times-per-week habits:** every week the range touches counts as a whole week (rounded out to Monday–Sunday).
+- [x] **Unfinished periods:** a habit's last day (today or its archive date) counts only once it's a hit; the current week only once its quota is met.
+- [x] **Overall and per-core rates:** the average of the habits' rates, like the review.
+- [x] Ranges end today (local), today included; archived habits count up to their archive date; the daily series covers daily and specific-day habits only; stats don't trigger a review.
 
 **Shared**
 
-- [ ] Range helpers, heatmap builder (`{ date, value, target, hit, scheduled }`), target-series builder
+- [x] Range helpers (`rangeDates`, `habitWindow`), `rangeStats`, `averageRate`, `dailySeries`, heatmap builder (`{ date, value, target, hit, scheduled }`), target-series builder
 
 **API**
 
-- [ ] `GET /stats/overview?range=`: overall rate, daily series, per-core rates, top 5 current streaks, goals summary, level-ups vs deloads
-- [ ] `GET /stats/habits/:id?range=`: rate, streaks, total value, heatmap, target history
+- [x] `GET /stats/overview?range=`: overall rate, daily series, per-core rates, top 5 current streaks, goals summary, level-ups vs deloads
+- [x] `GET /stats/habits/:id?range=`: rate, hits/occurrences, streaks, total value, heatmap, target history
 
 **Tests**
 
-- [ ] Every number checked against the seeded fixture; archived habits kept in history; bonus logs shown but not counted
+- [x] Every number checked against the seeded fixture at 7d, 30d, 90d and 365d; archived habits kept in history; bonus logs shown but not counted
+- [x] Mutation checks: counting an unfinished week or a bonus log fails tests
 
 **Done when:** the seeded user's stats match hand-computed values at every range.
 
@@ -292,12 +330,20 @@ Optional: deploy this skeleton to `notch.emindabakhov.com` now. That checks earl
 
 **Goal:** the backend is complete, its API contract is frozen for the web app, and it runs at `notch.emindabakhov.com`.
 
-- [ ] Ownership e2e pass over every route; input limits (string lengths, array caps, 100 kB body limit)
-- [ ] Review of the OpenAPI output and the shared response types, which the web app will build on
-- [ ] `Dockerfile` (multi-stage): API + `serve-static` with an `index.html` fallback, ready for the SPA build
-- [ ] Production env, `prisma migrate deploy` on start, `TRUST_PROXY=true`, `COOKIE_SECURE=true`
-- [ ] Deploy behind the host's TLS proxy; first user created with `user:create`
-- [ ] Daily `pg_dump` backups, verified with a restore
+**Decided**
+
+- [x] Hosting: a VPS with Docker Compose; Postgres in the same stack; CI builds the image and pushes it to GHCR; the server pulls it. Runbook: [deploy.md](deploy.md).
+- [x] The SPA is served with Nest's `useStaticAssets` and an `index.html` fallback (no `@nestjs/serve-static`): hashed assets cached for a year, everything else revalidated, `/api` and `/docs` never shadowed.
+- [x] `TRUST_PROXY=1` (one proxy hop; 2 behind Cloudflare), `COOKIE_SECURE=true`.
+
+**Work**
+
+- [x] Ownership e2e pass over every route: a test now reads Express's route table and fails if a route with an id in its path isn't in the ownership matrix. Input limits audited: every string and array is capped; the body limit is 100 kB.
+- [x] Contract review: every controller returns a type from `@notch/shared`; no Prisma type leaks. Swagger stays a development-only route index; the web app builds on the shared types.
+- [x] `Dockerfile` (multi-stage, `node:26-slim`, `pnpm deploy --prod`), with a placeholder page until the web app ships
+- [x] `deploy/compose.yml` (api, db, backup), `prisma migrate deploy` on start, health check
+- [x] Daily `pg_dump` backups, `verify-backup.sh` and `restore.sh`, verified locally with a restore
+- [ ] Deploy behind the host's TLS proxy and create the first user with `user:create` (on the server, following [deploy.md](deploy.md))
 
 **Done when:** the API runs in production, survives a redeploy without logging you out, and a backup restores.
 

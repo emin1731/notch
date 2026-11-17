@@ -5,11 +5,17 @@ import cookieParser from 'cookie-parser';
 import helmet from 'helmet';
 import { Logger } from 'nestjs-pino';
 import type { Env } from './config/env.schema.js';
+import { serveSpa } from './web/serve-spa.js';
 
 export const API_PREFIX = 'api/v1';
 
+export interface ConfigureOptions {
+  /** Overrides WEB_DIST_DIR (tests). */
+  webDistDir?: string;
+}
+
 /** Everything applied to the app outside its modules. Shared by main.ts and the e2e tests. */
-export function configureApp(app: NestExpressApplication): void {
+export function configureApp(app: NestExpressApplication, options: ConfigureOptions = {}): void {
   const config = app.get<ConfigService<Env, true>>(ConfigService);
 
   app.useLogger(app.get(Logger));
@@ -18,6 +24,10 @@ export function configureApp(app: NestExpressApplication): void {
   app.use(cookieParser());
   app.useBodyParser('json', { limit: '100kb' });
   app.setGlobalPrefix(API_PREFIX);
+  const webDistDir = options.webDistDir ?? config.get('WEB_DIST_DIR', { infer: true });
+  if (webDistDir) {
+    serveSpa(app, webDistDir);
+  }
   app.enableShutdownHooks();
 
   if (config.get('NODE_ENV', { infer: true }) === 'development') {

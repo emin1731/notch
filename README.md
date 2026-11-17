@@ -35,6 +35,52 @@ pnpm dev                           # builds shared, then watches shared + api
 The compose database listens on host port 5434 (override with `POSTGRES_PORT`), so it doesn't clash
 with other local Postgres instances.
 
+Run `pnpm --filter @notch/api exec prisma migrate dev` once after cloning, and again whenever a
+pull brings new migrations.
+
+For a populated account, seed the demo user (development only; it replaces an existing `demo`):
+
+```bash
+pnpm --filter @notch/api build
+pnpm --filter @notch/api seed --timezone=Asia/Baku     # log in as demo / demo-password
+```
+
+Weekly reviews run on the first visit of a new week. To try one without waiting for a Monday:
+
+```bash
+pnpm --filter @notch/api review:run demo --week=2026-11-09   # development only; idempotent
+```
+
+## Accounts
+
+Registration is invite-only: `INVITE_CODE` in `apps/api/.env`, and it closes once `MAX_USERS`
+accounts exist. There is no email, so accounts are managed from the command line (run on the
+server in production):
+
+```bash
+pnpm --filter @notch/api build                                         # the scripts run from dist/
+pnpm --filter @notch/api user:create emin --timezone=Asia/Baku         # no invite code needed
+pnpm --filter @notch/api user:set-password emin                        # also logs out everywhere
+```
+
+Both ask for the password twice without echoing it, or read the first line of stdin when piped.
+
+### Trying the API with curl
+
+Every POST, PUT, PATCH and DELETE needs the `XSRF-TOKEN` cookie echoed in the `X-XSRF-TOKEN`
+header. The token changes on login and logout, so read it from the jar each time:
+
+```bash
+jar=$(mktemp); api=localhost:3000/api/v1
+xsrf() { awk '$6=="XSRF-TOKEN"{print $7}' "$jar"; }
+post() { curl -s -b "$jar" -c "$jar" -H "X-XSRF-TOKEN: $(xsrf)" -H 'content-type: application/json' -d "${2:-}" "$api$1"; }
+
+curl -s -b "$jar" -c "$jar" "$api/auth/csrf"
+post /auth/login '{"username":"emin","password":"…"}'
+curl -s -b "$jar" -c "$jar" "$api/auth/me"
+post /auth/logout
+```
+
 ## Checks
 
 ```bash
@@ -47,6 +93,16 @@ pnpm format      # prettier --write
 
 A pre-commit hook runs ESLint and Prettier on staged files. CI runs all of the above plus a Prisma
 drift check on every push and pull request.
+
+## Production
+
+One Docker image (API plus the web app's static files) runs behind a reverse proxy, with Postgres and
+daily backups in the same Compose stack. CI publishes `ghcr.io/emin1731/notch` from `main`. See
+[docs/deploy.md](docs/deploy.md).
+
+```bash
+docker build -t notch .     # the image CI builds
+```
 
 ## Database
 

@@ -17,3 +17,6 @@ apps/api/src/generated/
 .idea/
 .vscode/*
 !.vscode/extensions.json
+
+# Production stack on the server
+deploy/backups/

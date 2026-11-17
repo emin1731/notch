@@ -67,7 +67,7 @@ User
 
 - Every **habit belongs to exactly one core**. Linking to a goal is optional, and the goal must belong to the same core.
 - A **core** has a name, color and icon. Cores can be reordered and archived.
-- A **goal** has a title, optional description, optional deadline and a status (`ACTIVE`, `COMPLETED`, `ARCHIVED`).
+- A **goal** has a title, optional description, optional deadline, a status (`ACTIVE`, `COMPLETED`) and, separately, an archived flag (`archivedAt`), so an archived goal keeps its completion.
 - A **milestone** has a title, an order and a completion timestamp.
 
 ### 2.2 Habit types
@@ -92,11 +92,14 @@ User
 
 **Time of day** (`MORNING`, `AFTERNOON`, `EVENING`, `ANYTIME`) is used only for grouping on the Today screen. It is the "custom timeline". It has no effect on logic.
 
-A habit has a `startDate` (the local date it was created, or a chosen later date). It is never scheduled before that date.
+A habit has a `startDate`: the local today by default, up to 6 days back (the backfill window, so days already done this week can be logged), or a later date. It is never scheduled before that date, and it can't be changed afterwards.
+
+**Editing a schedule.** The habit type and the schedule type are fixed: to change either, create a new habit. The weekdays of a `SPECIFIC_DAYS` habit and the quota of a `TIMES_PER_WEEK` habit can be edited. Like target edits, each edit is recorded as a `MANUAL` `TargetChange` (field `DAYS_OF_WEEK` as a bitmask, Mon = 1 … Sun = 64, or `TIMES_PER_WEEK`) effective from the local today, so history is read with `scheduleOn(date)` / `targetOn(date)` and past weeks keep the schedule they had.
 
 ### 2.4 Logging
 
-- One log per habit per local calendar date (`unique(habitId, date)`).
+- One log per habit per local calendar date (`unique(habitId, date)`). A write that leaves the value at `0` deletes the log, so "has a log" always means "did something".
+- Values are capped per type: toggle 1, count 100 000, duration 24 h. An archived habit can't be logged (`409 HABIT_ARCHIVED`).
 - `TOGGLE`: tapping flips between `0` and `1`.
 - `COUNT`: `+` / `−` buttons and direct number entry. Floor is `0`.
 - `DURATION`: start/stop timer that adds elapsed time, or manual minutes entry. Both add to the day's value. Manual entry can also overwrite the value.
@@ -123,7 +126,8 @@ For stats over arbitrary ranges, the same logic applies per day (`DAILY`, `SPECI
 
 - **`DAILY` / `SPECIFIC_DAYS`:** number of consecutive *scheduled* days that were hits, counting back from today. If today is scheduled but not yet hit, counting starts from the previous scheduled day, so today doesn't break a streak until it's over.
 - **`TIMES_PER_WEEK`:** number of consecutive weeks where hits ≥ `timesPerWeek`. The current week counts only once the quota is met, and an unfinished week doesn't break the streak.
-- **Current streak** is computed on read. **Longest streak** is stored on the habit and recomputed whenever a log for that habit changes.
+- Each day's schedule is read from the change history (`scheduleOn`), so editing a habit's weekdays or weekly quota doesn't rewrite past streaks.
+- **Current streak** is computed on read, from the habit's full log history. **Longest streak** is stored on the habit and recomputed (in the same transaction) whenever a log for that habit changes.
 
 ### 2.7 Adaptive difficulty
 
@@ -154,7 +158,7 @@ For stats over arbitrary ranges, the same logic applies per day (`DAILY`, `SPECI
 A week counts as **eligible** for a habit only if:
 
 1. the habit existed and was not archived for the whole week (`startDate <= weekStart`), and
-2. the progressing field had the **same value for the whole week**. Undone changes are treated as if they never happened. Manual edits do count as changes.
+2. the progressing field had the **same value for the whole week**, and the weekdays didn't change during it. Undone changes are treated as if they never happened. Manual edits do count as changes.
 
 #### Decision rules (evaluated for the week that just ended, W)
 
@@ -169,8 +173,9 @@ else                                  → HOLD
 ```
 
 - **Level-up** sets the target to `current + increment`, clamped to `maxTarget`.
-- **Deload:** if the current value came from a non-undone `LEVEL_UP`, it returns to that change's `fromValue`. Otherwise it sets `current − increment`. Either way, the result is clamped to `minTarget`.
-- **Cooldown:** if a change of kind K was undone during the previous review cycle, the habit cannot receive another change of kind K in this review. It gets a `HOLD` instead, with the reason `"cooldown after undo"`.
+- **Deload:** if the current value came from a non-undone `LEVEL_UP` (the latest non-undone change of the progressing field is a level-up whose `toValue` is the current value), it returns to that change's `fromValue`. Otherwise it sets `current − increment`. Either way, the result is clamped to `minTarget`.
+- **Cooldown:** if a change of kind K was undone during the previous review cycle, the habit cannot receive another change of kind K in this review. It gets a `HOLD` instead, with the reason `"cooldown after undo"`. The previous review's changes took effect on the Monday of the week under review, so this is "an undone change of kind K with `effectiveFrom` = W's Monday".
+- **"Changed during the week"** means a non-undone change of any field (target, quota or weekdays) with `effectiveFrom` after W's Monday and on or before its Sunday. A change taking effect on the Monday itself (last review's level-up, or an edit made that Monday) leaves the whole week at one value. As a guard, a habit whose value was edited after W ended but before the review ran is also not eligible.
 - **Inactive week:** if the user logged **nothing at all** across all habits during W, every habit gets a `HOLD` and the review is flagged `inactive`. This avoids punishing vacations. The app shows a "welcome back" message instead of deloading everything.
 - Only the most recent completed week is evaluated. If the user was away for several weeks, the missed weeks are not evaluated one by one.
 
@@ -180,21 +185,26 @@ All thresholds live in one config object in the shared package (`PROGRESSION_CON
 
 - A review is created for the week that just ended (Monday–Sunday in the **user's timezone**) the first time the user opens or logs anything in the new week. There is no background job. See [6.6](#66-weekly-review-creation) for the mechanics.
 - All decisions are **applied automatically**. Each applied change becomes a `TargetChange` row with `effectiveFrom = Monday of the new week`.
-- **Undo** is available while **both** of these are true:
+- **Undo** is available while **all** of these are true:
   - the week the change took effect hasn't ended yet (`now < effectiveFrom + 7 days`, local midnight), and
-  - the habit has **no log dated on or after `effectiveFrom`** (no log at the new level yet).
+  - the habit has **no log dated on or after `effectiveFrom`** (no log at the new level yet; a log set back to 0 is deleted, so it doesn't count), and
+  - the habit hasn't been edited since (its value is still the change's `toValue`). A manual edit wins over undo.
 - Undoing restores `fromValue` on the habit and sets `undoneAt` on the change.
 - The Today screen shows a badge on every habit whose target changed this week (e.g. "↑ 12 min", "↓ 3× / week"). Tapping it opens a popover with the reason and an Undo button if undo is still allowed.
-- A banner on the Today screen links to the review until the user opens it (`seenAt`).
+- A banner on the Today screen links to the review until the user opens it (`seenAt`). After an inactive week, the "welcome back" message shows with it, also until the review is opened.
+- No review is created for a week in which no active habit existed for the whole week (such as a new user's first, partial week): there's nothing to judge yet.
 
 ### 2.9 Goals and milestones
 
 - Goal progress is `ticked milestones / total milestones`.
 - **Ticking the last open milestone** sets the goal to `COMPLETED` with `completedAt`. The API response flags this so the client can show the celebration screen.
 - **Un-ticking** a milestone of a completed goal sets the goal back to `ACTIVE`.
-- A goal **without milestones** shows no percentage and has a manual "Mark goal complete" action.
+- **Adding a milestone** to a completed goal reopens it, since it now has an open milestone.
+- One rule covers all of these, run after every milestone change (create, tick, untick, delete): all milestones ticked → `COMPLETED`; any open → `ACTIVE`; no milestones left → unchanged. It's `nextGoalStatus()` in the shared package.
+- A goal **without milestones** shows no percentage and has a manual "Mark goal complete" (and reopen) action. A goal with milestones can only complete through them (`409 GOAL_HAS_MILESTONES`).
 - Milestones can be added, renamed, reordered (drag and drop) and deleted at any time.
-- **Archiving a goal** keeps its linked habits active (they stay under the core). **Deleting a goal** unlinks its habits (`goalId → null`) and deletes its milestones.
+- **Archiving a goal** sets `archivedAt` and keeps its status and its linked habits active (they stay under the core). Archived goals are hidden from default lists but stay editable.
+- A goal's milestones are capped at 50. **Deleting a goal** unlinks its habits (`goalId → null`) and deletes its milestones.
 
 ### 2.10 Cores, archiving and deletion
 
@@ -202,6 +212,7 @@ All thresholds live in one config object in the shared package (`PROGRESSION_CON
 |---|---|
 | Archive core | Confirmation dialog, then archives the core and all its active goals and habits |
 | Unarchive core | Restores the core only. Goals and habits are restored individually |
+| Unarchive goal or habit, or create one, in an archived core | Refused with `409 CORE_ARCHIVED`: unarchive the core first |
 | Delete core | Only allowed if it has no goals and no habits (including archived ones) |
 | Archive habit | Hidden from Today, excluded from reviews, kept in stats history |
 | Delete habit | Permanently deletes the habit, its logs and its target changes (confirmation required) |
@@ -250,7 +261,7 @@ All thresholds live in one config object in the shared package (`PROGRESSION_CON
 | Auth | Server-side sessions in Postgres (custom `Session` table + global guard, see [6.4](#64-authentication)), `cookie-parser`, `argon2` for password hashing |
 | Rate limiting | `@nestjs/throttler` (login and register only) |
 | Security headers | `helmet` |
-| Static hosting | `@nestjs/serve-static` serves the built SPA from the same origin |
+| Static hosting | The API serves the built SPA from the same origin (`useStaticAssets` plus an `index.html` fallback, `src/web/serve-spa.ts`) |
 | Dates | `luxon` (timezone-aware week and day math) |
 | Config | `@nestjs/config` with zod-validated env |
 | Logging | `nestjs-pino` |
@@ -359,13 +370,16 @@ datasource db {
   provider = "postgresql"   // URL comes from prisma.config.ts (Prisma 7)
 }
 
+// Every DateTime below without @db.Date is an instant and carries @db.Timestamptz(3) in the real
+// schema; the attribute is left out here to keep the listing readable.
+
 enum HabitType        { TOGGLE COUNT DURATION }
 enum ScheduleType     { DAILY SPECIFIC_DAYS TIMES_PER_WEEK }
 enum TimeOfDay        { MORNING AFTERNOON EVENING ANYTIME }
 enum StepType         { PERCENT ABSOLUTE }
-enum GoalStatus       { ACTIVE COMPLETED ARCHIVED }
+enum GoalStatus       { ACTIVE COMPLETED }      // archiving is Goal.archivedAt
 enum TargetChangeKind { LEVEL_UP DELOAD MANUAL }
-enum TargetField      { TARGET_VALUE TIMES_PER_WEEK }
+enum TargetField      { TARGET_VALUE TIMES_PER_WEEK DAYS_OF_WEEK }   // DAYS_OF_WEEK values are bitmasks
 
 model User {
   id             String    @id @default(uuid())
@@ -426,16 +440,17 @@ model Goal {
   deadline    DateTime?  @db.Date
   status      GoalStatus @default(ACTIVE)
   completedAt DateTime?
+  archivedAt  DateTime?
   sortOrder   Int        @default(0)
   createdAt   DateTime   @default(now())
   updatedAt   DateTime   @updatedAt
 
   user        User       @relation(fields: [userId], references: [id], onDelete: Cascade)
-  core        Core       @relation(fields: [coreId], references: [id], onDelete: Restrict)
+  core        Core       @relation(fields: [coreId], references: [id], onDelete: NoAction)
   milestones  Milestone[]
   habits      Habit[]
 
-  @@index([userId, coreId, status])
+  @@index([userId, coreId])
 }
 
 model Milestone {
@@ -482,7 +497,7 @@ model Habit {
   updatedAt           DateTime     @updatedAt
 
   user                User         @relation(fields: [userId], references: [id], onDelete: Cascade)
-  core                Core         @relation(fields: [coreId], references: [id], onDelete: Restrict)
+  core                Core         @relation(fields: [coreId], references: [id], onDelete: NoAction)
   goal                Goal?        @relation(fields: [goalId], references: [id], onDelete: SetNull)
   logs                HabitLog[]
   targetChanges       TargetChange[]
@@ -587,7 +602,7 @@ The summary is a snapshot: it keeps habit names as they were, so renames don't r
 
 ### 5.4 Date column convention
 
-`@db.Date` columns hold a **user-local calendar date**, not an instant. The API always sends and receives them as `"YYYY-MM-DD"` strings. Prisma returns them as `Date` objects at UTC midnight, so conversion happens in exactly one place, the shared helpers `toDateString()` and `fromDateString()`. Never call `new Date()` on these values in business logic.
+Instants are `DateTime @db.Timestamptz(3)`. `@db.Date` columns hold a **user-local calendar date**, not an instant. The API always sends and receives them as `"YYYY-MM-DD"` strings. Prisma returns them as `Date` objects at UTC midnight, so conversion happens in exactly one place, the shared helpers `toDateString()` and `fromDateString()`. Never call `new Date()` on these values in business logic.
 
 ---
 
@@ -598,9 +613,9 @@ The summary is a snapshot: it keeps habit names as they were, so renames don't r
 - **Global prefix:** `/api/v1`.
 - **Global guards:** `SessionGuard` (authentication) and `CsrfGuard` (unsafe methods), see [6.4](#64-authentication). Public routes are marked with `@Public()`.
 - **`@CurrentUser()` decorator:** returns `{ id, username, timezone }`, loaded by `SessionGuard` together with the session in one query, so the timezone is always current.
-- **Ownership:** every service method takes `userId` and scopes every query with `where: { userId }` (or via the parent's `userId`). A record owned by another user returns **404**, never 403, so ids can't be probed.
+- **Ownership:** every service method takes `userId` and scopes every query with `where: { userId }` (or via the parent's `userId`). A record owned by another user returns **404**, never 403, so ids can't be probed. A malformed id is a 404 too.
 - **Validation:** `ZodValidationPipe` with schemas imported from `@notch/shared`.
-- **Errors:** a global exception filter returns `{ statusCode, code, message, details? }`. `code` is a stable string the client can switch on, for example `HABIT_NOT_FOUND`, `UNDO_NOT_ALLOWED`, `BACKFILL_OUT_OF_RANGE`, `CORE_NOT_EMPTY`, `GOAL_CORE_MISMATCH`, `USERNAME_TAKEN`, `INVALID_CREDENTIALS`, `INVALID_INVITE_CODE`, `REGISTRATION_CLOSED`, `UNAUTHENTICATED`, `CSRF_INVALID`.
+- **Errors:** a global exception filter returns `{ statusCode, code, message, details? }`. `code` is a stable string the client can switch on, for example `CORE_NOT_FOUND`, `GOAL_NOT_FOUND`, `MILESTONE_NOT_FOUND`, `HABIT_NOT_FOUND`, `CORE_ARCHIVED`, `GOAL_HAS_MILESTONES`, `LIMIT_REACHED`, `UNDO_NOT_ALLOWED`, `BACKFILL_OUT_OF_RANGE`, `CORE_NOT_EMPTY`, `GOAL_CORE_MISMATCH`, `USERNAME_TAKEN`, `INVALID_CREDENTIALS`, `INVALID_INVITE_CODE`, `REGISTRATION_CLOSED`, `UNAUTHENTICATED`, `CSRF_INVALID`.
 - **Transactions:** any operation touching more than one table uses `prisma.$transaction`. This includes: milestone tick plus goal status, log write plus longest-streak update, review creation plus target changes, and undo.
 - **Config:** env validated at boot by a zod schema. The app refuses to start if a value is missing.
 
@@ -631,48 +646,51 @@ All routes are under `/api/v1` and require auth unless marked public.
 | POST | `/auth/register` | `{ username, password, inviteCode, name?, timezone }` | public; throttled; creates the user and starts a session, returns 201 + the user. `403 INVALID_INVITE_CODE`, `403 REGISTRATION_CLOSED`, `409 USERNAME_TAKEN` |
 | POST | `/auth/login` | `{ username, password }` | public; throttled; starts a session, returns 200 + the user. `401 INVALID_CREDENTIALS` for a wrong username or password alike |
 | GET | `/auth/me` | — | the current user (`id`, `username`, `name`, `timezone`, `onboardedAt`), or 401 |
-| POST | `/auth/logout` | — | deletes the current session, clears the cookie, returns 204 |
-| POST | `/auth/logout-all` | — | deletes every session of the user, including the current one, returns 204 |
+| POST | `/auth/logout` | — | public, so an expired session can still clear its cookie; deletes the current session, clears the cookie, issues an anonymous CSRF token, returns 204 |
+| POST | `/auth/logout-all` | — | deletes every session of the user, including the current one, clears the cookie, returns 204 |
 
 #### Users
 
 | Method | Path | Body | Notes |
 |---|---|---|---|
-| PATCH | `/me` | `{ name?, timezone? }` | a new timezone applies from the next request |
-| POST | `/me/password` | `{ currentPassword, newPassword }` | deletes the user's other sessions |
-| POST | `/me/onboarding/complete` | — | sets `onboardedAt` |
-| DELETE | `/me` | `{ password }` | hard delete via cascade |
+| PATCH | `/me` | `{ name?, timezone? }` | at least one field; `name: null` clears it. A new timezone applies from the next request. Returns the user |
+| POST | `/me/password` | `{ currentPassword, newPassword }` | deletes the user's other sessions, returns 204 |
+| POST | `/me/onboarding/complete` | — | sets `onboardedAt` (once), returns the user |
+| DELETE | `/me` | `{ password }` | hard delete via cascade, clears the cookie, returns 204 |
+
+A wrong `currentPassword` or `password` returns **403** `INVALID_CREDENTIALS`, not 401: the session is still valid, and a 401 would make the SPA treat the user as logged out.
 
 #### Cores
 
 | Method | Path | Body | Notes |
 |---|---|---|---|
-| GET | `/cores?includeArchived=` | — | ordered by `sortOrder`, with goal and habit counts |
+| GET | `/cores?includeArchived=` | — | ordered by `sortOrder`, with `counts` of non-archived goals (and habits, from S3) |
 | POST | `/cores` | `{ name, color, icon }` | |
-| POST | `/cores/batch` | `{ cores: [...] }` | used by onboarding |
+| POST | `/cores/batch` | `{ cores: [...] }` | 1–20, appended in order, all or nothing; used by onboarding |
 | PATCH | `/cores/:id` | `{ name?, color?, icon? }` | |
-| PUT | `/cores/order` | `{ ids: string[] }` | |
-| POST | `/cores/:id/archive` | — | cascades to goals and habits |
+| PUT | `/cores/order` | `{ ids: string[] }` | the listed cores first, the rest after them in their current order; unknown id → 404; returns the list |
+| POST | `/cores/:id/archive` | — | cascades to its active goals and habits (same `archivedAt`) |
 | POST | `/cores/:id/unarchive` | — | |
-| DELETE | `/cores/:id` | — | `409 CORE_NOT_EMPTY` if it has goals or habits |
+| DELETE | `/cores/:id` | — | `409 CORE_NOT_EMPTY` if it has goals or habits, archived ones included |
 
 #### Goals and milestones
 
 | Method | Path | Body | Notes |
 |---|---|---|---|
-| GET | `/goals?coreId=&status=` | — | includes `progress` and `milestoneCounts` |
-| GET | `/goals/:id` | — | goal with milestones and linked habits |
-| POST | `/goals` | `{ coreId, title, description?, deadline?, milestones?: string[] }` | milestones can be created inline |
-| PATCH | `/goals/:id` | `{ title?, description?, deadline?, coreId? }` | changing core is only allowed if no habits are linked, or the linked habits move with it (confirmation) |
-| POST | `/goals/:id/complete` | — | only for goals without milestones |
-| POST | `/goals/:id/reopen` | — | |
-| POST | `/goals/:id/archive` | — | |
+| GET | `/goals?coreId=&status=&includeArchived=` | — | `status` is `ACTIVE` or `COMPLETED`; includes `progress` and `milestoneCounts` |
+| GET | `/goals/:id` | — | goal with milestones and linked habits (archived ones included) |
+| POST | `/goals` | `{ coreId, title, description?, deadline?, milestones?: string[] }` | milestones can be created inline (≤ 50); `409 CORE_ARCHIVED`; returns the goal with milestones |
+| PATCH | `/goals/:id` | `{ title?, description?, deadline?, coreId?, moveHabits? }` | changing core while habits are linked needs `moveHabits: true` (else `409 GOAL_CORE_MISMATCH` with `details.linkedHabits`); the habits move with it |
+| POST | `/goals/:id/complete` | — | only for goals without milestones, else `409 GOAL_HAS_MILESTONES` |
+| POST | `/goals/:id/reopen` | — | same rule |
+| POST | `/goals/:id/archive` | — | keeps the status |
+| POST | `/goals/:id/unarchive` | — | `409 CORE_ARCHIVED` while its core is archived |
 | DELETE | `/goals/:id` | — | unlinks habits |
-| POST | `/goals/:goalId/milestones` | `{ title }` | appended at the end |
+| POST | `/goals/:goalId/milestones` | `{ title }` | appended at the end; reopens a completed goal; `409 LIMIT_REACHED` at 50. Returns `{ milestone, goal, goalJustCompleted }` |
 | PATCH | `/milestones/:id` | `{ title? }` | |
-| PUT | `/goals/:goalId/milestones/order` | `{ ids: string[] }` | |
+| PUT | `/goals/:goalId/milestones/order` | `{ ids: string[] }` | must list every milestone of the goal exactly once, else 400 |
 | POST | `/milestones/:id/toggle` | — | returns `{ milestone, goal, goalJustCompleted: boolean }` |
-| DELETE | `/milestones/:id` | — | if it was the last open one and the others are ticked, the goal completes |
+| DELETE | `/milestones/:id` | — | if it was the last open one and the others are ticked, the goal completes. Returns 200 `{ goal, goalJustCompleted }` |
 
 #### Habits
 
@@ -680,8 +698,9 @@ All routes are under `/api/v1` and require auth unless marked public.
 |---|---|---|---|
 | GET | `/habits?coreId=&goalId=&includeArchived=` | — | |
 | GET | `/habits/:id` | — | habit with current streak, recent target changes, and `adaptiveApplicable` |
-| POST | `/habits` | `CreateHabitDto` | sets `initial*` fields, `startDate = today (local)` unless given |
-| PATCH | `/habits/:id` | `UpdateHabitDto` | changing `targetValue`/`timesPerWeek` writes a `MANUAL` TargetChange; changing `type` is **not allowed** (create a new habit instead) |
+| POST | `/habits` | `CreateHabitDto` | sets `initial*` fields and a default `minTarget` (half the initial value); `startDate = today (local)` unless given. `409 CORE_ARCHIVED`, `409 GOAL_CORE_MISMATCH` |
+| PATCH | `/habits/:id` | `UpdateHabitDto` | changing `targetValue`, `timesPerWeek` or `daysOfWeek` writes a `MANUAL` TargetChange effective from the local today (several edits on one day fold into one change). `type`, `scheduleType` and `startDate` can't change (400). The merged habit is re-validated. Moving to another core needs a goal in that core, or `goalId: null` |
+| GET | `/habits/:id/target-history` | — | every change, oldest first |
 | PUT | `/habits/order` | `{ ids: string[] }` | |
 | POST | `/habits/:id/archive` / `/unarchive` | — | |
 | DELETE | `/habits/:id` | — | |
@@ -705,7 +724,7 @@ All routes are under `/api/v1` and require auth unless marked public.
   stepValue?: number;
   minTarget?: number | null;
   maxTarget?: number | null;
-  startDate?: string;                 // "YYYY-MM-DD", today or later
+  startDate?: string;                 // "YYYY-MM-DD", at most 6 days back
 }
 ```
 
@@ -714,17 +733,19 @@ All routes are under `/api/v1` and require auth unless marked public.
 | Method | Path | Body | Notes |
 |---|---|---|---|
 | GET | `/habits/:id/logs?from=&to=` | — | |
-| PUT | `/habits/:id/logs/:date` | `{ value }` | upsert (toggle, manual entry) |
-| POST | `/habits/:id/logs/:date/increment` | `{ delta }` | counter buttons, timer stop; atomic `value = GREATEST(value + delta, 0)` |
-| DELETE | `/habits/:id/logs/:date` | — | |
+| PUT | `/habits/:id/logs/:date` | `{ value }` | upsert (toggle, manual entry); `0` deletes the log |
+| POST | `/habits/:id/logs/:date/increment` | `{ delta }` | counter buttons, timer stop; atomic `value = LEAST(GREATEST(value + delta, 0), cap)`; reaching `0` deletes the log |
+| DELETE | `/habits/:id/logs/:date` | — | idempotent |
+
+`GET` takes an optional `from`/`to` (at most 366 days; the default is the 30 days up to the local today). Every write returns 200 with the result below. A date outside the window is `400 BACKFILL_OUT_OF_RANGE` with `details: { earliest, latest }`.
 
 Every log write runs these steps in order:
 
-1. Validate that the date is within `[today − 6, today]` in the user's timezone and on or after `startDate`. Otherwise return `BACKFILL_OUT_OF_RANGE`.
+1. Lock the habit row (`SELECT … FOR UPDATE`), so writes to one habit run one at a time. Validate that the date is within `[today − 6, today]` in the user's timezone and on or after `startDate`. Otherwise return `BACKFILL_OUT_OF_RANGE`.
 2. Call `WeeklyReviewService.ensureDue(userId)`, so that a new week's review always runs **before** the first log of that week. This keeps `targetSnapshot` correct.
 3. Upsert the log. `targetSnapshot` is set only on create, from the habit's target **effective on that date**, which may be an older target when backfilling across a change.
 4. Recompute `longestStreak` for the habit in the same transaction.
-5. Return `{ log, habitProgress, currentStreak, longestStreak }` so the client can reconcile its optimistic update.
+5. Return `{ log | null, habitProgress, currentStreak, longestStreak }` so the client can reconcile its optimistic update. Streaks are as of the local today.
 
 #### Today
 
@@ -737,18 +758,19 @@ Response:
 ```ts
 {
   date: string;
-  dayProgress: number;               // avg progress of DAILY/SPECIFIC_DAYS habits scheduled today
+  dayProgress: number | null;        // avg progress of DAILY/SPECIFIC_DAYS habits due on `date`; null if none
   pendingReview: { id: string; weekStart: string } | null;   // unseen review banner
   welcomeBack: boolean;              // last review was inactive
-  groups: Array<{
+  groups: Array<{                    // DAILY/SPECIFIC_DAYS habits due on `date`; empty groups left out
     timeOfDay: 'MORNING' | 'AFTERNOON' | 'EVENING' | 'ANYTIME';
     habits: TodayHabit[];
   }>;
-  weeklyQuota: TodayHabit[];         // TIMES_PER_WEEK habits, with weekHits / timesPerWeek
+  weeklyQuota: TodayHabit[];         // TIMES_PER_WEEK habits (only here, never in groups)
 }
 
 type TodayHabit = {
   id: string; name: string; type: HabitType; unit: string | null;
+  scheduleType: ScheduleType; timeOfDay: TimeOfDay;
   core: { id: string; name: string; color: string; icon: string };
   goal: { id: string; title: string } | null;
   target: number;                    // effective on `date`
@@ -764,31 +786,45 @@ type TodayHabit = {
 };
 ```
 
-The service loads all active habits, the logs for the last ~120 days (for current streaks), and this week's target changes, in **three queries**. It then computes everything in memory with the shared functions. There are no per-habit queries.
+Everything is computed **as of `date`** (streaks and the week's hits), so browsing back shows each day as it was. The service loads the active habits that had started by `date` (with core and goal), their full log history up to `date`, and all their target changes, in **three queries**. It then computes everything in memory with the shared functions. There are no per-habit queries. At personal scale a full history is a few thousand rows per year; add a window only if profiling shows a need.
 
 #### Reviews and target changes
 
 | Method | Path | Notes |
 |---|---|---|
-| GET | `/reviews?limit=&cursor=` | list, newest first |
-| GET | `/reviews/latest` | runs `ensureDue` first; returns the latest review with changes and their `canUndo` |
-| GET | `/reviews/:weekStart` | |
-| POST | `/reviews/:id/seen` | sets `seenAt` |
-| POST | `/target-changes/:id/undo` | `409 UNDO_NOT_ALLOWED` with `details.reason`: `EXPIRED`, `ALREADY_LOGGED`, `ALREADY_UNDONE`, or `NOT_AUTOMATIC` |
+| GET | `/reviews?limit=&cursor=` | newest first; `limit` 1–52 (default 10), `cursor` = the `nextCursor` of the previous page. Returns `{ items, nextCursor }` |
+| GET | `/reviews/latest` | runs `ensureDue` first; returns `{ review }`: the latest review with its changes and their `canUndo`, or `null` before the first one |
+| GET | `/reviews/:weekStart` | `404 REVIEW_NOT_FOUND` |
+| POST | `/reviews/:id/seen` | sets `seenAt` (once); returns the review |
+| POST | `/target-changes/:id/undo` | returns `{ change, habit }`. `409 UNDO_NOT_ALLOWED` with `details.reason`: `NOT_AUTOMATIC`, `ALREADY_UNDONE`, `EXPIRED`, `ALREADY_LOGGED` or `CHANGED_SINCE`; `404 TARGET_CHANGE_NOT_FOUND` |
 | GET | `/habits/:id/target-history` | all changes, for the chart |
 
 #### Stats
 
 | Method | Path | Notes |
 |---|---|---|
-| GET | `/stats/overview?range=7d\|30d\|90d\|365d` | see below |
-| GET | `/stats/habits/:id?range=` | see below |
+| GET | `/stats/overview?range=7d\|30d\|90d\|365d` | see below; `range` defaults to `30d` |
+| GET | `/stats/habits/:id?range=` | see below; archived habits included |
 
-Overview response: `overallRate`, a daily series `[{ date, rate }]`, per-core rates, the top 5 current streaks, a goals summary (`active`, `completed in range`, list with progress), and the count of level-ups vs deloads in the range.
+**Rules** (the same as streaks and reviews):
 
-Per-habit response: `rate`, `currentStreak`, `longestStreak`, `totalValue` (e.g. total minutes or pages), a heatmap `[{ date, value, target, hit, scheduled }]`, and the target history series `[{ date, target }]`.
+- A range `Nd` is the N days ending today in the user's timezone, today included. A habit counts from its `startDate`, up to its archive date if archived: archived habits keep their history, deleted ones are gone.
+- **Daily / specific days:** hits on due days ÷ due days, each day judged by the schedule it had then. A habit's last day (today, or its archive date) counts only once it's a hit.
+- **Times per week:** every week the range touches counts as a whole week (the range is rounded out to Monday–Sunday), each `min(hit days, quota) ÷ quota`. The current week counts only once its quota is met.
+- Bonus logs (on days the habit wasn't due) are shown but never counted.
+- **Overall and per-core rates** are the average of the habits' rates (each habit counts equally, like the review's `overallRate`); habits with nothing due in the range are skipped.
 
-For the MVP, stats are computed on request from logs. With an index on `(userId, date)`, a year of data for ~20 habits is about 7k rows, which is fast. Add caching only if profiling shows a need.
+Overview response: `{ range, from, to, overallRate, daily: [{ date, rate }], cores: [{ coreId, name, color, icon, rate }], topStreaks: [{ habitId, name, currentStreak }], goals: { active, completedInRange, items }, changes: { levelUps, deloads } }`.
+
+- `daily` covers daily and specific-day habits only (times-per-week habits have no daily obligation); `rate` is `null` on days with nothing due.
+- `cores` lists every core with a habit in the range, archived cores included, in core order.
+- `topStreaks` are the 5 best current streaks above 0 among active habits.
+- `goals.items` are the active goals, then the goals completed in the range, with progress.
+- `changes` counts level-ups and deloads that took effect in the range and weren't undone.
+
+Per-habit response: `{ habitId, range, from, to, rate, hits, occurrences, currentStreak, longestStreak, totalValue, heatmap, field, targetSeries }`. `from`/`to` are the habit's window inside the range. `totalValue` sums everything logged (total minutes or pages), bonus logs included. `heatmap` is `[{ date, value, target, hit, scheduled }]` for every day of the window. `targetSeries` is step points `[{ date, target }]` for the progressing `field` (`TARGET_VALUE`, or `TIMES_PER_WEEK` for a weekly toggle): the value at the window start, then each change inside the window.
+
+For the MVP, stats are computed on request from the full history, in four queries (habits, logs, target changes, goals). With an index on `(userId, date)`, a year of data for ~20 habits is about 7k rows, which is fast. Add caching only if profiling shows a need. Stats are read-only: they don't trigger a weekly review.
 
 ### 6.4 Authentication
 
@@ -827,9 +863,9 @@ Browser (SPA)                         NestJS (same origin)                    Po
 **CSRF**
 
 - `GET /auth/csrf` sets an `XSRF-TOKEN` cookie that JavaScript can read (`Secure; SameSite=Lax; Path=/`, not `HttpOnly`).
-- The token is `random.HMAC(CSRF_SECRET, random + sessionTokenHash | "anon")`, so it's bound to the current session and can't be planted from elsewhere.
+- The token is `nonce.HMAC(CSRF_SECRET, nonce + binding)`, where the binding is the SHA-256 of the `SESSION` cookie, or `"anon"` without one. It's bound to the current session and can't be planted from elsewhere, and checking it needs no database lookup. A token issued before login stops working after it.
 - `CsrfGuard` (global) requires the `X-XSRF-TOKEN` header to equal the cookie and the signature to verify, on every POST, PUT, PATCH and DELETE, **including** login, register and logout. A failure returns `403 CSRF_INVALID` ("Invalid or missing CSRF token").
-- The token is reissued on login, register and logout (a new `Set-Cookie` in the same response), so the client reads the cookie fresh before every request instead of caching it.
+- The token is reissued on login, register, logout and whenever the session's expiry slides (a new `Set-Cookie` in the same response), so the client reads the cookie fresh before every request instead of caching it.
 
 **Registration rules**
 
@@ -838,12 +874,13 @@ Browser (SPA)                         NestJS (same origin)                    Po
 - A taken username gives `409 USERNAME_TAKEN` on the `username` field.
 - Register starts a session straight away, just like login.
 
-**Brute-force protection:** `@nestjs/throttler` on `POST /auth/login` and `POST /auth/register` only: 10 requests per minute per IP, then 429. `/auth/me` and `/auth/csrf` run on every page load and are not throttled. Express has `trust proxy` set, so the client IP comes from `X-Forwarded-For` behind the host's reverse proxy.
+**Brute-force protection:** `@nestjs/throttler` on `POST /auth/login` and `POST /auth/register` only: 10 requests per minute per IP, then 429. `/auth/me` and `/auth/csrf` run on every page load and are not throttled. Express's `trust proxy` is set to the **number of proxies** in front of the app (`TRUST_PROXY=1`), so the client IP is the address the host's reverse proxy appended to `X-Forwarded-For`. With `true`, Express would take the left-most entry, which the client controls, and the throttle could be bypassed.
 
 **Account recovery without email:** CLI scripts run on the server (or locally against the production database):
 
 - `pnpm --filter @notch/api user:set-password <username>` prompts for a new password and deletes that user's sessions.
-- `pnpm --filter @notch/api user:create <username>` creates a user without an invite code, which is useful for the first account.
+- `pnpm --filter @notch/api user:create <username> [--timezone=Asia/Baku] [--name=…]` creates a user without an invite code or the `MAX_USERS` check, which is useful for the first account.
+- Both run from the build (`dist/cli/`), so run `pnpm --filter @notch/api build` first locally. The password is asked twice without echo, or read from the first line of stdin when piped.
 
 **Authorization** is unchanged: there are no roles, every query is scoped by `userId`, and another user's record returns 404.
 
@@ -902,11 +939,13 @@ export const PROGRESSION_CONFIG = {
 
 **Undo** (`POST /target-changes/:id/undo`), also in one transaction:
 
-1. Check that `kind ∈ {LEVEL_UP, DELOAD}` and that `undoneAt` is null.
-2. Check that `now < undoDeadline`.
-3. Check that no `HabitLog` exists for the habit with `date >= effectiveFrom`.
-4. Check that the habit's current value equals `toValue`, so there was no manual edit since.
+1. Lock the habit row. Check that `kind ∈ {LEVEL_UP, DELOAD}` (`NOT_AUTOMATIC`) and that `undoneAt` is null (`ALREADY_UNDONE`).
+2. Check that `now < undoDeadline` (`EXPIRED`).
+3. Check that no `HabitLog` exists for the habit with `date >= effectiveFrom` (`ALREADY_LOGGED`).
+4. Check that the habit's current value equals `toValue`, so there was no manual edit since (`CHANGED_SINCE`).
 5. Set the habit field back to `fromValue` and set `undoneAt = now`.
+
+Steps 1–4 are one pure shared function, `undoBlockReason()`, which also computes `canUndo` for Today and the reviews.
 
 The cooldown is derived at decision time from `changes` (an undone change whose review was the previous one). No extra column is needed.
 
@@ -915,11 +954,12 @@ The cooldown is derived at decision time from `changes` (an undone change whose 
 Reviews are created **lazily**. There is no background job.
 
 - `ensureDue(userId)` checks whether a review exists for the last completed week in the user's timezone, and runs `runForUser` if not.
-- It is called from `GET /today`, `GET /reviews/latest`, and before any log write. The user can't see a review or log at a new target without passing through one of these, so the result is the same as running it at Monday 00:00. This also covers downtime, timezone changes and deployments.
+- It is called from `GET /today`, `GET /reviews/latest`, before any log write and before a habit edit (`PATCH /habits/:id`), always before the caller's own transaction. The user can't see a review, log at a new target or change last week's values without passing through one of these, so the result is the same as running it at Monday 00:00. This also covers downtime, timezone changes and deployments.
+- `runForUser` locks the user's habit rows (`SELECT … FOR UPDATE`, serialising with log writes and edits), inserts the review row first to claim the week, then decides, applies and writes the summary.
 - The check is a single indexed lookup on `(userId, weekStart)`.
 - Concurrent calls (two tabs, or a page load plus a log write) are made safe by the unique `(userId, weekStart)` constraint. The losing call catches the unique-violation error **outside** its aborted transaction and reads the review that won.
 
-A review is **not** created for a week in which the user had no active habits at any point.
+A review is **not** created for a week in which no active habit existed for the whole week (`startDate <= weekStart`): a new user's first week, or a user without habits. Archived habits are never reviewed. After several weeks away, only the most recent week is reviewed.
 
 A scheduled job is only needed once something has to happen without the user opening the app, such as notifications. See [section 15](#15-out-of-scope-and-future-work).
 
@@ -1093,7 +1133,7 @@ Validation uses the shared zod schema, so the same errors appear client-side and
 #### Stats (`/stats`)
 
 - Range tabs: 7d / 30d / 90d / 365d.
-- **KPI row:** overall completion rate, best current streak, goals completed in range, and level-ups vs deloads.
+- **KPI row:** overall completion rate (the average of the habits' rates), best current streak, goals completed in range, and level-ups vs deloads. Unfinished days and weeks don't count until they're done, so the rate doesn't dip every morning.
 - **Completion over time:** a line chart of the daily rate.
 - **By core:** horizontal bars per core.
 - **Streak leaderboard:** your top 5 habits.
@@ -1234,7 +1274,7 @@ pnpm install
 cp apps/api/.env.example apps/api/.env
 docker compose up -d --wait       # postgres:16 on localhost:5434
 pnpm --filter @notch/api exec prisma migrate dev
-pnpm --filter @notch/api exec prisma db seed
+pnpm --filter @notch/api build && pnpm --filter @notch/api seed   # demo / demo-password
 pnpm dev                          # turbo runs api (3000) and web (5173) in parallel
 ```
 
@@ -1251,12 +1291,12 @@ DATABASE_URL=postgresql://postgres:postgres@localhost:5434/notch
 SHADOW_DATABASE_URL=postgresql://postgres:postgres@localhost:5434/notch_shadow   # drift check only
 LOG_LEVEL=info
 SESSION_TTL_DAYS=30
-COOKIE_SECURE=false              # true in production
-CSRF_SECRET=change-me            # 32+ random bytes
-INVITE_CODE=change-me
+COOKIE_SECURE=false              # defaults to true; false only for local plain HTTP
+CSRF_SECRET=change-me            # 32+ characters, e.g. `openssl rand -base64 48`
+INVITE_CODE=change-me            # 8+ characters
 MAX_USERS=1                      # raise to invite someone
-TRUST_PROXY=false                # true behind the host's reverse proxy
-WEB_DIST_DIR=                    # production only: path to the built SPA
+TRUST_PROXY=false                # number of proxies in front of the app; 1 behind the host's reverse proxy
+WEB_DIST_DIR=                    # path to the built SPA; set by the Docker image (/app/static)
 ```
 
 **Web (`apps/web/.env`):**
@@ -1273,16 +1313,17 @@ On every push to `main` and every PR (`.github/workflows/ci.yml`):
 2. `prettier --check .`
 3. `turbo run lint typecheck test build`. The e2e tests start their own Postgres with Testcontainers.
 4. Check that `prisma migrate diff` has no drift (against a Postgres service used as the shadow database).
-5. Later, with the web app: Playwright, on `main` and on PRs labelled `e2e`.
+5. Build the production image (job `image`, after the checks pass). On pushes to `main` it's pushed to `ghcr.io/emin1731/notch` as `latest` and `sha-<commit>`; on PRs it's only built.
+6. Later, with the web app: Playwright, on `main` and on PRs labelled `e2e`.
 
 ### 12.4 Deployment
 
 - **Domain:** `https://notch.emindabakhov.com`, on the existing hosting.
-- **One app, one origin:** a single Docker image (multi-stage build, `node:26-slim`) contains the API and the built SPA. NestJS serves the SPA with `@nestjs/serve-static` (falling back to `index.html` for client routes) and the API under `/api/v1`. There's no separate web host and no CORS.
-- **TLS:** terminated by the host's reverse proxy, which forwards `X-Forwarded-Proto` and `X-Forwarded-For`. Set `TRUST_PROXY=true` so Express sees HTTPS (required for the `Secure` cookies) and the real client IP (required for throttling). The cookies are never sent over plain HTTP.
-- **Release:** the container runs `prisma migrate deploy` on start. `GET /api/v1/health` checks the DB connection.
+- **One app, one origin:** a single Docker image (multi-stage build, `node:26-slim`) contains the API and the built SPA. NestJS serves the SPA from `WEB_DIST_DIR` (falling back to `index.html` for client routes, with hashed `/assets` cached for a year) and the API under `/api/v1`. Until the web app exists, the image serves a placeholder page. There's no separate web host and no CORS.
+- **TLS:** terminated by the host's reverse proxy, which forwards `X-Forwarded-Proto` and `X-Forwarded-For`. Set `TRUST_PROXY=1` (one proxy hop) so Express sees HTTPS (required for the `Secure` cookies) and the real client IP (required for throttling). The cookies are never sent over plain HTTP.
+- **Release:** CI publishes the image to GHCR; the server runs `docker compose pull && docker compose up -d` with [`deploy/compose.yml`](../deploy/compose.yml). The container runs `prisma migrate deploy` on start. `GET /api/v1/health` checks the DB connection and is the container's health check. The full runbook is [deploy.md](deploy.md).
 - **First user:** after the first deploy, run `user:create` (or register with the invite code).
-- **Database:** PostgreSQL 16 on the same host or a managed instance, with daily backups (`pg_dump` on a schedule is enough).
+- **Database:** PostgreSQL 16 in the same Compose stack (named volume). A `backup` service writes a daily `pg_dump` to `deploy/backups/`, keeps 14 days, and `scripts/verify-backup.sh` checks that a dump restores.
 - **Monitoring:** pino logs in the host's log viewer and the health endpoint. No error-tracking service.
 
 ---
@@ -1291,7 +1332,7 @@ On every push to `main` and every PR (`.github/workflows/ci.yml`):
 
 Each phase ends in a working, demo-able state. Shared-package logic for a phase is written **before** the API and UI that use it.
 
-> The backend is built first, in the sprints described in [backend-sprints.md](backend-sprints.md). That document replaces the API and shared-package items of the phases below; the web items still apply once the backend is done.
+> The backend was built first, in the sprints described in [backend-sprints.md](backend-sprints.md). The web app follows in the sprints of [web-sprints.md](web-sprints.md). Together they replace the phases below, which are kept for reference.
 
 ### Phase 0: Foundation
 
@@ -1426,6 +1467,7 @@ Listed so the architecture leaves room for them without building them now:
 | Email and self-service password reset | Add an `email` column and a reset-token table; until then, `user:set-password` covers it |
 | Error tracking and performance budgets | Sentry, Lighthouse and latency targets if the app ever has users beyond a few |
 | Pause / vacation mode | Add `pausedFrom`/`pausedTo` on Habit; paused weeks become NOT_ELIGIBLE and don't break streaks |
+| Phone installation (PWA) | A web app manifest and icons so the app opens full-screen from the home screen; offline logging would need a sync queue |
 | Mobile apps | API is already client-agnostic; the shared package can be reused in React Native |
 | Configurable week start (Sunday) | `weekStartOf` already centralizes this |
 | Social / accountability partners, payments, i18n | Not planned for MVP |
