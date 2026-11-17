@@ -89,34 +89,39 @@ W4 holds most of the web risk: optimistic updates, debounced counters and the ti
 
 **Goal:** you can register with the invite code, log in, stay logged in across reloads, and log out. The app always knows who's logged in. Spec: [plan 7.2](habit-tracker-implementation-plan.md#72-api-client-and-data-fetching).
 
-**Decide**
+**Decided**
 
-- [ ] **Playwright's backend.** Recommendation: Playwright starts the real API (on its own port) and the built web app against a separate `notch_e2e` database on the compose Postgres, reset before each run. Each spec creates its own user through the CLI or seed, so specs don't depend on each other. It's set up now, so every later sprint adds its golden path.
+- [x] **Playwright's backend:** the built API serves the built web app on port 3100 (one origin, the production CSP). Each run recreates a `notch_e2e` database on the compose Postgres (a service container in CI) and applies the migrations. Each spec registers its own users, through the UI or `registerViaApi`. A new `e2e` CI job runs it, and the `image` job waits for it.
+- [x] **Login throttle:** `AUTH_THROTTLE_LIMIT` (default 10 per minute per IP), raised only for the e2e API.
+- [x] **Return to the requested page:** the guest-only guard redirects as soon as `['me']` holds a user, so the forms need no navigation code. After "Log out" there's no return path: the next login, maybe someone else's, lands on Today.
+- [x] **CSRF:** a `403 CSRF_INVALID` fetches a fresh token and retries once. A request with no response is `ApiError` `NETWORK_ERROR`.
+- [x] **Forms:** the shared schemas got readable messages ("Use at least 8 characters"), and a pasted invite code is trimmed. The register form has a show/hide password toggle instead of a confirm field, and shows the detected timezone as a hint.
+- [x] `@hookform/resolvers` is pinned to 7.0.6: 7.0.7 is newer than the pnpm release-age policy allows.
 
 **App**
 
-- [ ] `lib/api-client.ts`:
+- [x] `lib/api-client.ts`:
   - same-origin `fetch`
   - reads the `XSRF-TOKEN` cookie fresh on every unsafe request, calling `/auth/csrf` when it's missing
   - parses errors into a typed `ApiError { status, code, message, details }`
   - a global 401 handler
-- [ ] `lib/query-keys.ts` and the invalidation map (plan 7.2)
-- [ ] `AuthProvider` / `useAuth()`:
+- [x] `lib/query-keys.ts` and the invalidation map (plan 7.2)
+- [x] `AuthProvider` / `useAuth()`:
   - statuses `loading | authenticated | anonymous | error`
   - `['me']` is filled straight from the login and register responses
   - logout clears every cached query
   - session expiry shows a "Log in again" toast
   - server unreachable shows a "Try again" screen
-- [ ] `RequireAuth` (no flash while loading; return to the requested page after login) and guest-only routes
-- [ ] **Form infrastructure:** react-hook-form + the shared schemas, and server errors mapped onto fields (`VALIDATION_FAILED` issues, `USERNAME_TAKEN`, `INVALID_INVITE_CODE`)
-- [ ] Login and register pages; register detects the timezone with `Intl`
-- [ ] Log out in the shell's user menu
+- [x] `RequireAuth` (no flash while loading; return to the requested page after login) and guest-only routes
+- [x] **Form infrastructure:** react-hook-form + the shared schemas, and server errors mapped onto fields (`VALIDATION_FAILED` issues, `USERNAME_TAKEN`, `INVALID_INVITE_CODE`)
+- [x] Login and register pages; register detects the timezone with `Intl`
+- [x] Log out in the shell's user menu
 
 **Tests**
 
-- [ ] API client: the CSRF header on unsafe methods, a fresh token after login, error parsing, the 401 handler
-- [ ] Auth flows with MSW: the four statuses, return-to, logout clearing the cache, session expiry
-- [ ] Playwright: register → reload (still logged in) → logout → login
+- [x] API client: the CSRF header on unsafe methods, a fresh token after login, error parsing, the 401 handler
+- [x] Auth flows with MSW: the four statuses, return-to, logout clearing the cache, session expiry
+- [x] Playwright: register → reload (still logged in) → logout → login
 
 **Done when:** the auth flow works in the browser against the real API, survives a reload and an API restart, and the first Playwright path is green.
 

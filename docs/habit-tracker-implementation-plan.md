@@ -990,21 +990,21 @@ A scheduled job is only needed once something has to happen without the user ope
 
 - **Desktop:** a left sidebar with Today, Cores & Goals, Stats, Review and Settings, plus a main content area.
 - **Narrow screens:** a bottom tab bar. It's a web app, but people will open it on phones.
-- **`RequireAuth`:** while auth is `loading` it renders nothing, so the login screen doesn't flash. When `anonymous` it redirects to `/login` with `state.from`, and after logging in the user returns to the page they asked for.
+- **`RequireAuth`:** while auth is `loading` it renders nothing, so the login screen doesn't flash. When `anonymous` it redirects to `/login` with `state.from`, and after logging in the user returns to the page they asked for. The guest-only guard on `/login` and `/register` does that redirect as soon as `['me']` holds a user, and the link between the two pages carries `state.from` along.
 - **`RequireOnboarded`:** redirects to `/onboarding` while `onboardedAt` is null.
 
 ### 7.2 API client and data fetching
 
 - `lib/api-client.ts` wraps `fetch`:
   - It uses `credentials: "same-origin"` and relative `/api/v1/...` URLs. No token is ever stored in JavaScript; the `SESSION` cookie is `HttpOnly`.
-  - On POST, PUT, PATCH and DELETE it reads the `XSRF-TOKEN` cookie **fresh on every request** and sends it as `X-XSRF-TOKEN`. If the cookie is missing, it first calls `GET /auth/csrf`.
-  - Any `401` calls a global "unauthenticated" handler.
-  - It parses the error body into a typed `ApiError { code, message, details }`.
+  - On POST, PUT, PATCH and DELETE it reads the `XSRF-TOKEN` cookie **fresh on every request** and sends it as `X-XSRF-TOKEN`. If the cookie is missing, it first calls `GET /auth/csrf` (concurrent requests share that call). A `403 CSRF_INVALID` fetches a fresh token and retries the request once, which covers a stale cookie after logging in from another tab.
+  - Any `401 UNAUTHENTICATED` calls a global "unauthenticated" handler. `/auth/me` opts out, since a 401 there just means logged out.
+  - It parses the error body into a typed `ApiError { status, code, message, details }`. A request that gets no response is `NETWORK_ERROR` (status 0); an error body that isn't the API's (a proxy's 502 page) is `INTERNAL`.
 - **Auth state** (`features/auth/AuthProvider.tsx` + `useAuth()`):
   - The current user is the query `['me']` with `staleTime: Infinity`. Its fetcher ensures the CSRF cookie exists, then calls `GET /auth/me`. A 401 resolves to `null` (logged out), not an error.
   - The status is one of `loading | authenticated | anonymous | error`. `error` means the server couldn't be reached, which is different from being logged out, and shows a "Try again" screen.
   - `login` and `register` put the returned user straight into the `['me']` cache, so no extra `/auth/me` call is needed.
-  - `logout` calls the endpoint, then clears `['me']` **and every other cached query**, so the next user never sees the previous user's data.
+  - `logout` calls the endpoint (a failure still logs this browser out), then clears `['me']` **and every other cached query**, so the next user never sees the previous user's data. After a logout the login page has no `from`, so the next login (maybe someone else's) lands on Today.
   - A 401 on any request while authenticated means the session expired: clear the cache, set `['me']` to `null`, and show a "Your session ended. Log in again." toast.
 - **Query keys** are defined centrally in `lib/query-keys.ts`, e.g. `['me']`, `['today', date]`, `['habits', filters]`, `['habit', id]`, `['goals', filters]`, `['goal', id]`, `['cores']`, `['reviews', 'latest']`, `['stats', 'overview', range]`, `['stats', 'habit', id, range]`.
 - **Invalidation map** (after a mutation succeeds):
@@ -1236,7 +1236,7 @@ Getting this wrong causes the subtlest bugs, so the rules are strict:
 | API services | Vitest | Services with a real test database (Testcontainers) rather than mocked Prisma |
 | API e2e | Vitest + Supertest | Auth flow (invite code, max users, same 401 for unknown user and wrong password, session expiry, logout and logout-all, CSRF rejected without or with a stale token), ownership isolation, log write → streak update, milestone tick → goal complete, review creation idempotency, undo rules, `ensureDue` before log writes |
 | Web components | Vitest + RTL | `HabitCard` variants, optimistic update rollback, `TargetChangeBadge`, habit form validation and type/schedule switching |
-| Web e2e | Playwright | Golden paths (below) against a seeded API |
+| Web e2e | Playwright | Golden paths (below) against the real API and database |
 
 **Must-have progression test cases** (in `decide.spec.ts`), all with a fixed injected `now`:
 
@@ -1261,7 +1261,9 @@ Getting this wrong causes the subtlest bugs, so the rules are strict:
 4. Tick all milestones → celebration shows → goal is completed.
 5. With seeded logs and a fake clock: the review appears, the badge shows on Today, undo works, and undo disappears after logging at the new level.
 
-Seed script (`prisma/seed.ts`): creates a demo user with 8 weeks of realistic logs, including one habit that levelled up twice and one that deloaded. It's used for local development and Playwright.
+Seed script (`prisma/seed.ts`): creates a demo user with 8 weeks of realistic logs, including one habit that levelled up twice and one that deloaded. It's used for local development.
+
+**Playwright setup** (`apps/web/playwright.config.ts`, `pnpm test:e2e`): the built API serves the built web app on port 3100, one origin under the production CSP, as in production. Each run drops and recreates a `notch_e2e` database (on the compose Postgres locally, a service container in CI) and applies the migrations. Each spec registers its own users (through the UI, or `registerViaApi` in `e2e/support/users.ts`), so specs don't depend on each other or on order. The e2e API raises `MAX_USERS` and `AUTH_THROTTLE_LIMIT`.
 
 ---
 
@@ -1295,15 +1297,12 @@ COOKIE_SECURE=false              # defaults to true; false only for local plain 
 CSRF_SECRET=change-me            # 32+ characters, e.g. `openssl rand -base64 48`
 INVITE_CODE=change-me            # 8+ characters
 MAX_USERS=1                      # raise to invite someone
+AUTH_THROTTLE_LIMIT=10           # login and register attempts per minute per IP; raised only for Playwright
 TRUST_PROXY=false                # number of proxies in front of the app; 1 behind the host's reverse proxy
 WEB_DIST_DIR=                    # path to the built SPA; set by the Docker image (/app/static)
 ```
 
-**Web (`apps/web/.env`):**
-
-```
-VITE_API_URL=/api/v1
-```
+**Web:** none. The app calls `/api/v1` on its own origin (the Vite proxy in development).
 
 ### 12.3 CI (GitHub Actions)
 
@@ -1314,7 +1313,7 @@ On every push to `main` and every PR (`.github/workflows/ci.yml`):
 3. `turbo run lint typecheck test build`. The e2e tests start their own Postgres with Testcontainers.
 4. Check that `prisma migrate diff` has no drift (against a Postgres service used as the shadow database).
 5. Build the production image (job `image`, after the checks pass). On pushes to `main` it's pushed to `ghcr.io/emin1731/notch` as `latest` and `sha-<commit>`; on PRs it's only built.
-6. Later, with the web app: Playwright, on `main` and on PRs labelled `e2e`.
+6. Playwright (job `e2e`, in parallel with the checks): builds the API and the web app and runs the golden paths against a Postgres service. The `image` job waits for it too.
 
 ### 12.4 Deployment
 
