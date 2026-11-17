@@ -23,6 +23,8 @@ export const envSchema = z.object({
   CSRF_SECRET: z.string().min(32, 'must be at least 32 characters'),
   INVITE_CODE: z.string().min(8, 'must be at least 8 characters'),
   MAX_USERS: z.coerce.number().int().min(1).default(1),
+  /** Login and register attempts per minute per IP. Raised only for the Playwright runs. */
+  AUTH_THROTTLE_LIMIT: z.coerce.number().int().positive().default(10),
   /** The built web app, served on the same origin. Unset: API only. */
   WEB_DIST_DIR: z.string().min(1).optional(),
 });

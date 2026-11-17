@@ -18,14 +18,22 @@ describe('validateEnv', () => {
       SESSION_TTL_DAYS: 30,
       COOKIE_SECURE: true,
       MAX_USERS: 1,
+      AUTH_THROTTLE_LIMIT: 10,
     });
   });
 
   it('parses strings from the environment', () => {
-    const env = validateEnv({ ...valid, PORT: '8080', COOKIE_SECURE: 'false', MAX_USERS: '3' });
+    const env = validateEnv({
+      ...valid,
+      PORT: '8080',
+      COOKIE_SECURE: 'false',
+      MAX_USERS: '3',
+      AUTH_THROTTLE_LIMIT: '1000',
+    });
     expect(env.PORT).toBe(8080);
     expect(env.COOKIE_SECURE).toBe(false);
     expect(env.MAX_USERS).toBe(3);
+    expect(env.AUTH_THROTTLE_LIMIT).toBe(1000);
   });
 
   it.each([
