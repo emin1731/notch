@@ -330,12 +330,20 @@ Optional: deploy this skeleton to `notch.emindabakhov.com` now. That checks earl
 
 **Goal:** the backend is complete, its API contract is frozen for the web app, and it runs at `notch.emindabakhov.com`.
 
-- [ ] Ownership e2e pass over every route; input limits (string lengths, array caps, 100 kB body limit)
-- [ ] Review of the OpenAPI output and the shared response types, which the web app will build on
-- [ ] `Dockerfile` (multi-stage): API + `serve-static` with an `index.html` fallback, ready for the SPA build
-- [ ] Production env, `prisma migrate deploy` on start, `TRUST_PROXY=true`, `COOKIE_SECURE=true`
-- [ ] Deploy behind the host's TLS proxy; first user created with `user:create`
-- [ ] Daily `pg_dump` backups, verified with a restore
+**Decided**
+
+- [x] Hosting: a VPS with Docker Compose; Postgres in the same stack; CI builds the image and pushes it to GHCR; the server pulls it. Runbook: [deploy.md](deploy.md).
+- [x] The SPA is served with Nest's `useStaticAssets` and an `index.html` fallback (no `@nestjs/serve-static`): hashed assets cached for a year, everything else revalidated, `/api` and `/docs` never shadowed.
+- [x] `TRUST_PROXY=1` (one proxy hop; 2 behind Cloudflare), `COOKIE_SECURE=true`.
+
+**Work**
+
+- [x] Ownership e2e pass over every route: a test now reads Express's route table and fails if a route with an id in its path isn't in the ownership matrix. Input limits audited: every string and array is capped; the body limit is 100 kB.
+- [x] Contract review: every controller returns a type from `@notch/shared`; no Prisma type leaks. Swagger stays a development-only route index; the web app builds on the shared types.
+- [x] `Dockerfile` (multi-stage, `node:26-slim`, `pnpm deploy --prod`), with a placeholder page until the web app ships
+- [x] `deploy/compose.yml` (api, db, backup), `prisma migrate deploy` on start, health check
+- [x] Daily `pg_dump` backups, `verify-backup.sh` and `restore.sh`, verified locally with a restore
+- [ ] Deploy behind the host's TLS proxy and create the first user with `user:create` (on the server, following [deploy.md](deploy.md))
 
 **Done when:** the API runs in production, survives a redeploy without logging you out, and a backup restores.
 

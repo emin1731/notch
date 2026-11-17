@@ -261,7 +261,7 @@ All thresholds live in one config object in the shared package (`PROGRESSION_CON
 | Auth | Server-side sessions in Postgres (custom `Session` table + global guard, see [6.4](#64-authentication)), `cookie-parser`, `argon2` for password hashing |
 | Rate limiting | `@nestjs/throttler` (login and register only) |
 | Security headers | `helmet` |
-| Static hosting | `@nestjs/serve-static` serves the built SPA from the same origin |
+| Static hosting | The API serves the built SPA from the same origin (`useStaticAssets` plus an `index.html` fallback, `src/web/serve-spa.ts`) |
 | Dates | `luxon` (timezone-aware week and day math) |
 | Config | `@nestjs/config` with zod-validated env |
 | Logging | `nestjs-pino` |
@@ -1296,7 +1296,7 @@ CSRF_SECRET=change-me            # 32+ characters, e.g. `openssl rand -base64 48
 INVITE_CODE=change-me            # 8+ characters
 MAX_USERS=1                      # raise to invite someone
 TRUST_PROXY=false                # number of proxies in front of the app; 1 behind the host's reverse proxy
-WEB_DIST_DIR=                    # production only: path to the built SPA
+WEB_DIST_DIR=                    # path to the built SPA; set by the Docker image (/app/static)
 ```
 
 **Web (`apps/web/.env`):**
@@ -1313,16 +1313,17 @@ On every push to `main` and every PR (`.github/workflows/ci.yml`):
 2. `prettier --check .`
 3. `turbo run lint typecheck test build`. The e2e tests start their own Postgres with Testcontainers.
 4. Check that `prisma migrate diff` has no drift (against a Postgres service used as the shadow database).
-5. Later, with the web app: Playwright, on `main` and on PRs labelled `e2e`.
+5. Build the production image (job `image`, after the checks pass). On pushes to `main` it's pushed to `ghcr.io/emin1731/notch` as `latest` and `sha-<commit>`; on PRs it's only built.
+6. Later, with the web app: Playwright, on `main` and on PRs labelled `e2e`.
 
 ### 12.4 Deployment
 
 - **Domain:** `https://notch.emindabakhov.com`, on the existing hosting.
-- **One app, one origin:** a single Docker image (multi-stage build, `node:26-slim`) contains the API and the built SPA. NestJS serves the SPA with `@nestjs/serve-static` (falling back to `index.html` for client routes) and the API under `/api/v1`. There's no separate web host and no CORS.
+- **One app, one origin:** a single Docker image (multi-stage build, `node:26-slim`) contains the API and the built SPA. NestJS serves the SPA from `WEB_DIST_DIR` (falling back to `index.html` for client routes, with hashed `/assets` cached for a year) and the API under `/api/v1`. Until the web app exists, the image serves a placeholder page. There's no separate web host and no CORS.
 - **TLS:** terminated by the host's reverse proxy, which forwards `X-Forwarded-Proto` and `X-Forwarded-For`. Set `TRUST_PROXY=1` (one proxy hop) so Express sees HTTPS (required for the `Secure` cookies) and the real client IP (required for throttling). The cookies are never sent over plain HTTP.
-- **Release:** the container runs `prisma migrate deploy` on start. `GET /api/v1/health` checks the DB connection.
+- **Release:** CI publishes the image to GHCR; the server runs `docker compose pull && docker compose up -d` with [`deploy/compose.yml`](../deploy/compose.yml). The container runs `prisma migrate deploy` on start. `GET /api/v1/health` checks the DB connection and is the container's health check. The full runbook is [deploy.md](deploy.md).
 - **First user:** after the first deploy, run `user:create` (or register with the invite code).
-- **Database:** PostgreSQL 16 on the same host or a managed instance, with daily backups (`pg_dump` on a schedule is enough).
+- **Database:** PostgreSQL 16 in the same Compose stack (named volume). A `backup` service writes a daily `pg_dump` to `deploy/backups/`, keeps 14 days, and `scripts/verify-backup.sh` checks that a dump restores.
 - **Monitoring:** pino logs in the host's log viewer and the health endpoint. No error-tracking service.
 
 ---

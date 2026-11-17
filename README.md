@@ -94,6 +94,16 @@ pnpm format      # prettier --write
 A pre-commit hook runs ESLint and Prettier on staged files. CI runs all of the above plus a Prisma
 drift check on every push and pull request.
 
+## Production
+
+One Docker image (API plus the web app's static files) runs behind a reverse proxy, with Postgres and
+daily backups in the same Compose stack. CI publishes `ghcr.io/emin1731/notch` from `main`. See
+[docs/deploy.md](docs/deploy.md).
+
+```bash
+docker build -t notch .     # the image CI builds
+```
+
 ## Database
 
 ```bash
