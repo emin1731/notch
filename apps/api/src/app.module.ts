@@ -14,6 +14,7 @@ import { HealthModule } from './health/health.module.js';
 import { LogsModule } from './logs/logs.module.js';
 import { PrismaModule } from './prisma/prisma.module.js';
 import { ReviewsModule } from './reviews/reviews.module.js';
+import { StatsModule } from './stats/stats.module.js';
 import { TodayModule } from './today/today.module.js';
 import { UsersModule } from './users/users.module.js';
 
@@ -47,6 +48,7 @@ import { UsersModule } from './users/users.module.js';
     HabitsModule,
     LogsModule,
     ReviewsModule,
+    StatsModule,
     TodayModule,
     HealthModule,
   ],
