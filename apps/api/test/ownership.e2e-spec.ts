@@ -2,6 +2,7 @@ import { todayIn } from '@notch/shared';
 import type { NestExpressApplication } from '@nestjs/platform-express';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { PrismaService } from '../src/prisma/prisma.service.js';
+import { API_PREFIX } from '../src/setup-app.js';
 import { createTestApp } from './create-test-app.js';
 import { PASSWORD, registerUser, resetDb } from './helpers/auth.js';
 import { createCore, createGoal, createHabit } from './helpers/structure.js';
@@ -143,6 +144,25 @@ async function aliceReview(app: NestExpressApplication, habitId: string) {
   return { review: review.id, reviewWeek, change: change.id };
 }
 
+/** Every route Express has registered, with a matcher for concrete paths. */
+function registeredRoutes(app: NestExpressApplication) {
+  const router = (app.getHttpAdapter().getInstance() as { router: { stack: RouterLayer[] } })
+    .router;
+  return router.stack.flatMap((layer) =>
+    layer.route
+      ? Object.keys(layer.route.methods).map((method) => ({
+          method,
+          path: layer.route!.path,
+          pattern: new RegExp(`^${layer.route!.path.replace(/:[A-Za-z]+/g, '[^/]+')}$`),
+        }))
+      : [],
+  );
+}
+
+interface RouterLayer {
+  route?: { path: string; methods: Record<string, boolean> };
+}
+
 describe('ownership (e2e)', () => {
   let app: NestExpressApplication;
   let alice: TestClient;
@@ -193,8 +213,22 @@ describe('ownership (e2e)', () => {
     expect(await snapshot()).toEqual(before);
   });
 
+  it('covers every route that takes an id in its path', () => {
+    const tested = ROUTES.map(([method, path]) => [method, `/${API_PREFIX}${path(ids)}`] as const);
+    const untested = registeredRoutes(app)
+      .filter((route) => route.path.includes(':'))
+      .filter(
+        (route) =>
+          !tested.some(([method, path]) => method === route.method && route.pattern.test(path)),
+      )
+      .map((route) => `${route.method.toUpperCase()} ${route.path}`);
+    expect(untested).toEqual([]);
+  });
+
   it("lists never include another user's records", async () => {
     expect((await bob.get(`/goals?coreId=${ids.core}`)).body).toEqual([]);
+    expect((await bob.get(`/habits?coreId=${ids.core}&includeArchived=true`)).body).toEqual([]);
+    expect((await bob.get('/today')).body).toMatchObject({ groups: [], weeklyQuota: [] });
     const bobCores = (await bob.get('/cores?includeArchived=true')).body;
     expect(bobCores.map((core: { id: string }) => core.id)).toEqual([ids.bobCore]);
     expect((await bob.get('/reviews')).body).toEqual({ items: [], nextCursor: null });
