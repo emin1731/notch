@@ -34,9 +34,22 @@ const FORM_MESSAGES: Partial<Record<ApiErrorCode, string>> = {
   REGISTRATION_CLOSED: 'Registration is closed for now.',
   TOO_MANY_REQUESTS: 'Too many attempts. Try again in a minute.',
   NETWORK_ERROR: "Couldn't reach the server. Check your connection and try again.",
+  CORE_ARCHIVED: 'This core is archived. Unarchive it first.',
+  CORE_NOT_EMPTY:
+    'This core still has goals or habits, archived ones included. Archive it instead, or delete those first.',
+  LIMIT_REACHED: 'A goal can have up to 50 milestones.',
+  GOAL_HAS_MILESTONES: 'This goal has milestones: it completes when they are all ticked.',
+  CORE_NOT_FOUND: 'That core no longer exists.',
+  GOAL_NOT_FOUND: 'That goal no longer exists.',
+  MILESTONE_NOT_FOUND: 'That milestone no longer exists.',
 };
 
 export const FALLBACK_FORM_MESSAGE = 'Something went wrong. Try again in a moment.';
+
+/** Words for any failed request, for a toast or a dialog. Never the server's raw message. */
+export function apiErrorMessage(error: unknown): string {
+  return (isApiError(error) && FORM_MESSAGES[error.code]) || FALLBACK_FORM_MESSAGE;
+}
 
 interface ValidationIssue {
   path: string;
@@ -107,5 +120,5 @@ export function applyServerError<T extends FieldValues>(
     return elsewhere.length > 0 ? elsewhere.join(' ') : shouldFocus ? FALLBACK_FORM_MESSAGE : null;
   }
 
-  return FORM_MESSAGES[error.code] ?? FALLBACK_FORM_MESSAGE;
+  return apiErrorMessage(error);
 }

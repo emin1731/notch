@@ -124,7 +124,7 @@ describe('auth', () => {
     const user = userEvent.setup();
     const { router, client } = renderApp('/today');
     await heading('Today');
-    client.setQueryData(queryKeys.cores, [{ id: 'core-1' }]);
+    client.setQueryData(queryKeys.cores.all, [{ id: 'core-1' }]);
 
     const sidebar = screen.getByRole('complementary');
     await user.click(within(sidebar).getByRole('button', { name: 'Emin' }));
@@ -134,7 +134,7 @@ describe('auth', () => {
     expect(router.state.location.pathname).toBe('/login');
     expect(router.state.location.state).toBeNull();
     expect(logouts).toBe(1);
-    expect(client.getQueryData(queryKeys.cores)).toBeUndefined();
+    expect(client.getQueryData(queryKeys.cores.all)).toBeUndefined();
     expect(client.getQueryData(queryKeys.me)).toBeNull();
   });
 
@@ -143,13 +143,13 @@ describe('auth', () => {
     server.use(http.get(`${API}/cores`, () => apiError(401, 'UNAUTHENTICATED', 'Not logged in')));
     const { router, client } = renderApp('/stats');
     await heading('Stats');
-    client.setQueryData(queryKeys.cores, [{ id: 'core-1' }]);
+    client.setQueryData(queryKeys.cores.all, [{ id: 'core-1' }]);
 
     await act(() => api.get('/cores').catch(() => undefined));
 
     expect(await screen.findByText('Your session ended. Log in again.')).toBeInTheDocument();
     expect(await heading('Log in')).toBeInTheDocument();
     expect(router.state.location.state).toMatchObject({ from: { pathname: '/stats' } });
-    expect(client.getQueryData(queryKeys.cores)).toBeUndefined();
+    expect(client.getQueryData(queryKeys.cores.all)).toBeUndefined();
   });
 });

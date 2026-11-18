@@ -1075,12 +1075,14 @@ Four steps with a progress indicator. State is held locally and submitted at the
   - active goals with progress bars (e.g. "2 / 4 milestones")
   - habits not linked to a goal, as compact rows
   - actions: add goal, add habit, edit core, archive
-- A "Show archived" toggle at the bottom.
-- An "Add core" card.
+- Completed goals stay on the card, folded under "Completed (n)".
+- A "Show archived" toggle at the bottom shows archived cores and goals, each with Unarchive.
+- An "Add core" button; with no cores yet, the presets are one-click starts.
+- The icon picker offers a curated, searchable set of lucide icons for life areas (`lib/core-icons.ts`), not all of lucide.
 
 #### Goal detail (`/goals/:goalId`)
 
-- Title, description, deadline (shows "12 days left" or "Overdue" in a muted warning color), status, and a progress bar.
+- Title, description, deadline, status, and a progress bar. The deadline text counts days in the user's timezone: "12 days left", "1 day left", "Due today", or "Overdue" in a muted warning color. A completed goal shows none.
 - **Milestone list:** checkbox, inline-editable title, drag handle, and delete. Has an "Add milestone" input at the bottom.
 - **Ticking the last milestone:** opens a full-screen celebration modal (confetti plus a message from section 14). It offers "Archive goal" or "Set a new goal in this core".
 - **Linked habits:** list with today's status and streaks, plus a "Link a habit" action.
