@@ -20,7 +20,10 @@ export const queryKeys = {
     list: (filters: object = {}) => ['goals', filters] as const,
   },
   goal: (id: string) => ['goal', id] as const,
-  cores: ['cores'] as const,
+  cores: {
+    all: ['cores'] as const,
+    list: (includeArchived: boolean) => ['cores', { includeArchived }] as const,
+  },
   reviews: {
     all: ['reviews'] as const,
     latest: ['reviews', 'latest'] as const,
@@ -52,7 +55,7 @@ export const invalidate = {
     invalidateAll(client, [
       queryKeys.habits.all,
       queryKeys.today.all,
-      queryKeys.cores,
+      queryKeys.cores.all,
       habitId ? queryKeys.habit(habitId) : undefined,
       goalId ? queryKeys.goal(goalId) : undefined,
     ]),
@@ -60,17 +63,25 @@ export const invalidate = {
     invalidateAll(client, [
       queryKeys.goal(goalId),
       queryKeys.goals.all,
-      queryKeys.cores,
+      queryKeys.cores.all,
       queryKeys.stats.all,
     ]),
   goalChange: (client: QueryClient, { goalId }: { goalId?: string } = {}) =>
     invalidateAll(client, [
       queryKeys.goals.all,
-      queryKeys.cores,
+      queryKeys.cores.all,
       goalId ? queryKeys.goal(goalId) : undefined,
     ]),
   coreChange: (client: QueryClient) =>
-    invalidateAll(client, [queryKeys.cores, queryKeys.today.all]),
+    invalidateAll(client, [queryKeys.cores.all, queryKeys.today.all]),
+  /** Archiving or unarchiving a core: it cascades to its goals and habits. */
+  coreArchive: (client: QueryClient) =>
+    invalidateAll(client, [
+      queryKeys.cores.all,
+      queryKeys.goals.all,
+      queryKeys.habits.all,
+      queryKeys.today.all,
+    ]),
   undo: (client: QueryClient, { habitId }: { habitId: string }) =>
     invalidateAll(client, [queryKeys.today.all, queryKeys.reviews.all, queryKeys.habit(habitId)]),
 };
