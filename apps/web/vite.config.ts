@@ -23,6 +23,9 @@ export default defineConfig({
     setupFiles: ['src/test/setup.ts'],
     // Playwright's specs live in e2e/ and run against the real API.
     include: ['src/**/*.test.{ts,tsx}'],
+    // Form tests type key by key; under turbo's parallel load (lint, build, the API's database
+    // tests) they can pass the 5 s default. Each `findBy` still gives up after 5 s.
+    testTimeout: 15_000,
     css: false,
   },
 });
