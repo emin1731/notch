@@ -131,36 +131,41 @@ W4 holds most of the web risk: optimistic updates, debounced counters and the ti
 
 **Goal:** you can build and reorganise the core → goal → milestone structure, and completing a goal is celebrated. Spec: plan 7.5 "Cores & Goals" and "Goal detail".
 
-**Decide**
+**Decided**
 
-- [ ] **Drag and drop library.** `@dnd-kit/react` is the new API, but it's still 0.x. Recommendation: the stable `@dnd-kit/core` + `@dnd-kit/sortable` 6.x, with keyboard sorting included.
-- [ ] **Icon picker.** The API accepts any lucide-style name. Recommendation: a curated grid of about 40 lucide icons that suit life areas, with search. Not all ~1,600 icons, which would bloat the bundle.
+- [x] **Drag and drop:** `@dnd-kit/core` 6 + `@dnd-kit/sortable` 10, behind one `SortableList`. A drag handle works with the mouse, touch and the keyboard (Space, arrows, Space), with screen-reader announcements.
+- [x] **Icon picker:** 42 curated lucide icons for life areas (every preset's included), searchable by name and keywords. An icon name outside the set shows a plain circle.
+- [x] **Deadline:** a native date input. The text uses the user's timezone: "12 days left", "1 day left", "Due today", "Overdue" (muted amber); a completed goal shows none.
+- [x] **Optimistic changes:** ticking milestones and reordering cores or milestones show at once and roll back with a toast on failure. The celebration opens only on the server's `goalJustCompleted` (or "Mark goal complete"), so it opens once.
+- [x] **Completed goals** stay on their core card, folded under "Completed (n)"; archived goals appear under "Archived (n)" with "Show archived".
+- [x] **Confetti:** `canvas-confetti`, loaded only when the celebration opens, on its own canvas with no web worker (the CSP has no `worker-src blob:`), and skipped with `prefers-reduced-motion`.
+- [x] The shared core, goal and milestone schemas got readable messages ("Give it a name").
 
 **App**
 
-- [ ] **Cores & Goals page:**
+- [x] **Cores & Goals page:**
   - core cards, reorderable
   - active goals with progress
   - add, edit, archive and unarchive; delete (explains `CORE_NOT_EMPTY`)
   - "Show archived"
-- [ ] Core dialog with `IconPicker`, `ColorPicker` and the presets
-- [ ] Goal create and edit dialog: core, title, description, deadline, inline milestones
+- [x] Core dialog with `IconPicker`, `ColorPicker` and the presets
+- [x] Goal create and edit dialog: core, title, description, deadline, inline milestones
   - moving a goal with linked habits asks for confirmation (`moveHabits`)
-- [ ] **Goal detail:**
+- [x] **Goal detail:**
   - deadline text ("12 days left" / "Overdue")
   - progress
   - milestone list: tick, inline rename, reorder, delete, add
   - "Mark goal complete" for goals without milestones
   - archive and delete with a `ConfirmDialog`
-- [ ] **`CelebrationModal`:** opens when `goalJustCompleted` is set, with confetti (respecting `prefers-reduced-motion`) and "Archive goal" / "Set a new goal"
-- [ ] Shared components: `CoreChip`, `ProgressBar`, `SortableList`, `ConfirmDialog`
+- [x] **`CelebrationModal`:** opens when `goalJustCompleted` is set, with confetti (respecting `prefers-reduced-motion`) and "Archive goal" / "Set a new goal"
+- [x] Shared components: `CoreChip`, `ProgressBar`, `SortableList`, `ConfirmDialog`
 
 **Tests**
 
-- [ ] Milestone tick updates the goal status and opens the celebration once
-- [ ] Reorder by keyboard
-- [ ] Archive cascade reflected in the UI
-- [ ] Playwright: create 2 cores and a goal with 3 milestones → tick all → celebration → goal completed
+- [x] Milestone tick updates the goal status and opens the celebration once
+- [x] Reorder by keyboard
+- [x] Archive cascade reflected in the UI
+- [x] Playwright: create 2 cores and a goal with 3 milestones → tick all → celebration → goal completed
 
 **Done when:** the whole structure can be built and reorganised in the browser, and completing a goal is celebrated.
 
