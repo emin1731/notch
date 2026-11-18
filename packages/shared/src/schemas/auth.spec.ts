@@ -40,6 +40,18 @@ describe('registerSchema', () => {
     expect(registerSchema.safeParse({ ...valid, timezone: 'Nowhere' }).success).toBe(false);
   });
 
+  it('trims a pasted invite code', () => {
+    expect(registerSchema.parse({ ...valid, inviteCode: ' invite \n' }).inviteCode).toBe('invite');
+  });
+
+  it('explains what is wrong in words the form can show', () => {
+    const result = registerSchema.safeParse({ ...valid, password: 'short', inviteCode: ' ' });
+    expect(result.error?.issues.map(({ path, message }) => [path.join('.'), message])).toEqual([
+      ['password', 'Use at least 8 characters'],
+      ['inviteCode', 'Enter your invite code'],
+    ]);
+  });
+
   it('trims the optional name and rejects an empty one', () => {
     expect(registerSchema.parse({ ...valid, name: ' Emin ' }).name).toBe('Emin');
     expect(registerSchema.safeParse({ ...valid, name: '  ' }).success).toBe(false);
@@ -47,6 +59,14 @@ describe('registerSchema', () => {
 });
 
 describe('loginSchema', () => {
+  it('asks for both fields', () => {
+    const result = loginSchema.safeParse({ username: ' ', password: '' });
+    expect(result.error?.issues.map((issue) => issue.message)).toEqual([
+      'Enter your username',
+      'Enter your password',
+    ]);
+  });
+
   it('lower-cases but does not apply the username pattern', () => {
     expect(loginSchema.parse({ username: ' A B ', password: 'x' })).toEqual({
       username: 'a b',

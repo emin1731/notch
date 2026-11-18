@@ -4,6 +4,11 @@ coverage/
 .turbo/
 *.tsbuildinfo
 
+# Playwright
+playwright-report/
+test-results/
+blob-report/
+
 # env
 .env
 .env.*

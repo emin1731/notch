@@ -6,12 +6,12 @@ is built in the sprints listed in [docs/backend-sprints.md](docs/backend-sprints
 
 ## Stack
 
-pnpm + Turborepo monorepo · NestJS 12 (ESM) · Prisma 7 + PostgreSQL 16 · React 19 + Vite 8 + Tailwind 4 + shadcn/ui · zod · Vitest + Testcontainers
+pnpm + Turborepo monorepo · NestJS 12 (ESM) · Prisma 7 + PostgreSQL 16 · React 19 + Vite 8 + Tailwind 4 + shadcn/ui · zod · Vitest + Testcontainers · Playwright
 
 ```
 apps/api          NestJS API, served under /api/v1
 apps/web          React app (Vite), served by the API in production
-packages/shared   domain logic, schemas and types shared by the API and (later) the web app
+packages/shared   domain logic, schemas and types shared by the API and the web app
 packages/config   tsconfig bases, ESLint and Prettier
 ```
 
@@ -89,9 +89,15 @@ post /auth/logout
 pnpm lint
 pnpm typecheck
 pnpm test        # unit + e2e; e2e starts its own Postgres container
+pnpm test:e2e    # Playwright golden paths (needs the compose Postgres; builds first)
 pnpm build
 pnpm format      # prettier --write
 ```
+
+`pnpm test:e2e` recreates a `notch_e2e` database on the compose Postgres, then the built API serves
+the built web app on port 3100, as in production. Playwright's own Chromium is installed with
+`pnpm --filter @notch/web exec playwright install chromium`; to use your installed Google Chrome
+instead, run `PW_CHANNEL=chrome pnpm test:e2e`.
 
 A pre-commit hook runs ESLint and Prettier on staged files. CI runs all of the above plus a Prisma
 drift check on every push and pull request.

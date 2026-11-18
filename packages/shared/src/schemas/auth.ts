@@ -10,14 +10,21 @@ export const usernameSchema = z.string().trim().toLowerCase().regex(USERNAME_PAT
   message: '3–50 characters: letters, digits, dot, dash or underscore',
 });
 
-export const passwordSchema = z.string().min(PASSWORD_MIN_LENGTH).max(PASSWORD_MAX_LENGTH);
+export const passwordSchema = z
+  .string()
+  .min(PASSWORD_MIN_LENGTH, `Use at least ${PASSWORD_MIN_LENGTH} characters`)
+  .max(PASSWORD_MAX_LENGTH, `Use at most ${PASSWORD_MAX_LENGTH} characters`);
 
-export const nameSchema = z.string().trim().min(1).max(80);
+export const nameSchema = z
+  .string()
+  .trim()
+  .min(1, "The name can't be blank")
+  .max(80, 'Use at most 80 characters');
 
 export const registerSchema = z.object({
   username: usernameSchema,
   password: passwordSchema,
-  inviteCode: z.string().min(1).max(200),
+  inviteCode: z.string().trim().min(1, 'Enter your invite code').max(200),
   name: nameSchema.optional(),
   timezone: timezoneSchema,
 });
@@ -28,7 +35,7 @@ export type RegisterInput = z.infer<typeof registerSchema>;
  * 401 as a wrong password, instead of a 400 that tells it apart.
  */
 export const loginSchema = z.object({
-  username: z.string().trim().toLowerCase().min(1).max(50),
-  password: z.string().min(1).max(PASSWORD_MAX_LENGTH),
+  username: z.string().trim().toLowerCase().min(1, 'Enter your username').max(50),
+  password: z.string().min(1, 'Enter your password').max(PASSWORD_MAX_LENGTH),
 });
 export type LoginInput = z.infer<typeof loginSchema>;

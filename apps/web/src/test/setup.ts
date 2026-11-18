@@ -1,6 +1,7 @@
 import '@testing-library/jest-dom/vitest';
 import { cleanup, configure } from '@testing-library/react';
 import { afterAll, afterEach, beforeAll } from 'vitest';
+import { clearCookies } from './auth';
 import { server } from './server';
 
 // Pages are lazy chunks: the first import can take over a second when the whole suite runs.
@@ -23,6 +24,7 @@ afterEach(() => {
   server.resetHandlers();
   cleanup();
   localStorage.clear();
+  clearCookies();
   document.documentElement.className = '';
 });
 afterAll(() => server.close());

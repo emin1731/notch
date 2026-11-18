@@ -24,6 +24,10 @@
       "dependsOn": ["^build", "generate"],
       "cache": false,
       "persistent": true
+    },
+    "test:e2e": {
+      "dependsOn": ["build", "@notch/api#build"],
+      "cache": false
     }
   }
 }
