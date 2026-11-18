@@ -1,4 +1,4 @@
-import type { CoreDto, GoalDto, LocalDate } from '@notch/shared';
+import type { CoreDto, GoalDto, HabitDto, LocalDate } from '@notch/shared';
 import {
   Archive,
   ArchiveRestore,
@@ -9,6 +9,7 @@ import {
   Trash2,
 } from 'lucide-react';
 import { type ReactNode, useId } from 'react';
+import { Link } from 'react-router';
 import { CoreIcon } from '@/components/CoreIcon';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -20,6 +21,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { GoalRow } from '@/features/goals/GoalRow';
+import { HabitList } from '@/features/habits/HabitList';
 import { coreStyle } from '@/lib/core-colors';
 import { cn } from '@/lib/utils';
 
@@ -36,12 +38,18 @@ export interface CoreCardActions {
 export function CoreCard({
   core,
   goals,
+  habits,
+  includeArchived,
   today,
   handle,
   actions,
 }: {
   core: CoreDto;
   goals: readonly GoalDto[];
+  /** The core's habits that aren't linked to a goal (linked ones show on their goal's page). */
+  habits: readonly HabitDto[];
+  /** Whether the page shows archived items: the habits list a reorder updates. */
+  includeArchived: boolean;
   today: LocalDate;
   /** The drag handle from SortableList. */
   handle?: ReactNode;
@@ -101,8 +109,8 @@ export function CoreCard({
       </header>
 
       <div className="flex flex-col gap-1 px-2 pb-3">
-        {active.length === 0 && completed.length === 0 && !archived && (
-          <p className="px-2 py-1 text-sm text-muted-foreground">No goals yet.</p>
+        {active.length === 0 && completed.length === 0 && habits.length === 0 && !archived && (
+          <p className="px-2 py-1 text-sm text-muted-foreground">No goals or habits yet.</p>
         )}
         {active.map((goal) => (
           <GoalRow key={goal.id} goal={goal} color={core.color} today={today} />
@@ -130,16 +138,34 @@ export function CoreCard({
             />
           )}
         </Folded>
+        {habits.length > 0 && (
+          <section aria-label={`${core.name} habits`} className="mt-2 flex flex-col gap-0.5">
+            <h3 className="px-2 pb-1 text-xs font-medium text-muted-foreground">Habits</h3>
+            <HabitList
+              habits={habits}
+              includeArchived={includeArchived}
+              reorderable={!archived && habits.length > 1}
+            />
+          </section>
+        )}
         {!archived && (
-          <Button
-            variant="ghost"
-            size="sm"
-            className="mt-1 self-start text-muted-foreground"
-            onClick={actions.onAddGoal}
-          >
-            <Plus />
-            Add goal
-          </Button>
+          <div className="mt-1 flex flex-wrap gap-1">
+            <Button
+              variant="ghost"
+              size="sm"
+              className="text-muted-foreground"
+              onClick={actions.onAddGoal}
+            >
+              <Plus />
+              Add goal
+            </Button>
+            <Button asChild variant="ghost" size="sm" className="text-muted-foreground">
+              <Link to={`/habits/new?coreId=${core.id}`}>
+                <Plus />
+                Add habit
+              </Link>
+            </Button>
+          </div>
         )}
       </div>
     </article>

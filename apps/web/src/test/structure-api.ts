@@ -1,10 +1,13 @@
 /* eslint-disable @typescript-eslint/no-explicit-any -- request bodies in a test fake */
 import {
+  adaptiveApplicable,
   type CoreColor,
   type CoreDto,
   type GoalDetailDto,
   type GoalDto,
   goalProgress,
+  type HabitDetailDto,
+  type HabitDto,
   type LinkedHabitDto,
   type LocalDate,
   type MilestoneDto,
@@ -85,8 +88,42 @@ export interface Call {
  * The cores, goals and milestones API over in-memory state, close enough to the real rules for
  * the pages' tests. `fail` makes the next matching request fail with the given error.
  */
-export function mockStructureApi(initial: { cores?: FakeCore[]; goals?: FakeGoal[] } = {}) {
-  const state = { cores: [...(initial.cores ?? [])], goals: [...(initial.goals ?? [])] };
+export function fakeHabit(fields: Partial<HabitDto> & Pick<HabitDto, 'coreId' | 'name'>): HabitDto {
+  const habit: HabitDto = {
+    id: nextId(),
+    goalId: null,
+    type: 'TOGGLE',
+    unit: null,
+    targetValue: 1,
+    initialTargetValue: 1,
+    scheduleType: 'DAILY',
+    daysOfWeek: [],
+    timesPerWeek: null,
+    initialTimesPerWeek: null,
+    timeOfDay: 'ANYTIME',
+    adaptiveEnabled: true,
+    adaptiveApplicable: false,
+    stepType: 'PERCENT',
+    stepValue: 10,
+    minTarget: null,
+    maxTarget: null,
+    longestStreak: 0,
+    startDate: '2026-11-01',
+    sortOrder: 0,
+    archivedAt: null,
+    ...fields,
+  };
+  return { ...habit, adaptiveApplicable: adaptiveApplicable(habit) };
+}
+
+export function mockStructureApi(
+  initial: { cores?: FakeCore[]; goals?: FakeGoal[]; habits?: HabitDto[] } = {},
+) {
+  const state = {
+    cores: [...(initial.cores ?? [])],
+    goals: [...(initial.goals ?? [])],
+    habits: [...(initial.habits ?? [])],
+  };
   const calls: Call[] = [];
   const failures: { method: string; path: RegExp; response: () => Response }[] = [];
 
@@ -106,7 +143,12 @@ export function mockStructureApi(initial: { cores?: FakeCore[]; goals?: FakeGoal
   const detail = (goal: FakeGoal): GoalDetailDto => ({
     ...goalDto(goal),
     milestones: goal.milestones,
-    habits: goal.habits,
+    habits: [
+      ...goal.habits,
+      ...state.habits
+        .filter((habit) => habit.goalId === goal.id)
+        .map(({ id, name, type, archivedAt }) => ({ id, name, type, archivedAt })),
+    ],
   });
   const findGoal = (id: string) => state.goals.find((goal) => goal.id === id);
   const findMilestone = (id: string) => {
@@ -162,7 +204,61 @@ export function mockStructureApi(initial: { cores?: FakeCore[]; goals?: FakeGoal
   const notFound = (code: 'CORE_NOT_FOUND' | 'GOAL_NOT_FOUND' | 'MILESTONE_NOT_FOUND') =>
     apiError(404, code);
 
+  const habitDetail = (habit: HabitDto): HabitDetailDto => ({
+    ...habit,
+    currentStreak: 0,
+    recentChanges: [],
+  });
+  const findHabit = (id: string) => state.habits.find((habit) => habit.id === id);
+
   server.use(
+    route('get', '/habits', ({ url }) => {
+      const all = url.searchParams.get('includeArchived') === 'true';
+      return HttpResponse.json(state.habits.filter((habit) => all || !habit.archivedAt));
+    }),
+    route('put', '/habits/order', ({ body }) => {
+      const ids: string[] = body.ids;
+      const listed = ids.map((id) => findHabit(id)!);
+      state.habits = [...listed, ...state.habits.filter((habit) => !ids.includes(habit.id))];
+      return HttpResponse.json(state.habits);
+    }),
+    route<{ id: string }>('get', '/habits/:id', ({ params }) => {
+      const habit = findHabit(params.id);
+      return habit ? HttpResponse.json(habitDetail(habit)) : apiError(404, 'HABIT_NOT_FOUND');
+    }),
+    route('post', '/habits', ({ body }) => {
+      const core = state.cores.find((candidate) => candidate.id === body.coreId);
+      if (core?.archivedAt) return apiError(409, 'CORE_ARCHIVED');
+      const habit = fakeHabit({
+        ...body,
+        initialTargetValue: body.targetValue,
+        initialTimesPerWeek: body.timesPerWeek,
+        startDate: body.startDate ?? '2026-11-18',
+      });
+      state.habits.push(habit);
+      return HttpResponse.json(habitDetail(habit), { status: 201 });
+    }),
+    route<{ id: string }>('patch', '/habits/:id', ({ params, body }) => {
+      const habit = findHabit(params.id);
+      if (!habit) return apiError(404, 'HABIT_NOT_FOUND');
+      Object.assign(habit, body);
+      return HttpResponse.json(habitDetail(habit));
+    }),
+    route<{ id: string; action: string }>('post', '/habits/:id/:action', ({ params }) => {
+      const habit = findHabit(params.id);
+      if (!habit) return apiError(404, 'HABIT_NOT_FOUND');
+      if (params.action === 'unarchive') {
+        const core = state.cores.find((candidate) => candidate.id === habit.coreId);
+        if (core?.archivedAt) return apiError(409, 'CORE_ARCHIVED');
+      }
+      habit.archivedAt = params.action === 'archive' ? '2026-11-18T09:00:00.000Z' : null;
+      return HttpResponse.json(habitDetail(habit));
+    }),
+    route<{ id: string }>('delete', '/habits/:id', ({ params }) => {
+      state.habits = state.habits.filter((habit) => habit.id !== params.id);
+      return new HttpResponse(null, { status: 204 });
+    }),
+
     route('get', '/cores', ({ url }) => {
       const all = url.searchParams.get('includeArchived') === 'true';
       return HttpResponse.json(state.cores.map(coreDto).filter((core) => all || !core.archivedAt));

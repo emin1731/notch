@@ -47,7 +47,7 @@ describe('Cores & Goals page', () => {
       within(health).getByRole('progressbar', { name: 'Run a half marathon progress' }),
     ).toHaveAttribute('aria-valuetext', '1 / 3 milestones');
     expect(within(health).getByText('Completed (1)')).toBeInTheDocument();
-    expect(within(await card('Career')).getByText('No goals yet.')).toBeInTheDocument();
+    expect(within(await card('Career')).getByText('No goals or habits yet.')).toBeInTheDocument();
   });
 
   it('creates a core in one click from the empty state', async () => {

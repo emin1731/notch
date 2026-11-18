@@ -1,4 +1,4 @@
-import { CORE_PRESETS, type CoreDto, type GoalDto } from '@notch/shared';
+import { CORE_PRESETS, type CoreDto, type GoalDto, type HabitDto } from '@notch/shared';
 import { Layers, Plus, TriangleAlert } from 'lucide-react';
 import { useId, useMemo, useState } from 'react';
 import { toast } from 'sonner';
@@ -13,6 +13,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Switch } from '@/components/ui/switch';
 import { GoalDialog } from '@/features/goals/GoalDialog';
 import { useGoalAction, useGoals } from '@/features/goals/hooks';
+import { useHabits } from '@/features/habits/hooks';
 import { apiErrorMessage } from '@/lib/forms';
 import { useToday } from '@/lib/use-today';
 import { CoreCard } from './CoreCard';
@@ -29,6 +30,7 @@ export default function CoresPage() {
   const [showArchived, setShowArchived] = useState(false);
   const cores = useCores(showArchived);
   const goals = useGoals(showArchived);
+  const habits = useHabits(showArchived);
   const today = useToday();
   const reorder = useReorderCores(showArchived);
   const archiveCore = useArchiveCore();
@@ -44,6 +46,15 @@ export default function CoresPage() {
     }
     return map;
   }, [goals.data]);
+  const unlinkedHabitsByCore = useMemo(() => {
+    const map = new Map<string, HabitDto[]>();
+    for (const habit of habits.data ?? []) {
+      if (habit.goalId === null) {
+        map.set(habit.coreId, [...(map.get(habit.coreId) ?? []), habit]);
+      }
+    }
+    return map;
+  }, [habits.data]);
   const activeCores = (cores.data ?? []).filter((core) => !core.archivedAt);
 
   const unarchive = async (run: () => Promise<unknown>, done: string) => {
@@ -56,7 +67,7 @@ export default function CoresPage() {
   };
 
   let content;
-  if (cores.isPending || goals.isPending) {
+  if (cores.isPending || goals.isPending || habits.isPending) {
     content = (
       <div className="flex flex-col gap-4" aria-busy="true" aria-label="Loading cores">
         {[0, 1].map((key) => (
@@ -64,7 +75,7 @@ export default function CoresPage() {
         ))}
       </div>
     );
-  } else if (cores.isError || goals.isError) {
+  } else if (cores.isError || goals.isError || habits.isError) {
     content = (
       <EmptyState
         icon={TriangleAlert}
@@ -75,6 +86,7 @@ export default function CoresPage() {
             onClick={() => {
               void cores.refetch();
               void goals.refetch();
+              void habits.refetch();
             }}
           >
             Try again
@@ -97,6 +109,8 @@ export default function CoresPage() {
           <CoreCard
             core={core}
             goals={goalsByCore.get(core.id) ?? []}
+            habits={unlinkedHabitsByCore.get(core.id) ?? []}
+            includeArchived={showArchived}
             today={today}
             handle={handle}
             actions={{
