@@ -4,8 +4,12 @@ import { localDateSchema } from '../dates/local-date.js';
 import { queryBooleanSchema, uuidSchema } from './common.js';
 import { milestoneTitleSchema } from './milestone.js';
 
-export const goalTitleSchema = z.string().trim().min(1).max(120);
-export const goalDescriptionSchema = z.string().trim().max(1000);
+export const goalTitleSchema = z
+  .string()
+  .trim()
+  .min(1, 'Give it a title')
+  .max(120, 'Use at most 120 characters');
+export const goalDescriptionSchema = z.string().trim().max(1000, 'Use at most 1000 characters');
 
 export const createGoalSchema = z.object({
   coreId: uuidSchema,

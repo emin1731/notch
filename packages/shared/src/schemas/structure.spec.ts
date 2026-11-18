@@ -12,6 +12,11 @@ import { createGoalSchema, listGoalsQuerySchema, updateGoalSchema } from './goal
 const id = (n: number) => `00000000-0000-4000-8000-${String(n).padStart(12, '0')}`;
 
 describe('core schemas', () => {
+  it('explains a missing name in words a form can show', () => {
+    const result = createCoreSchema.safeParse({ name: ' ', color: 'rose', icon: 'bed' });
+    expect(result.error?.issues.map((issue) => issue.message)).toEqual(['Give it a name']);
+  });
+
   it('accepts every preset', () => {
     for (const preset of CORE_PRESETS) {
       expect(createCoreSchema.parse(preset)).toEqual(preset);

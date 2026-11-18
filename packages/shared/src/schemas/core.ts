@@ -2,7 +2,11 @@ import { z } from 'zod';
 import { COLOR_PALETTE, LIMITS } from '../constants.js';
 import { queryBooleanSchema } from './common.js';
 
-export const coreNameSchema = z.string().trim().min(1).max(40);
+export const coreNameSchema = z
+  .string()
+  .trim()
+  .min(1, 'Give it a name')
+  .max(40, 'Use at most 40 characters');
 export const coreColorSchema = z.enum(COLOR_PALETTE);
 /** A lucide icon name, e.g. "heart-pulse". */
 export const iconSchema = z.string().regex(/^[a-z0-9-]{1,50}$/, { message: 'Invalid icon name' });
