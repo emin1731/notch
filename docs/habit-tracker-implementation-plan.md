@@ -1011,7 +1011,7 @@ A scheduled job is only needed once something has to happen without the user ope
 
 | Mutation | Invalidate |
 |---|---|
-| log write | `today` (that date), `habit/:id`, `stats` |
+| log write | `today` (every cached day: streaks and the week's hits run across days), `habit/:id`, `stats` |
 | habit create/edit/archive/delete | `habits`, `today`, `cores`, `goal/:id` if linked |
 | milestone toggle | `goal/:id`, `goals`, `cores`, `stats` |
 | goal CRUD | `goals`, `cores` |
@@ -1020,21 +1020,22 @@ A scheduled job is only needed once something has to happen without the user ope
 
 ### 7.3 Optimistic logging
 
-Logging must feel instant. For toggle, increment and set:
+Logging must feel instant, and stay correct:
 
-1. In `onMutate`, cancel `['today', date]` queries, snapshot the cache, and patch the habit's `log.value`, `progress` and `dayProgress` locally using the shared `computeProgress()`.
-2. In `onError`, restore the snapshot and show a toast: "Couldn't save that. Try again."
-3. In `onSuccess`, merge the server's `{ habitProgress, currentStreak, longestStreak }` into the cache.
-4. Counter buttons (`+` / `−`) debounce sends by 400 ms and send the summed `delta` through the increment endpoint, so rapid taps don't flood the API.
+1. **Unsaved values are overrides,** kept in a small store keyed by date and habit and applied on top of the server's day with `applyOverrides`. That recomputes the habit's progress (`computeProgress` against the log's `targetSnapshot`, or the day's target for a new log), the day's average and the week's hits (`isHit`). A background refetch can never wipe a pending change, because the override wins until the habit is idle.
+2. **Writes for one habit go out in order,** one after another, so a typed value can't overtake an earlier increment. Typing a value drops the habit's unsent taps.
+3. **On success, once the habit has nothing else pending,** the server's `{ log, habitProgress, currentStreak }` is merged into `['today', date]`, the override is dropped, and the day is refetched quietly (for the week's hits and the streaks).
+4. **On error,** the override is dropped (the saved value shows again) with the toast "Couldn't save that. Check your connection and try again.", or the API's own message where it has one (a day outside the window, an archived habit).
+5. **Counter buttons** (`+` / `−`) debounce sends by 400 ms and send the summed `delta` through the increment endpoint, so rapid taps don't flood the API. Unsent taps are flushed with `fetch(…, { keepalive: true })` when the page is hidden or reloaded.
 
 ### 7.4 Duration timer
 
-- A Zustand store holds `{ habitId, date, startedAt } | null`, persisted to `localStorage` so a running timer survives a refresh or a closed tab.
-- **Only one timer runs at a time.** Starting another prompts the user to stop the current one first.
-- **On stop:** `delta = floor((now − startedAt) / 1000)` seconds is sent via the increment endpoint, and the store is cleared.
-- A running timer shows live elapsed time on the habit card and as a small indicator in the sidebar.
-- **Midnight edge case:** if the timer was started on a previous date, the time is credited to the **start date** (if still within the backfill window). A toast explains this.
-- **Sanity limit:** if more than 6 hours have elapsed, the app asks "Still going? Log X h Y min?" with the option to edit the amount before saving.
+- A Zustand store holds `{ habitId, habitName, date, startedAt } | null`, persisted to `localStorage` so a running timer survives a refresh or a closed tab.
+- **Only one timer runs at a time.** Starting another asks to stop the current one first (its time so far is logged).
+- **On stop:** `delta = floor((now − startedAt) / 1000)` seconds is sent via the increment endpoint, and the store is cleared. Under a second logs nothing.
+- A running timer shows live elapsed time on the habit card and as a small indicator in the sidebar (and the phone header), linking to the day it's logging to.
+- **Midnight edge case:** if the timer was started on a previous date, the time is credited to the **start date**, and a toast explains this. If that date has already left the backfill window, a dialog offers "Log to today" (the minutes editable) or "Discard".
+- **Sanity limit:** if more than 6 hours have elapsed, the app asks "Still going? Log X h Y min?" with the minutes editable before saving, or "Keep going".
 
 ### 7.5 Pages in detail
 

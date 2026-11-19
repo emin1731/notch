@@ -36,6 +36,8 @@ export interface RequestOptions {
   signal?: AbortSignal;
   /** `false` keeps a 401 from counting as an ended session (`/auth/me` asks exactly that). */
   authHandler?: boolean;
+  /** Lets the request finish after the page unloads (unsent log taps on `pagehide`). */
+  keepalive?: boolean;
 }
 
 let onUnauthenticated: (() => void) | null = null;
@@ -132,6 +134,7 @@ async function request<T>(
       body: body === undefined ? undefined : JSON.stringify(body),
       credentials: 'same-origin',
       signal: options.signal,
+      keepalive: options.keepalive,
     });
   } catch (cause) {
     if (options.signal?.aborted) {

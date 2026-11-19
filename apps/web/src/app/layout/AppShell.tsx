@@ -2,7 +2,9 @@ import { NavLink, Outlet } from 'react-router';
 import { cn } from '@/lib/utils';
 import { NAV_ITEMS } from '../nav';
 import { Logo } from './Logo';
+import { TimerDialogs } from '@/features/today/TimerDialogs';
 import { ThemeMenu } from './ThemeMenu';
+import { TimerIndicator } from './TimerIndicator';
 import { UserMenu } from './UserMenu';
 
 /** Sidebar from `md` up; a top bar and a bottom tab bar on phones. */
@@ -32,6 +34,7 @@ export function AppShell() {
             </NavLink>
           ))}
         </nav>
+        <TimerIndicator className="mb-2" />
         <div className="flex items-center gap-1">
           <UserMenu />
           <ThemeMenu />
@@ -40,12 +43,14 @@ export function AppShell() {
 
       <header className="sticky top-0 z-10 flex h-14 items-center justify-between border-b bg-background/90 px-4 backdrop-blur md:hidden">
         <Logo />
-        <div className="flex items-center gap-1">
+        <div className="flex min-w-0 items-center gap-1">
+          <TimerIndicator className="max-w-40" />
           <ThemeMenu />
           <UserMenu variant="compact" />
         </div>
       </header>
 
+      <TimerDialogs />
       <main className="min-w-0 flex-1 pb-24 md:pb-0">
         <div className="mx-auto w-full max-w-3xl px-4 py-6 md:px-8 md:py-10">
           <Outlet />
