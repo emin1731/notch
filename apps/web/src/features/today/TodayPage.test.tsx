@@ -1,7 +1,7 @@
 import { addDays, todayIn } from '@notch/shared';
 import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { apiError, signedIn, testUser } from '@/test/auth';
 import { renderApp } from '@/test/render';
 import { mockTodayApi, todayHabit } from '@/test/today-api';
@@ -203,7 +203,12 @@ describe('Today', () => {
 });
 
 describe('Today: the timer', () => {
-  beforeEach(() => signedIn());
+  beforeEach(() => {
+    signedIn();
+    // The clock stands still, so a slow run can't add seconds to what the timer logs.
+    const now = Date.now();
+    vi.spyOn(Date, 'now').mockReturnValue(now);
+  });
 
   it('runs from the card, shows in the shell, and logs the seconds when stopped', async () => {
     const { api, meditate } = setup();
