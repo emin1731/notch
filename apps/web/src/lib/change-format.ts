@@ -6,6 +6,7 @@ import {
   type TargetField,
   addDays,
 } from '@notch/shared';
+import { percent } from './stats-format';
 
 /** What a level-up or deload changed (from a Today habit's `change` or a review's). */
 export interface ChangeLike {
@@ -59,8 +60,6 @@ export const movedText = (change: ChangeLike, habit: HabitUnits) =>
 /** Plan 14's undo confirmation: "Back to 10 min. We'll check again next week." */
 export const undoneMessage = (change: ChangeLike, habit: HabitUnits) =>
   `Back to ${changeValue(change, habit, change.fromValue)}. We'll check again next week.`;
-
-const percent = (rate: number) => `${Math.round(rate * 100)}%`;
 
 /** "25% last week · 100% the week before", or null without either. */
 export function ratesText(rate: number | null, previousRate: number | null): string | null {
