@@ -1094,10 +1094,10 @@ Four steps with a progress indicator. State is held locally and submitted at the
 Sections, all in one page:
 
 1. **Basics:** name, core (select), goal (select filtered by core, optional).
-2. **Type:** segmented control for Toggle / Count / Duration. It's disabled when editing, with a hint: "To change the type, create a new habit."
+2. **Type:** segmented control for Toggle / Count / Duration. It's disabled when editing, with a hint: "To change the type, create a new habit." The schedule type is locked the same way (its days or weekly count stay editable), and the start date can't change.
 3. **Target:**
    - Count: number plus unit.
-   - Duration: minutes, with hours shown when ≥ 60.
+   - Duration: minutes, with hours shown when ≥ 60. Fixed steps and limits are in minutes too; the form converts to seconds.
    - Toggle: hidden.
 4. **Schedule:** Daily / Specific days (weekday chips) / X times per week (stepper 1–7).
 5. **Time of day:** Morning / Afternoon / Evening / Anytime.
@@ -1107,11 +1107,13 @@ Sections, all in one page:
    - Min and max target (advanced, collapsed by default).
    - A preview line computed with shared logic: "If you're consistent: 10 → 11 → 12 → 13 min over the next 6 weeks."
    - For toggle habits on daily or specific days, the section shows: "Levels work on how often you do a yes/no habit. Switch the schedule to 'X times per week' to use them."
-7. **Start date** (optional, today or later).
+7. **Start date** (optional): today by default, from 6 days back (so recent days can be logged) to a year ahead.
 
 When editing the target of an existing habit, a note says: "This counts as a manual change. Levels will wait for two full weeks at the new target before adjusting."
 
-Validation uses the shared zod schema, so the same errors appear client-side and server-side.
+Validation uses the shared zod schema on the converted payload, so the same errors appear client-side and server-side; the cross-field rules are checked even while a plain field is invalid. An edit sends only the fields that changed.
+
+On a goal's page, "Add habit" opens this form with the goal preselected, and "Link existing" links one of the core's habits that has no goal yet.
 
 #### Habit detail (`/habits/:habitId`)
 

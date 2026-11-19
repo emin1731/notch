@@ -175,29 +175,34 @@ W4 holds most of the web risk: optimistic updates, debounced counters and the ti
 
 **Goal:** you can create and edit every habit type × schedule combination, with level settings and a live preview. Spec: plan 7.5 "Habit form".
 
-**Decide**
+**Decided**
 
-- [ ] **Form units.** The API takes durations in seconds; people think in minutes. Recommendation: the form works in minutes (hours shown from 60), converts on submit, and the final payload is checked with the shared `createHabitSchema` / `habitShapeIssues`, so client and server agree on every rule.
+- [x] **Form units:** durations, fixed steps and limits are entered in minutes (with "= 1 h 30 min" shown from 60 up) and converted to seconds on submit. A weekly yes/no habit's limits are in times a week.
+- [x] **One set of rules:** the form converts its values to the API payload and validates it with the shared `createHabitSchema`. The cross-field rules (`habitShapeIssues`) are checked even while a plain field such as the name is invalid, so every problem shows at once, in the server's own words. Server errors map back to the same fields.
+- [x] **Locked when editing:** the type, the schedule type and the start date, as in the API; each says how to change it (create a new habit). The days and the times a week stay editable.
+- [x] **Edits send only what changed,** so an untouched target never writes a manual change. Changing the target, days or weekly count shows the manual-change note.
+- [x] **Goal pages:** "Add habit" (the goal preselected) and "Link existing" (the core's habits without a goal); rows can be unlinked.
+- [x] The shared habit schema got readable messages ("Give it a name", "Set a target").
 
 **App**
 
-- [ ] **Habit form** (create and edit), on one page:
+- [x] **Habit form** (create and edit), on one page:
   - basics: core, then goal filtered by core
   - a type segmented control, locked when editing, with a hint
   - target and unit; schedule with `WeekdayPicker` and a 1–7 stepper; time of day
   - levels: switch, step, min/max under "advanced", the preview line from `projectLevels`, and the toggle-schedule hint
   - start date (up to 6 days back)
   - the manual-change note when editing a target
-- [ ] Habits on core cards (unlinked ones) and goal detail (linked), with archive, unarchive and delete; reordering habits (`PUT /habits/order`)
-- [ ] `DurationInput`, `WeekdayPicker`
+- [x] Habits on core cards (unlinked ones) and goal detail (linked), with archive, unarchive and delete; reordering habits (`PUT /habits/order`)
+- [x] `DurationInput` (a minutes field with the hours hint), `WeekdayPicker`, `Stepper`, `SegmentedControl`
 
 **Tests**
 
-- [ ] Every cross-field rule shows the same error as the server
-- [ ] Switching type or schedule resets the right fields
-- [ ] The preview matches `projectLevels`
-- [ ] Minute ↔ second conversion
-- [ ] Playwright: create one habit of each type
+- [x] Every cross-field rule shows the same error as the server
+- [x] Switching type or schedule resets the right fields
+- [x] The preview matches `projectLevels`
+- [x] Minute ↔ second conversion
+- [x] Playwright: create one habit of each type
 
 **Done when:** every combination can be created and edited in the browser, and the preview and validation match the API exactly.
 

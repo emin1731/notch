@@ -5,9 +5,17 @@ import { habitShapeIssues } from '../habits/shape.js';
 import { PROGRESSION_CONFIG } from '../progression/config.js';
 import { queryBooleanSchema, uuidSchema } from './common.js';
 
-export const habitNameSchema = z.string().trim().min(1).max(80);
-export const habitUnitSchema = z.string().trim().min(1).max(20);
-const positiveInt = z.number().int().min(1);
+export const habitNameSchema = z
+  .string()
+  .trim()
+  .min(1, 'Give it a name')
+  .max(80, 'Use at most 80 characters');
+export const habitUnitSchema = z
+  .string()
+  .trim()
+  .min(1, 'Enter a unit')
+  .max(20, 'Use at most 20 characters');
+const positiveInt = z.number().int('Use a whole number').min(1, 'At least 1');
 
 /** ISO weekdays, deduplicated and sorted. */
 export const daysOfWeekSchema = z
@@ -15,7 +23,11 @@ export const daysOfWeekSchema = z
   .max(7)
   .transform((days) => [...new Set(days)].sort((a, b) => a - b));
 
-export const timesPerWeekSchema = z.number().int().min(1).max(PROGRESSION_CONFIG.maxTimesPerWeek);
+export const timesPerWeekSchema = z
+  .number()
+  .int()
+  .min(1, 'At least once a week')
+  .max(PROGRESSION_CONFIG.maxTimesPerWeek, 'At most 7 times a week');
 
 const shapeRefinement = (habit: Parameters<typeof habitShapeIssues>[0], ctx: z.RefinementCtx) => {
   for (const { path, message } of habitShapeIssues(habit)) {
@@ -59,7 +71,7 @@ export const createHabitSchema = z
   }))
   .superRefine((habit, ctx) => {
     if (habit.targetValue === 0) {
-      ctx.addIssue({ code: 'custom', path: ['targetValue'], message: 'Required' });
+      ctx.addIssue({ code: 'custom', path: ['targetValue'], message: 'Set a target' });
       return;
     }
     shapeRefinement(habit, ctx);

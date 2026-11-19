@@ -42,6 +42,9 @@ const FORM_MESSAGES: Partial<Record<ApiErrorCode, string>> = {
   CORE_NOT_FOUND: 'That core no longer exists.',
   GOAL_NOT_FOUND: 'That goal no longer exists.',
   MILESTONE_NOT_FOUND: 'That milestone no longer exists.',
+  HABIT_NOT_FOUND: 'That habit no longer exists.',
+  HABIT_ARCHIVED: 'This habit is archived. Unarchive it first.',
+  GOAL_CORE_MISMATCH: 'That goal belongs to another core.',
 };
 
 export const FALLBACK_FORM_MESSAGE = 'Something went wrong. Try again in a moment.';
@@ -76,6 +79,8 @@ export interface ServerErrorMapping<T extends FieldValues> {
   fields: readonly Path<T>[];
   /** Error codes that point at one field, e.g. `USERNAME_TAKEN` → `username`. */
   codes?: Partial<Record<ErrorCode, Path<T>>>;
+  /** When the form's fields aren't named like the API's, e.g. `targetValue` → `target`. */
+  fieldForPath?: (path: string) => Path<T> | undefined;
 }
 
 /**
@@ -86,7 +91,7 @@ export interface ServerErrorMapping<T extends FieldValues> {
 export function applyServerError<T extends FieldValues>(
   form: Pick<UseFormReturn<T>, 'setError'>,
   error: unknown,
-  { fields, codes = {} }: ServerErrorMapping<T>,
+  { fields, codes = {}, fieldForPath = (path) => path as Path<T> }: ServerErrorMapping<T>,
 ): string | null {
   if (!isApiError(error)) {
     return FALLBACK_FORM_MESSAGE;
@@ -104,9 +109,10 @@ export function applyServerError<T extends FieldValues>(
     const elsewhere: string[] = [];
     let shouldFocus = true;
     for (const issue of validationIssues(error.details)) {
-      if (known.has(issue.path)) {
+      const field = fieldForPath(issue.path);
+      if (field && known.has(field)) {
         form.setError(
-          issue.path as Path<T>,
+          field,
           { type: 'server', message: issue.message },
           {
             shouldFocus,

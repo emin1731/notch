@@ -4,8 +4,10 @@ import {
   ArchiveRestore,
   ArrowLeft,
   CircleCheck,
+  Link2,
   MoreHorizontal,
   Pencil,
+  Plus,
   RotateCcw,
   SearchX,
   Trash2,
@@ -29,6 +31,9 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useCores } from '@/features/cores/hooks';
+import { HabitList } from '@/features/habits/HabitList';
+import { useHabits } from '@/features/habits/hooks';
+import { LinkHabitDialog } from '@/features/habits/LinkHabitDialog';
 import { isApiError } from '@/lib/api-client';
 import { deadlineText, formatLocalDate } from '@/lib/deadline';
 import { apiErrorMessage } from '@/lib/forms';
@@ -39,7 +44,7 @@ import { GoalDialog } from './GoalDialog';
 import { useDeleteGoal, useGoal, useGoalAction } from './hooks';
 import { MilestoneList } from './MilestoneList';
 
-type Dialog = 'edit' | 'delete' | 'new-goal' | null;
+type Dialog = 'edit' | 'delete' | 'new-goal' | 'link' | null;
 
 export default function GoalPage() {
   const { goalId = '' } = useParams();
@@ -47,6 +52,8 @@ export default function GoalPage() {
   const goal = useGoal(goalId);
   // Archived cores too: an archived goal may belong to one.
   const cores = useCores(true);
+  // Archived ones too: the goal's archived habits still belong to it.
+  const habits = useHabits(true);
   const today = useToday();
   const action = useGoalAction();
   const remove = useDeleteGoal();
@@ -94,6 +101,7 @@ export default function GoalPage() {
   const completed = data.status === 'COMPLETED';
   const deadline = deadlineText(data.deadline, data.status, today);
   const hasMilestones = data.milestones.length > 0;
+  const linkedHabits = (habits.data ?? []).filter((habit) => habit.goalId === data.id);
 
   const run = (
     kind: 'complete' | 'reopen' | 'archive' | 'unarchive',
@@ -224,6 +232,35 @@ export default function GoalPage() {
         <MilestoneList goal={data} onGoalCompleted={() => setCelebrating(true)} />
       </section>
 
+      <section aria-labelledby="habits-heading" className="mt-10 flex flex-col gap-3">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <h2 id="habits-heading" className="font-medium">
+            Habits
+          </h2>
+          {!archived && (
+            <div className="flex gap-1">
+              <Button variant="ghost" size="sm" onClick={() => setDialog('link')}>
+                <Link2 />
+                Link existing
+              </Button>
+              <Button asChild variant="outline" size="sm">
+                <Link to={`/habits/new?coreId=${data.coreId}&goalId=${data.id}`}>
+                  <Plus />
+                  Add habit
+                </Link>
+              </Button>
+            </div>
+          )}
+        </div>
+        {linkedHabits.length > 0 ? (
+          <HabitList habits={linkedHabits} includeArchived unlinkable={!archived} />
+        ) : (
+          <p className="text-sm text-muted-foreground">
+            No habits yet. The small things you do each week are what move a goal.
+          </p>
+        )}
+      </section>
+
       <CelebrationModal
         goal={data}
         color={color}
@@ -252,6 +289,12 @@ export default function GoalPage() {
             void navigate(`/goals/${saved.id}`);
           }
         }}
+      />
+      <LinkHabitDialog
+        open={dialog === 'link'}
+        onOpenChange={(open) => !open && setDialog(null)}
+        goal={data}
+        habits={habits.data ?? []}
       />
       <ConfirmDialog
         open={dialog === 'delete'}
