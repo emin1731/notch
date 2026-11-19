@@ -1,4 +1,4 @@
-import type { ErrorCode, UserDto } from '@notch/shared';
+import { type ErrorCode, todayIn, type UserDto } from '@notch/shared';
 import { http, HttpResponse } from 'msw';
 import { server } from './server';
 
@@ -35,10 +35,25 @@ export function apiError(
   return HttpResponse.json({ statusCode: status, code, message, details }, { status });
 }
 
-/** `/auth/me` answers with this user. */
+/**
+ * `/auth/me` answers with this user. Today answers with an empty day, since every login lands
+ * there; tests about Today register their own.
+ */
 export function signedIn(user: UserDto = testUser): void {
   setCsrfCookie();
-  server.use(http.get(`${API}/auth/me`, () => HttpResponse.json(user)));
+  server.use(
+    http.get(`${API}/auth/me`, () => HttpResponse.json(user)),
+    http.get(`${API}/today`, ({ request }) =>
+      HttpResponse.json({
+        date: new URL(request.url).searchParams.get('date') ?? todayIn(user.timezone, new Date()),
+        dayProgress: null,
+        pendingReview: null,
+        welcomeBack: false,
+        groups: [],
+        weeklyQuota: [],
+      }),
+    ),
+  );
 }
 
 /** `/auth/me` answers 401. */

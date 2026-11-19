@@ -45,12 +45,12 @@ const invalidateAll = (client: QueryClient, keys: (QueryKey | undefined)[]) =>
 
 /** What each mutation makes stale (the invalidation map in plan 7.2). */
 export const invalidate = {
-  logWrite: (client: QueryClient, { date, habitId }: { date: string; habitId: string }) =>
-    invalidateAll(client, [
-      queryKeys.today.date(date),
-      queryKeys.habit(habitId),
-      queryKeys.stats.all,
-    ]),
+  /**
+   * Every cached day, not just the one logged: streaks and the week's hits run across days, so
+   * backfilling yesterday changes today's streak.
+   */
+  logWrite: (client: QueryClient, { habitId }: { date: string; habitId: string }) =>
+    invalidateAll(client, [queryKeys.today.all, queryKeys.habit(habitId), queryKeys.stats.all]),
   habitChange: (client: QueryClient, { habitId, goalId }: { habitId?: string; goalId?: string }) =>
     invalidateAll(client, [
       queryKeys.habits.all,
