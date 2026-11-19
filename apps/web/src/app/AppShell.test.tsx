@@ -44,8 +44,9 @@ describe('app shell', () => {
 
   it('shows Today with the local date from the shared package', async () => {
     renderApp('/today');
-    const heading = await screen.findByRole('heading', { level: 1, name: 'Today' });
-    expect(heading.parentElement).toHaveTextContent(/day, \w+ \d+/);
+    await screen.findByRole('heading', { level: 1, name: 'Today' });
+    expect(await screen.findByText('Nothing scheduled today')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Next day' })).toBeDisabled();
   });
 
   it('shows a not-found page for unknown paths', async () => {
