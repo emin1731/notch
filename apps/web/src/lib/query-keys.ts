@@ -27,6 +27,8 @@ export const queryKeys = {
   reviews: {
     all: ['reviews'] as const,
     latest: ['reviews', 'latest'] as const,
+    /** The paged history (an infinite query). */
+    list: ['reviews', 'list'] as const,
     week: (weekStart: string) => ['reviews', weekStart] as const,
   },
   stats: {
@@ -83,5 +85,11 @@ export const invalidate = {
       queryKeys.today.all,
     ]),
   undo: (client: QueryClient, { habitId }: { habitId: string }) =>
-    invalidateAll(client, [queryKeys.today.all, queryKeys.reviews.all, queryKeys.habit(habitId)]),
+    invalidateAll(client, [
+      queryKeys.today.all,
+      queryKeys.reviews.all,
+      queryKeys.habits.all,
+      queryKeys.habit(habitId),
+      queryKeys.stats.all,
+    ]),
 };
