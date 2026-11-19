@@ -47,6 +47,10 @@ pnpm --filter @notch/api build
 pnpm --filter @notch/api seed --timezone=Asia/Baku     # log in as demo / demo-password
 ```
 
+`--username=<name>` seeds another user instead of `demo`. `--pending-review` stops the history at
+the end of last week without reviewing it, so the next visit shows a fresh review on any day
+(Playwright uses both).
+
 Weekly reviews run on the first visit of a new week. To try one without waiting for a Monday:
 
 ```bash
