@@ -15,6 +15,8 @@ export const queryKeys = {
     list: (filters: object = {}) => ['habits', filters] as const,
   },
   habit: (id: string) => ['habit', id] as const,
+  /** Under `habit(id)`, so whatever refreshes the habit refreshes its history too. */
+  habitTargetHistory: (id: string) => ['habit', id, 'target-history'] as const,
   goals: {
     all: ['goals'] as const,
     list: (filters: object = {}) => ['goals', filters] as const,
@@ -33,8 +35,8 @@ export const queryKeys = {
   },
   stats: {
     all: ['stats'] as const,
-    overview: (range: object) => ['stats', 'overview', range] as const,
-    habit: (id: string, range: object) => ['stats', 'habit', id, range] as const,
+    overview: (range: string) => ['stats', 'overview', range] as const,
+    habit: (id: string, range: string) => ['stats', 'habit', id, range] as const,
   },
 };
 
@@ -45,7 +47,10 @@ const invalidateAll = (client: QueryClient, keys: (QueryKey | undefined)[]) =>
       .map((queryKey) => client.invalidateQueries({ queryKey })),
   ).then(() => undefined);
 
-/** What each mutation makes stale (the invalidation map in plan 7.2). */
+/**
+ * What each mutation makes stale (the invalidation map in plan 7.2). Stats name habits, cores and
+ * goals and count their targets, so every structure change refreshes them too.
+ */
 export const invalidate = {
   /**
    * Every cached day, not just the one logged: streaks and the week's hits run across days, so
@@ -58,6 +63,7 @@ export const invalidate = {
       queryKeys.habits.all,
       queryKeys.today.all,
       queryKeys.cores.all,
+      queryKeys.stats.all,
       habitId ? queryKeys.habit(habitId) : undefined,
       goalId ? queryKeys.goal(goalId) : undefined,
     ]),
@@ -72,10 +78,11 @@ export const invalidate = {
     invalidateAll(client, [
       queryKeys.goals.all,
       queryKeys.cores.all,
+      queryKeys.stats.all,
       goalId ? queryKeys.goal(goalId) : undefined,
     ]),
   coreChange: (client: QueryClient) =>
-    invalidateAll(client, [queryKeys.cores.all, queryKeys.today.all]),
+    invalidateAll(client, [queryKeys.cores.all, queryKeys.today.all, queryKeys.stats.all]),
   /** Archiving or unarchiving a core: it cascades to its goals and habits. */
   coreArchive: (client: QueryClient) =>
     invalidateAll(client, [
@@ -83,6 +90,7 @@ export const invalidate = {
       queryKeys.goals.all,
       queryKeys.habits.all,
       queryKeys.today.all,
+      queryKeys.stats.all,
     ]),
   undo: (client: QueryClient, { habitId }: { habitId: string }) =>
     invalidateAll(client, [
