@@ -156,6 +156,8 @@ function demoHabits(today: LocalDate): DemoHabit[] {
 }
 
 export interface SeedDemoOptions {
+  /** Defaults to `demo`. Playwright seeds a user of its own per spec. */
+  username?: string;
   today: LocalDate;
   timezone: string;
   passwordHash: string;
@@ -173,7 +175,13 @@ export interface SeedDemoOptions {
  */
 export async function seedDemo(
   app: INestApplicationContext,
-  { today, timezone, passwordHash, pendingMonday = false }: SeedDemoOptions,
+  {
+    username = DEMO_USERNAME,
+    today,
+    timezone,
+    passwordHash,
+    pendingMonday = false,
+  }: SeedDemoOptions,
 ): Promise<{ userId: string; habitIds: Record<string, string> }> {
   const prisma = app.get(PrismaService);
   const reviews = app.get(ReviewsService);
@@ -182,6 +190,7 @@ export async function seedDemo(
   const lastDay = pendingMonday ? addDays(weekStartOf(today), -1) : today;
 
   const { userId, habitIds } = await createAccount(prisma, specs, {
+    username,
     start,
     today,
     timezone,
@@ -244,13 +253,19 @@ export async function seedDemo(
 async function createAccount(
   prisma: PrismaService,
   specs: DemoHabit[],
-  ctx: { start: LocalDate; today: LocalDate; timezone: string; passwordHash: string },
+  ctx: {
+    username: string;
+    start: LocalDate;
+    today: LocalDate;
+    timezone: string;
+    passwordHash: string;
+  },
 ): Promise<{ userId: string; habitIds: Record<string, string> }> {
   return prisma.$transaction(async (tx) => {
-    await tx.user.deleteMany({ where: { username: DEMO_USERNAME } });
+    await tx.user.deleteMany({ where: { username: ctx.username } });
     const user = await tx.user.create({
       data: {
-        username: DEMO_USERNAME,
+        username: ctx.username,
         passwordHash: ctx.passwordHash,
         name: 'Demo',
         timezone: ctx.timezone,
