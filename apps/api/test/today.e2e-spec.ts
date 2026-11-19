@@ -97,6 +97,7 @@ describe('today (e2e)', () => {
       fromValue: 3600,
       toValue: 3300,
       canUndo: false,
+      undoBlockedReason: 'ALREADY_LOGGED',
     });
     expect(today.weeklyQuota[0]!.change).toBeUndefined();
     // Monday's review hasn't been opened yet; the earlier ones have.

@@ -259,29 +259,31 @@ W4 holds most of the web risk: optimistic updates, debounced counters and the ti
 
 **Goal:** level-ups and deloads are visible, explained and undoable exactly as the API allows. Spec: plan 2.8 and 7.5 "Weekly review".
 
-**Decide**
+**Decided**
 
-- [ ] **Getting a pending review in Playwright without moving the server's clock.** Recommendation: a seed option that writes history through yesterday but skips last week's review, so the first visit in the test creates it, on any day of the week. It needs no test-only clock in the API.
+- [x] **A pending review in Playwright without moving the server's clock:** the seed CLI takes `--username` and `--pending-review` (history through last Sunday, last week not reviewed). Each spec seeds its own user against the e2e database, so the first visit creates the review on any day of the week. Its one change is Deep work easing off, 60 → 55 min.
+- [x] **The API says why an undo is blocked:** `undoBlockedReason` sits next to `canUndo` on Today's `change` and on review changes, from the same `undoBlockReason()` call. The UI shows `UNDO_BLOCK_REASON_TEXT`.
+- [x] **Undo refreshes** every cached day, the reviews, the habits and the habit; a `409 UNDO_NOT_ALLOWED` toast reads the reason from `details.reason`.
 
 **App**
 
-- [ ] `TargetChangeBadge` on cards ("↑ 10 → 12 min") with a popover:
-  - the reason sentence (`DECISION_REASON_TEXT`)
-  - Undo while `canUndo`, otherwise why not (`UNDO_BLOCK_REASON_TEXT`)
-- [ ] Review banner and "welcome back" banner on Today
-- [ ] Review page:
-  - levelled up, eased off, and holding steady (collapsed)
+- [x] `TargetChangeBadge` on cards ("↓ 60 → 55 min", "↑ 3× → 4× a week") with a popover:
+  - the reason sentence, "Target moved from 60 to 55 min.", and "This isn't a step back." for a deload
+  - Undo while `canUndo`, otherwise why not
+- [x] Review banner ("Your week is in. 2 targets went up, 1 eased off. See review →") and "welcome back" banner, on today only
+- [x] Review page:
+  - levelled up, eased off (with last week's and the week before's rates), and holding steady (collapsed, with each habit's reason)
   - the inactive-week variant
   - undo
   - marks the review seen on open
-- [ ] Review history list and past reviews (`/review/:weekStart`)
+- [x] Review history list ("Show more") and past reviews (`/review/:weekStart`), with a not-found state
 
 **Tests**
 
-- [ ] Badge text for each field and type
-- [ ] Undo success and each blocked reason
-- [ ] The banner disappears after the review is seen
-- [ ] Playwright: seeded pending review → banner → review page → undo → badge gone; undo locked after logging
+- [x] Badge text for each field and type
+- [x] Undo success and each blocked reason
+- [x] The banner disappears after the review is seen
+- [x] Playwright: seeded pending review → banner → review page → undo → badge gone; undo locked after logging
 
 **Done when:** with seeded data, the review appears, every change is explained, and undo works and locks as specified.
 

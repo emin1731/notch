@@ -27,6 +27,7 @@ import { coreStyle } from '@/lib/core-colors';
 import { apiErrorMessage } from '@/lib/forms';
 import { cn } from '@/lib/utils';
 import { useLogSync } from './log-sync-context';
+import { TargetChangeBadge } from './TargetChangeBadge';
 import { formatClock, useElapsed, useTimer } from './timer';
 import { useTimerActions } from './timer-actions';
 
@@ -57,6 +58,7 @@ export function HabitCard({ habit, date }: { habit: TodayHabit; date: LocalDate 
             {habit.week && <WeekDots hits={habit.week.hits} quota={habit.week.quota} />}
           </p>
         </div>
+        <TargetChangeBadge habit={habit} />
         {habit.currentStreak > 0 && (
           <span
             className="flex shrink-0 items-center gap-0.5 text-sm font-medium tabular-nums text-orange-600 dark:text-orange-400"

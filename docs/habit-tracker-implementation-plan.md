@@ -782,6 +782,7 @@ type TodayHabit = {
     id: string; kind: 'LEVEL_UP' | 'DELOAD';
     field: 'TARGET_VALUE' | 'TIMES_PER_WEEK';
     fromValue: number; toValue: number; canUndo: boolean;
+    undoBlockedReason: UndoBlockReason | null;       // why not, when canUndo is false
   };
 };
 ```
@@ -793,7 +794,7 @@ Everything is computed **as of `date`** (streaks and the week's hits), so browsi
 | Method | Path | Notes |
 |---|---|---|
 | GET | `/reviews?limit=&cursor=` | newest first; `limit` 1–52 (default 10), `cursor` = the `nextCursor` of the previous page. Returns `{ items, nextCursor }` |
-| GET | `/reviews/latest` | runs `ensureDue` first; returns `{ review }`: the latest review with its changes and their `canUndo`, or `null` before the first one |
+| GET | `/reviews/latest` | runs `ensureDue` first; returns `{ review }`: the latest review with its changes and their `canUndo` and `undoBlockedReason`, or `null` before the first one |
 | GET | `/reviews/:weekStart` | `404 REVIEW_NOT_FOUND` |
 | POST | `/reviews/:id/seen` | sets `seenAt` (once); returns the review |
 | POST | `/target-changes/:id/undo` | returns `{ change, habit }`. `409 UNDO_NOT_ALLOWED` with `details.reason`: `NOT_AUTOMATIC`, `ALREADY_UNDONE`, `EXPIRED`, `ALREADY_LOGGED` or `CHANGED_SINCE`; `404 TARGET_CHANGE_NOT_FOUND` |
@@ -945,7 +946,7 @@ export const PROGRESSION_CONFIG = {
 4. Check that the habit's current value equals `toValue`, so there was no manual edit since (`CHANGED_SINCE`).
 5. Set the habit field back to `fromValue` and set `undoneAt = now`.
 
-Steps 1–4 are one pure shared function, `undoBlockReason()`, which also computes `canUndo` for Today and the reviews.
+Steps 1–4 are one pure shared function, `undoBlockReason()`, which also computes `canUndo` and `undoBlockedReason` for Today and the reviews.
 
 The cooldown is derived at decision time from `changes` (an undone change whose review was the previous one). No extra column is needed.
 
@@ -1057,13 +1058,13 @@ Four steps with a progress indicator. State is held locally and submitted at the
   - A circular **day progress** ring showing `dayProgress`.
   - A one-line message based on progress (see section 14).
 - **Review banner** (when `pendingReview`): "Your week is in. 2 targets went up, 1 eased off. See review →".
-- **Welcome back banner** (when `welcomeBack`).
+- **Welcome back banner** (when `welcomeBack`): "You were away last week. Nothing changed. Pick up where you left off." It links to the review too.
 - **Time-of-day groups** (Morning, Afternoon, Evening, Anytime): empty groups are hidden, and habits are ordered by `sortOrder`.
 - **Habit card**, depending on type:
   - **Toggle:** a large circular check button. Tapping toggles it.
   - **Count:** `− value / target unit +`, where tapping the value opens a number input, plus a progress bar.
   - **Duration:** `value / target` in minutes, a ▶ start / ■ stop button, a "+ add time" button (opens a minutes input), and a progress bar.
-  - **Always shown:** a core color stripe, the goal name (small, if linked), the 🔥 streak count, and the target-change badge when `change` is present ("↑ from 10 to 12 min"). Clicking the badge opens a popover with the reason sentence, plus an Undo button if `canUndo`, or else a disabled state explaining why.
+  - **Always shown:** a core color stripe, the goal name (small, if linked), the 🔥 streak count, and the target-change badge when `change` is present ("↑ 10 → 12 min", "↓ 4× → 3× a week"). Clicking the badge opens a popover with the reason sentence, "Target moved from 60 to 55 min." (plus "This isn't a step back." for a deload), and an Undo button if `canUndo`, or else why not (`UNDO_BLOCK_REASON_TEXT[undoBlockedReason]`). Undo's toast: "Back to 60 min. We'll check again next week."
   - **Kebab menu:** Edit, View stats, Archive.
 - **"This week" section** for `TIMES_PER_WEEK` habits: shows "2 / 3 this week" dots. Habits whose quota is met collapse into a "Done for the week ✓" row but can still be logged.
 - **Empty state:** "Nothing scheduled today. Enjoy it, or add a habit."

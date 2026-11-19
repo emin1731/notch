@@ -48,6 +48,11 @@ export function mockTodayApi(
   habits: TodayHabit[],
   options: { date: LocalDate; writeDelayMs?: number },
 ) {
+  /** The banner fields, changeable mid-test (e.g. once the review is seen). */
+  const meta: Pick<TodayResponse, 'pendingReview' | 'welcomeBack'> = {
+    pendingReview: null,
+    welcomeBack: false,
+  };
   const key = (habitId: string, date: string) => `${date}:${habitId}`;
   const logs = new Map<string, { value: number; targetSnapshot: number }>();
   // A habit's `log` is its log on `options.date`; its streak and week count include it.
@@ -89,8 +94,7 @@ export function mockTodayApi(
         scheduled.length === 0
           ? null
           : scheduled.reduce((sum, habit) => sum + habit.progress, 0) / scheduled.length,
-      pendingReview: null,
-      welcomeBack: false,
+      ...meta,
       groups,
       weeklyQuota: all.filter((habit) => habit.scheduleType === 'TIMES_PER_WEEK'),
     };
@@ -160,6 +164,7 @@ export function mockTodayApi(
   );
 
   return {
+    meta,
     calls,
     writes: () => calls.filter((call) => call.method !== 'ARCHIVE' && call.method !== 'GET'),
     /** How many times the day was fetched. */

@@ -40,15 +40,18 @@ export function toReviewDto(
     seenAt: review.seenAt?.toISOString() ?? null,
     createdAt: review.createdAt.toISOString(),
     summary: review.summary as unknown as WeeklyReviewSummary,
-    changes: review.changes.map((change): ReviewChangeDto => ({
-      ...toTargetChangeDto(change),
-      habitName: change.habit.name,
-      canUndo:
-        undoBlockReason(change, {
-          now,
-          hasLogSinceEffective: hasLogSince(change),
-          currentValue: currentValueOf(change.habit, change.field),
-        }) === null,
-    })),
+    changes: review.changes.map((change): ReviewChangeDto => {
+      const blocked = undoBlockReason(change, {
+        now,
+        hasLogSinceEffective: hasLogSince(change),
+        currentValue: currentValueOf(change.habit, change.field),
+      });
+      return {
+        ...toTargetChangeDto(change),
+        habitName: change.habit.name,
+        canUndo: blocked === null,
+        undoBlockedReason: blocked,
+      };
+    }),
   };
 }

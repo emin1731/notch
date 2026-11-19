@@ -83,6 +83,7 @@ describe('weekly review of the demo seed, on Monday morning (e2e)', () => {
         effectiveFrom: '2026-11-16',
         undoDeadline: '2026-11-22T23:00:00.000Z', // Monday 11-23, 00:00 in Berlin
         canUndo: true,
+        undoBlockedReason: null,
       }),
     ]);
   });
@@ -231,7 +232,12 @@ describe('weekly reviews, day by day (e2e)', () => {
     expect(res.body.log).toEqual({ date: '2026-11-09', value: 22, targetSnapshot: 22 });
     const review = await reviewOf('2026-11-02');
     expect(byName(review)).toEqual({ Read: ['LEVEL_UP', 'CONSISTENT', 1] });
-    expect(review.changes[0]).toMatchObject({ fromValue: 20, toValue: 22, canUndo: false });
+    expect(review.changes[0]).toMatchObject({
+      fromValue: 20,
+      toValue: 22,
+      canUndo: false,
+      undoBlockedReason: 'ALREADY_LOGGED',
+    });
     expect((await undo(review.changes[0]!.id)).body.details.reason).toBe('ALREADY_LOGGED');
   });
 
@@ -255,7 +261,10 @@ describe('weekly reviews, day by day (e2e)', () => {
     expect(change).toMatchObject({ undoDeadline: '2026-11-16T00:00:00.000Z', canUndo: true });
 
     clock.set('2026-11-16T00:00:00Z');
-    expect((await reviewOf('2026-11-02')).changes[0]!.canUndo).toBe(false);
+    expect((await reviewOf('2026-11-02')).changes[0]).toMatchObject({
+      canUndo: false,
+      undoBlockedReason: 'EXPIRED',
+    });
     expect((await undo(change.id)).body.details.reason).toBe('EXPIRED');
   });
 
