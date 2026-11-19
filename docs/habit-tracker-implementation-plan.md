@@ -1120,11 +1120,12 @@ On a goal's page, "Add habit" opens this form with the goal preselected, and "Li
 #### Habit detail (`/habits/:habitId`)
 
 - Header: name, core, goal, current target, schedule, current and longest streak.
-- Range selector: 30d / 90d / 365d.
+- Range selector: 30d / 90d / 365d, kept in the URL (`?range=90d`).
 - **Heatmap:** calendar grid with columns per week. Cell intensity shows progress, unscheduled days are hollow, and bonus logs get a dot. Hovering shows the date and value.
 - **Target over time:** a Recharts step-line chart. ↑ / ↓ markers show level-ups and deloads, and undone changes appear as faded markers.
-- **Totals:** completion rate, total minutes/units, number of level-ups.
-- **Log history:** a list of the last 14 days with inline editing within the backfill window.
+- **Totals:** completion rate (hits of due days, or of sessions for a weekly habit), total minutes/units, number of level-ups that weren't undone.
+- **Log history:** a list of the last 14 days with inline editing within the backfill window (never before the start date; read-only for an archived habit).
+- Each chart has a Chart | Table switch, so its numbers are readable without seeing it.
 
 #### Weekly review (`/review`, `/review/:weekStart`)
 
@@ -1138,7 +1139,7 @@ On a goal's page, "Add habit" opens this form with the goal preselected, and "Li
 
 #### Stats (`/stats`)
 
-- Range tabs: 7d / 30d / 90d / 365d.
+- Range tabs: 7d / 30d / 90d / 365d, kept in the URL (`?range=`).
 - **KPI row:** overall completion rate (the average of the habits' rates), best current streak, goals completed in range, and level-ups vs deloads. Unfinished days and weeks don't count until they're done, so the rate doesn't dip every morning.
 - **Completion over time:** a line chart of the daily rate.
 - **By core:** horizontal bars per core.
