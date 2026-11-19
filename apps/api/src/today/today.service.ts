@@ -171,6 +171,7 @@ export class TodayService {
       fromValue: change.fromValue,
       toValue: change.toValue,
       canUndo: blocked === null,
+      undoBlockedReason: blocked,
     };
   }
 }

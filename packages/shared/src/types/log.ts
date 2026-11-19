@@ -1,6 +1,7 @@
 import type { LocalDate } from '../dates/local-date.js';
 import type { CoreColor } from '../constants.js';
 import type { HabitType, ScheduleType, TargetChangeKind, TimeOfDay } from '../enums.js';
+import type { UndoBlockReason } from '../progression/undo.js';
 
 export interface LogDto {
   date: LocalDate;
@@ -43,6 +44,8 @@ export interface TodayHabit {
     fromValue: number;
     toValue: number;
     canUndo: boolean;
+    /** Why it can't be undone (`UNDO_BLOCK_REASON_TEXT`), or null when it can. */
+    undoBlockedReason: UndoBlockReason | null;
   };
 }
 
