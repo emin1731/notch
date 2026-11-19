@@ -212,26 +212,30 @@ W4 holds most of the web risk: optimistic updates, debounced counters and the ti
 
 **Goal:** logging feels instant and is always correct, including the timer's edge cases. Spec: plan 7.3, 7.4 and 7.5 "Today".
 
-**Decide**
+**Decided**
 
-- [ ] **Optimistic updates while counting.** Recommendation:
-  - a habit with unsent taps ignores server responses for itself until its debounce flushes, so the number never jumps back
-  - the final server result always wins
-  - on failure, the snapshot is restored with a toast
+- [x] **Optimistic updates while counting:**
+  - taps show at once and go out as one summed increment after 400 ms of quiet
+  - while a habit has unsent or unanswered writes, nothing from the server changes what it shows; once it's idle, the server's result stays
+  - a failure falls back to the saved value with plan 14's "Couldn't save that…" toast
+- [x] **Overrides, not cache edits:** unsaved values live in a small store and are applied on top of the server's day (`applyOverrides`, recomputing progress, the day's average and the week's hits with the shared helpers). A background refetch can't wipe a pending tap.
+- [x] **Writes for one habit go out in order** (a typed value can't overtake an earlier increment), and unsent taps are flushed with `keepalive` when the page is hidden or reloaded.
+- [x] **Timer past midnight:** the time goes to the day it started, with a toast; if that day has left the 6-day window, a dialog offers "Log to today" or "Discard". Over 6 hours, "Still going?" lets you fix the minutes or keep going.
+- [x] The review and "welcome back" banners and the target-change badge come with W5.
 
 **App**
 
-- [ ] Today page:
+- [x] Today page:
   - `DateNavigator` (back 6 days, "Backfilling" pill)
   - `ProgressRing` and the progress line
   - time-of-day groups
   - the "This week" section ("2 / 3" dots, collapses when done)
   - empty state, floating "+ Habit"
-- [ ] `HabitCard` with `ToggleControl`, `CounterControl` (400 ms debounce, summed delta, tap the value to type it) and `DurationControl`
+- [x] `HabitCard` with `ToggleControl`, `CounterControl` (400 ms debounce, summed delta, tap the value to type it) and `DurationControl`
   - streak, goal and core stripe
   - kebab menu: edit, stats, archive
-- [ ] Optimistic updates with rollback, and the server result merged on success (plan 7.3)
-- [ ] **Duration timer** (Zustand, persisted):
+- [x] Optimistic updates with rollback, and the server result merged on success (plan 7.3)
+- [x] **Duration timer** (Zustand, persisted):
   - one timer at a time
   - live elapsed time on the card and in the shell
   - midnight credits the start date
@@ -240,12 +244,12 @@ W4 holds most of the web risk: optimistic updates, debounced counters and the ti
 
 **Tests**
 
-- [ ] Optimistic rollback on error
-- [ ] Debounce sums taps
-- [ ] The timer survives a reload
-- [ ] Midnight and 6-hour cases (fake timers)
-- [ ] Backfill dates
-- [ ] Playwright: log a toggle, a count with `+` and a duration with start/stop; reload; values persist; backfill yesterday and the streak updates
+- [x] Optimistic rollback on error
+- [x] Debounce sums taps
+- [x] The timer survives a reload
+- [x] Midnight and 6-hour cases
+- [x] Backfill dates
+- [x] Playwright: log a toggle, a count with `+` and a duration with start/stop; reload; values persist; backfill yesterday and the streak updates
 
 **Done when:** you can log every habit type for today and the past 6 days, and progress and streaks update instantly and stay correct after a reload.
 
