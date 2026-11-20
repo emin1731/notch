@@ -18,6 +18,7 @@ import {
   undoneMessage,
 } from '@/lib/change-format';
 import { cn } from '@/lib/utils';
+import { closingLine } from '@/features/review/copy';
 
 /**
  * "↑ 50 → 55 min" on a habit whose target moved this week (plan 2.8). The popover says why, and
@@ -53,7 +54,7 @@ export function TargetChangeBadge({ habit }: { habit: TodayHabit }) {
           <PopoverTitle>{reasonForKind(change.kind)}</PopoverTitle>
           <PopoverDescription>
             {movedText(change, habit)}
-            {!up && " This isn't a step back."}
+            {` ${closingLine(change.kind)}`}
           </PopoverDescription>
         </PopoverHeader>
         {change.canUndo ? (

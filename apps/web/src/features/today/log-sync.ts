@@ -12,6 +12,7 @@ import { apiErrorMessage, FALLBACK_FORM_MESSAGE } from '@/lib/forms';
 import { invalidate, queryKeys } from '@/lib/query-keys';
 import { logsApi } from './api';
 import { allHabits, mergeWriteResult, type Overrides, overrideKey } from './today-model';
+import { TODAY_COPY } from './copy';
 
 /** Counter taps within this long of each other go out as one increment. */
 export const TAP_DEBOUNCE_MS = 400;
@@ -72,7 +73,7 @@ export interface LogSync {
   reset: () => void;
 }
 
-const SAVE_FAILED = "Couldn't save that. Check your connection and try again.";
+const SAVE_FAILED = TODAY_COPY.saveFailed;
 
 /**
  * Logging that feels instant and stays correct (plan 7.3): values show at once through

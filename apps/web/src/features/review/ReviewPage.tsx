@@ -34,6 +34,7 @@ import {
   undoneMessage,
   weekRangeTitle,
 } from '@/lib/change-format';
+import { closingLine, REVIEW_COPY } from './copy';
 import { useLatestReview, useMarkSeen, useReview, useReviewList, useUndoChange } from './hooks';
 
 /** `/review` is the latest review; `/review/:weekStart` an earlier one (plan 7.5). */
@@ -127,7 +128,7 @@ function ReviewView({ review }: { review: ReviewDto }) {
       {review.inactive ? (
         <div className="flex items-start gap-3 rounded-xl border bg-card p-4 text-sm">
           <Hand className="mt-0.5 size-5 shrink-0 text-muted-foreground" aria-hidden="true" />
-          <p>You were away last week. Nothing changed. Pick up where you left off.</p>
+          <p>{REVIEW_COPY.inactiveWeek}</p>
         </div>
       ) : (
         <div className="flex flex-col gap-8">
@@ -156,9 +157,7 @@ function ReviewView({ review }: { review: ReviewDto }) {
             </ChangeSection>
           )}
           {review.changes.length === 0 && (
-            <p className="text-sm text-muted-foreground">
-              No targets changed this week. Solid weeks add up: keep going.
-            </p>
+            <p className="text-sm text-muted-foreground">{REVIEW_COPY.noChanges}</p>
           )}
           {steady.length > 0 && <HoldingSteady entries={steady} />}
         </div>
@@ -215,7 +214,7 @@ function ChangeCard({
       </div>
       <p className="text-muted-foreground">
         {reasonForKind(change.kind)}
-        {rates && `. ${rates}`}.{change.kind === 'DELOAD' && " This isn't a step back."}
+        {rates && `. ${rates}`}. {closingLine(change.kind)}
       </p>
       {change.undoneAt !== null ? (
         <Badge variant="secondary" className="self-start">

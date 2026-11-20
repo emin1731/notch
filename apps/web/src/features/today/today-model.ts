@@ -10,6 +10,7 @@ import {
   type TodayResponse,
   weekStartOf,
 } from '@notch/shared';
+import { TODAY_COPY } from './copy';
 
 /** Unsaved values shown in place of the server's, keyed by `overrideKey(date, habitId)`. */
 export type Overrides = Readonly<Record<string, number>>;
@@ -101,15 +102,15 @@ export function progressMessage(dayProgress: number | null): string | null {
     return null;
   }
   if (dayProgress === 0) {
-    return 'Fresh day. Start with the easiest one.';
+    return TODAY_COPY.progress.none;
   }
   if (dayProgress < 0.5) {
-    return "Momentum's started. Keep it going.";
+    return TODAY_COPY.progress.started;
   }
   if (dayProgress < 1) {
-    return 'More than halfway. Finish strong.';
+    return TODAY_COPY.progress.halfway;
   }
-  return "Everything done. That's how it's built.";
+  return TODAY_COPY.progress.done;
 }
 
 /** The earliest day that can still be logged. */
@@ -136,6 +137,6 @@ export function backfillNote(date: LocalDate, today: LocalDate): string | null {
   }
   const day = weekdayName(date);
   return weekStartOf(date) < weekStartOf(today)
-    ? `Logging for ${day}. Last week's review won't change.`
-    : `Logging for ${day}.`;
+    ? TODAY_COPY.backfillEarlierWeek(day)
+    : TODAY_COPY.backfill(day);
 }
