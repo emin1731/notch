@@ -6,6 +6,7 @@ export * from './enums.js';
 export * from './errors.js';
 export * from './goals/goal-progress.js';
 export * from './habits/shape.js';
+export * from './habits/templates.js';
 export * from './progress/history.js';
 export * from './progress/progress.js';
 export * from './progress/streaks.js';
