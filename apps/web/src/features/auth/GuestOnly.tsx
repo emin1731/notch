@@ -1,4 +1,5 @@
 import { Navigate, Outlet, useLocation } from 'react-router';
+import { FullScreenLoading } from '@/components/FullScreenLoading';
 import { ServerErrorScreen } from '@/components/ServerErrorScreen';
 import { useAuth } from './auth-context';
 import { returnPath } from './return-to';
@@ -12,7 +13,7 @@ export function GuestOnly() {
   const location = useLocation();
 
   if (status === 'loading') {
-    return null;
+    return <FullScreenLoading />;
   }
   if (status === 'error') {
     return <ServerErrorScreen />;

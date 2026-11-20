@@ -127,7 +127,7 @@ describe('review page', () => {
     );
     expect(
       within(screen.getByRole('article', { name: 'Read' })).getByText(
-        "You've already logged at the new level.",
+        "You've already logged at the new target, so this one's locked in.",
       ),
     ).toBeInTheDocument();
     await user.click(within(card).getByRole('button', { name: 'Undo' }));

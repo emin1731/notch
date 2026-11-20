@@ -11,6 +11,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { coreStyle } from '@/lib/core-colors';
+import { GOALS_COPY } from './copy';
 
 const REDUCED_MOTION = '(prefers-reduced-motion: reduce)';
 
@@ -70,8 +71,10 @@ export function CelebrationModal({
           <div className="mb-3 flex size-16 items-center justify-center rounded-full bg-(--core)/15 text-(--core)">
             <Trophy className="size-8" aria-hidden="true" />
           </div>
-          <DialogTitle className="text-xl text-balance">Goal done: {goal.title}</DialogTitle>
-          <DialogDescription>That's real change, not a checkbox.</DialogDescription>
+          <DialogTitle className="text-xl text-balance">
+            {GOALS_COPY.completedTitle(goal.title)}
+          </DialogTitle>
+          <DialogDescription>{GOALS_COPY.completedLine}</DialogDescription>
         </DialogHeader>
         <DialogFooter className="sm:justify-center">
           <Button variant="outline" onClick={onArchive}>

@@ -1,5 +1,6 @@
 import type { UserDto } from '@notch/shared';
 import type { QueryClient } from '@tanstack/react-query';
+import { useOnboarding } from '@/features/onboarding/onboarding-store';
 import { useOverrides } from '@/features/today/log-sync';
 import { useTimer } from '@/features/today/timer';
 import { queryKeys } from '@/lib/query-keys';
@@ -15,8 +16,9 @@ export function startSession(client: QueryClient, user: UserDto): void {
  */
 export function endSession(client: QueryClient): void {
   client.removeQueries({ predicate: (query) => query.queryKey[0] !== queryKeys.me[0] });
-  // Unsaved log values and a running timer belong to this user too.
+  // Unsaved log values, a running timer and an onboarding draft belong to this user too.
   useOverrides.getState().clear();
   useTimer.getState().clear();
+  useOnboarding.getState().reset();
   client.setQueryData(queryKeys.me, null);
 }

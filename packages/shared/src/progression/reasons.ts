@@ -18,6 +18,6 @@ export const UNDO_BLOCK_REASON_TEXT: Record<UndoBlockReason, string> = {
   NOT_AUTOMATIC: 'Only automatic changes can be undone',
   ALREADY_UNDONE: 'Already undone',
   EXPIRED: 'Undo was available until the end of that week',
-  ALREADY_LOGGED: "You've already logged at the new level",
+  ALREADY_LOGGED: "You've already logged at the new target, so this one's locked in",
   CHANGED_SINCE: 'You changed this habit yourself since then',
 };

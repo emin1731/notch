@@ -47,6 +47,13 @@ export function MilestoneList({
 
   return (
     <div className="flex flex-col gap-3">
+      {goal.milestones.length === 0 && (
+        <p className="text-sm text-muted-foreground">
+          {readOnly
+            ? 'No milestones.'
+            : 'No milestones yet. Break the goal into steps to see your progress.'}
+        </p>
+      )}
       {goal.milestones.length > 0 && (
         <SortableList
           items={goal.milestones}

@@ -1,6 +1,7 @@
 import type { TodayResponse } from '@notch/shared';
 import { ArrowRight, CalendarCheck, Hand } from 'lucide-react';
 import { Link } from 'react-router';
+import { REVIEW_COPY } from '@/features/review/copy';
 import { useLatestReview } from '@/features/review/hooks';
 import { reviewSummaryText } from '@/lib/change-format';
 
@@ -28,9 +29,7 @@ export function ReviewBanner({ today }: { today: TodayResponse }) {
         <CalendarCheck className="size-5 shrink-0 text-muted-foreground" aria-hidden="true" />
       )}
       <span className="min-w-0 flex-1">
-        {today.welcomeBack
-          ? 'You were away last week. Nothing changed. Pick up where you left off.'
-          : reviewSummaryText(changes)}
+        {today.welcomeBack ? REVIEW_COPY.inactiveWeek : reviewSummaryText(changes)}
       </span>
       <span className="flex shrink-0 items-center gap-1 font-medium">
         See review

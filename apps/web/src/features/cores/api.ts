@@ -4,6 +4,8 @@ import { api } from '@/lib/api-client';
 export const coresApi = {
   list: (includeArchived: boolean) => api.get<CoreDto[]>('/cores', { query: { includeArchived } }),
   create: (input: CreateCoreInput) => api.post<CoreDto>('/cores', input),
+  /** Several at once, in order, all or nothing (onboarding). */
+  batch: (cores: CreateCoreInput[]) => api.post<CoreDto[]>('/cores/batch', { cores }),
   update: (id: string, input: UpdateCoreInput) => api.patch<CoreDto>(`/cores/${id}`, input),
   /** The listed cores first, in this order; the rest keep theirs after them. */
   order: (ids: string[]) => api.put<CoreDto[]>('/cores/order', { ids }),

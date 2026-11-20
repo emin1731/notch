@@ -40,7 +40,9 @@ test('logging at the new level locks the undo', async ({ page }) => {
   await expect(async () => {
     await page.keyboard.press('Escape');
     await deepWork.getByRole('button', { name: /Eased off/ }).click();
-    await expect(page.getByRole('dialog')).toContainText("You've already logged at the new level.");
+    await expect(page.getByRole('dialog')).toContainText(
+      "You've already logged at the new target, so this one's locked in.",
+    );
   }).toPass({ timeout: 10_000 });
   await expect(page.getByRole('dialog').getByRole('button', { name: 'Undo' })).toHaveCount(0);
 });

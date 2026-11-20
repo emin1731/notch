@@ -1,4 +1,5 @@
 import { Navigate, Outlet, useLocation } from 'react-router';
+import { FullScreenLoading } from '@/components/FullScreenLoading';
 import { ServerErrorScreen } from '@/components/ServerErrorScreen';
 import { useAuth } from './auth-context';
 import type { ReturnState } from './return-to';
@@ -9,7 +10,7 @@ export function RequireAuth() {
   const location = useLocation();
 
   if (status === 'loading') {
-    return null;
+    return <FullScreenLoading />;
   }
   if (status === 'error') {
     return <ServerErrorScreen />;

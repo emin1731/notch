@@ -1046,10 +1046,10 @@ Four steps with a progress indicator. State is held locally and submitted at the
 
 1. **Your cores:** preset chips (Health, Career, Mind, Relationships, Finance, Learning) plus "Add your own". At least one is required. Each core can have its color and icon edited.
 2. **A goal (optional):** pick a core, write a goal title, optionally set a deadline, and add milestones as a quick list. A "Skip for now" link is available.
-3. **First habits:** suggested templates per selected core (e.g. Health: "Walk 20 min", "Drink 8 glasses"; Mind: "Meditate 5 min"). Users can also create a habit from scratch with a compact version of the habit form. The UI gently recommends 2–3 habits and soft-warns above 5 ("Starting small makes it stick. You can add more later.").
+3. **First habits:** suggested templates per selected core (e.g. Health: "Walk 20 min", "Drink 8 glasses"; Mind: "Meditate 5 min"). Users can also create a habit from scratch with a compact version of the habit form. The UI gently recommends 2–3 habits and soft-warns above 5 ("Starting small makes it stick. You can add more anytime.").
 4. **How it works:** one screen explaining levels in plain words: "Hit a habit consistently for two weeks and its target goes up a little. Have a rough week and it eases off. You can always undo."
 
-**Submit:** `POST /cores/batch`, then the goal and milestones, then the habits, then `POST /me/onboarding/complete`, then navigate to `/today`. If a step fails, the user stays on it and the data already created is reused on retry. Track created ids in state so nothing is duplicated.
+**Submit:** `POST /cores/batch`, then the goal and milestones, then the habits, then `POST /me/onboarding/complete`, then navigate to `/today`. If a step fails, the user stays on it and the data already created is reused on retry. Track created ids in state so nothing is duplicated. The draft and those ids are kept in sessionStorage (per user), so a reload mid-way resumes too. An account that already has cores can skip onboarding ("I'm already set up").
 
 #### Today (`/today`)
 
@@ -1151,9 +1151,10 @@ On a goal's page, "Add habit" opens this form with the goal preselected, and "Li
 Sections:
 
 - **Profile:** name, username (read-only).
-- **Timezone:** select, prefilled from the browser. Shows a warning if the browser timezone differs from the saved one ("Your device is on Asia/Baku but your account uses UTC. Update?").
+- **Timezone:** select, prefilled from the browser. Shows a warning if the browser timezone differs from the saved one ("Your device is on Asia/Baku but your account uses UTC. Update?"). Today shows the same prompt as a banner; "Not now" is remembered for that device timezone.
 - **Password:** change password.
 - **Archived:** archived cores, goals and habits, each with an Unarchive action.
+- **Theme:** light, dark or system.
 - **Danger zone:** log out of all devices (`POST /auth/logout-all`), delete account (requires the password).
 
 ### 7.6 Shared UI components

@@ -334,31 +334,35 @@ W4 holds most of the web risk: optimistic updates, debounced counters and the ti
 
 **Goal:** a new user goes from sign-up to a populated Today in under two minutes, and every state has intentional copy. Spec: plan 7.5 "Onboarding" and "Settings", section 14.
 
-**Decide**
+**Decided**
 
-- [ ] **Habit templates.** Recommendation: 2–3 per core preset in `@notch/shared` (`HABIT_TEMPLATES`), each a valid `CreateHabitInput` without the core, so the server validates them like any habit.
+- [x] **Habit templates:** 2–3 per core preset in `@notch/shared` (`HABIT_TEMPLATES`), each a habit input without the core; a shared test parses every one through `createHabitSchema`, so the server accepts them. Custom cores get none; the compact form covers them.
+- [x] **Resumable submission:** the draft and the ids already created live in sessionStorage, keyed by user. Cores (one batch), the goal and each habit are created in order, skipping what's recorded; a failure lands on its step with "Try again", so a retry or a reload never duplicates anything.
+- [x] **Timezone mismatch:** in Settings (plan) and as a dismissible banner on Today, since Settings is rarely open while travelling. "Not now" is remembered for that device timezone.
+- [x] **Copy pass:** every screen checked against section 14 and fixed in place; the section 14 moments and W7's new strings live in `features/*/copy.ts`. "You can add more anytime" (section 14) over 7.5's "later". Holding steady keeps the decision's own reason, since "one more like it and this levels up" isn't true after a middling week.
 
 **App**
 
-- [ ] Onboarding in 4 steps: cores, an optional goal, first habits (templates or a compact form, soft warning above 5), and how levels work
+- [x] Onboarding in 4 steps, outside the app shell: cores (preset toggles, your own with color and icon), an optional goal with milestones, first habits (suggestions or a compact form, soft warning above 5), and how levels work
   - resumable submission: created ids are kept, so a retry never duplicates anything
-- [ ] `RequireOnboarded`; CLI-created users are sent to onboarding once
-- [ ] Settings:
+  - an account that already has cores can skip it ("I'm already set up")
+- [x] `RequireOnboarded` (and `/onboarding` sends onboarded users to Today); CLI-created and registered users both start there
+- [x] Settings:
   - profile
   - timezone, with the "your device is on …" mismatch prompt
   - password
-  - archived cores, goals and habits with unarchive
+  - archived cores, goals and habits with unarchive (a goal or habit waits for its core)
   - theme override
   - log out everywhere, delete account
-- [ ] **Copy pass:** strings in `features/*/copy.ts`, checked against section 14
-- [ ] A skeleton, empty and error state audit on every page
+- [x] **Copy pass:** strings in `features/*/copy.ts`, checked against section 14
+- [x] A skeleton, empty and error state audit on every page: a route error page (with "notch was updated, reload" for a stale tab), a delayed spinner while the session loads, a goal with no milestones, Archive / Unarchive on the habit page
 
 **Tests**
 
-- [ ] Onboarding retry after a failed step doesn't duplicate anything
-- [ ] Timezone mismatch prompt
-- [ ] Delete account
-- [ ] Playwright: register → onboarding (2 cores, a goal with 3 milestones, 3 habits) → Today
+- [x] Onboarding retry after a failed step doesn't duplicate anything
+- [x] Timezone mismatch prompt
+- [x] Delete account
+- [x] Playwright: register → onboarding (2 cores, a goal with 3 milestones, 3 habits) → Today
 
 **Done when:** sign-up to a populated Today takes under two minutes, and no screen shows a raw error or an unstyled empty state.
 

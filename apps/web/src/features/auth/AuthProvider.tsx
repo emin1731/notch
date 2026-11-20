@@ -33,6 +33,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     endSession(client);
   }, [client]);
 
+  const signedOut = useCallback(() => {
+    setLoggedOut(true);
+    endSession(client);
+  }, [client]);
+
   const { data, isError, isFetching, refetch } = me;
   const value = useMemo<AuthState>(() => {
     const status: AuthStatus =
@@ -43,9 +48,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       retry: () => void refetch(),
       retrying: isError && isFetching,
       logout,
+      signedOut,
       loggedOut,
     };
-  }, [data, isError, isFetching, refetch, logout, loggedOut]);
+  }, [data, isError, isFetching, refetch, logout, signedOut, loggedOut]);
 
   return <AuthContext value={value}>{children}</AuthContext>;
 }

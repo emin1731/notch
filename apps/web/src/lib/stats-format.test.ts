@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { dateRangeText, percent, streakResetText, streakText, totalText } from './stats-format';
+import { streakResetText } from '@/features/habits/copy';
+import { dateRangeText, percent, streakText, totalText } from './stats-format';
 
 describe('stats format', () => {
   it('rounds rates, and says "—" when there was nothing to count', () => {

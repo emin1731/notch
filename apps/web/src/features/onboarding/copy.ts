@@ -1,0 +1,40 @@
+/** Onboarding's words (plan 7.5 and section 14). */
+export const ONBOARDING_COPY = {
+  steps: ['Your cores', 'A goal', 'First habits', 'How it works'],
+  cores: {
+    title: 'What do you want to grow in?',
+    intro:
+      'Cores are the areas of your life you want to work on. Pick a few, or make your own. Goals and habits live in them.',
+    needOne: 'Pick at least one core to continue.',
+    alreadySetUp: (count: number) =>
+      `You already have ${count} ${count === 1 ? 'core' : 'cores'}. Skip the setup and go to Today.`,
+  },
+  goal: {
+    title: 'Something to aim for',
+    intro:
+      'A goal is something you want to achieve, like running a half marathon. Break it into milestones to see your progress. Optional.',
+  },
+  habits: {
+    title: 'Your first habits',
+    intro:
+      'Habits are what you do day to day. Two or three is a good start: pick from the suggestions or make your own.',
+    tooMany: 'Starting small makes it stick. You can add more anytime.',
+  },
+  howItWorks: {
+    title: 'How levels work',
+    body: 'Hit a habit consistently for two weeks and its target goes up a little. Have a rough week and it eases off. You can always undo.',
+    points: [
+      'Every Monday, notch looks back at your week.',
+      'Two strong weeks in a row: the target moves up a step.',
+      'A rough week: it eases off, so you can rebuild. This isn’t a step back.',
+      'Every change shows on Today, with an Undo while you haven’t logged at the new target.',
+    ],
+  },
+  failed: {
+    cores: 'Couldn’t save your cores.',
+    goal: 'Couldn’t save your goal.',
+    habits: 'Couldn’t save your habits.',
+    complete: 'Couldn’t finish the setup.',
+  },
+  saved: 'Saved. You can change it later in Cores & Goals.',
+} as const;

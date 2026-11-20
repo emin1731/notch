@@ -10,6 +10,7 @@ import { HabitCard } from './HabitCard';
 import { useTodayView } from './hooks';
 import { ProgressRing } from './ProgressRing';
 import { ReviewBanner } from './ReviewBanner';
+import { TimezoneBanner } from './TimezoneBanner';
 import { backfillNote, clampDate, progressMessage, weekdayName } from './today-model';
 
 const GROUP_TITLES: Record<TimeOfDay, string> = {
@@ -57,6 +58,7 @@ function Day({
           <DateNavigator date={date} today={today} onChange={onNavigate} />
         </div>
         {note && <p className="text-sm text-muted-foreground">{note}</p>}
+        {isToday && <TimezoneBanner />}
         {isToday && view && <ReviewBanner today={view} />}
         {view && view.dayProgress !== null && (
           <div className="flex items-center gap-4 rounded-xl border bg-card p-4">

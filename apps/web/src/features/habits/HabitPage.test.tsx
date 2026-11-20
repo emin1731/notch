@@ -357,3 +357,25 @@ function dateText(date: string) {
     timeZone: 'UTC',
   });
 }
+
+describe('habit page: archiving', () => {
+  it('archives the habit and brings it back', async () => {
+    signedIn();
+    setup(deepWork, days());
+    const user = userEvent.setup();
+    renderApp(`/habits/${deepWork.id}`);
+
+    await user.click(await screen.findByRole('button', { name: 'Archive' }));
+    expect(
+      await screen.findByText('Deep work is archived. It no longer shows on Today.'),
+    ).toBeInTheDocument();
+    expect(await screen.findByText('Archived')).toBeInTheDocument();
+    expect(
+      within(screen.getByRole('region', { name: 'Last 14 days' })).queryAllByRole('spinbutton'),
+    ).toHaveLength(0);
+
+    await user.click(screen.getByRole('button', { name: 'Unarchive' }));
+    expect(await screen.findByText('Deep work is back.')).toBeInTheDocument();
+    await waitFor(() => expect(screen.queryByText('Archived')).not.toBeInTheDocument());
+  });
+});
