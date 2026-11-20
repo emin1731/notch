@@ -35,7 +35,9 @@ test('the stats page shows the API’s numbers at every range', async ({ page })
     await expect(page).toHaveURL(new RegExp(`range=${range}`));
     const data = await get<StatsOverviewDto>(page, `/stats/overview?range=${range}`);
     const numbers = page.getByLabel('Key numbers');
-    await expect(numbers).toContainText(`Completion${percent(data.overallRate)}`);
+    await expect(page.getByRole('region', { name: 'Completion over time' })).toContainText(
+      `${percent(data.overallRate)}of what you planned`,
+    );
     await expect(numbers).toContainText(`Best streak${data.topStreaks[0]?.currentStreak ?? '—'}`);
     await expect(numbers).toContainText(`Goals completed${data.goals.completedInRange}`);
     await expect(

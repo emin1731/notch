@@ -53,16 +53,18 @@ export function HabitRow({
   const Icon = HABIT_TYPE_ICONS[habit.type];
   const archived = habit.archivedAt !== null;
   return (
-    <div className={cn('flex items-center gap-1 rounded-lg', archived && 'opacity-60')}>
+    <div className={cn('flex items-center gap-1 rounded-2xl', archived && 'opacity-60')}>
       {handle}
       <Link
         to={`/habits/${habit.id}`}
-        className="flex min-w-0 flex-1 items-center gap-2.5 rounded-lg px-2 py-1.5 hover:bg-muted/60 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+        className="flex min-w-0 flex-1 items-center gap-4 rounded-2xl px-3 py-2.5 transition-colors hover:bg-muted/70 focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none"
       >
-        <Icon className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
-        <span className="flex min-w-0 flex-col">
-          <span className="truncate text-sm font-medium">{habit.name}</span>
-          <span className="truncate text-xs text-muted-foreground">{habitSummary(habit)}</span>
+        <span className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-muted">
+          <Icon className="size-5" aria-hidden="true" />
+        </span>
+        <span className="flex min-w-0 flex-col gap-0.5">
+          <span className="truncate text-[0.9375rem] font-medium">{habit.name}</span>
+          <span className="truncate text-sm text-muted-foreground">{habitSummary(habit)}</span>
         </span>
       </Link>
       {archived && <Badge variant="secondary">Archived</Badge>}

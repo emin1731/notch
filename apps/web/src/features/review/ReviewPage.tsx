@@ -126,8 +126,8 @@ function ReviewView({ review }: { review: ReviewDto }) {
       />
 
       {review.inactive ? (
-        <div className="flex items-start gap-3 rounded-xl border bg-card p-4 text-sm">
-          <Hand className="mt-0.5 size-5 shrink-0 text-muted-foreground" aria-hidden="true" />
+        <div className="flex items-start gap-3 rounded-3xl bg-card p-5 text-sm sm:p-6">
+          <Hand className="mt-0.5 size-5 shrink-0" aria-hidden="true" />
           <p>{REVIEW_COPY.inactiveWeek}</p>
         </div>
       ) : (
@@ -178,9 +178,9 @@ function ChangeSection({
   children: React.ReactNode;
 }) {
   return (
-    <section aria-label={title} className="flex flex-col gap-2">
-      <h2 className="flex items-center gap-2 font-medium">
-        <Icon className="size-4 text-muted-foreground" aria-hidden="true" />
+    <section aria-label={title} className="flex flex-col gap-3">
+      <h2 className="flex items-center gap-2 px-1 text-xl font-semibold tracking-tight">
+        <Icon className="size-5" aria-hidden="true" />
         {title}
       </h2>
       {children}
@@ -206,11 +206,13 @@ function ChangeCard({
   return (
     <article
       aria-label={change.habitName}
-      className="flex flex-col gap-2 rounded-xl border bg-card p-4 text-sm"
+      className="flex flex-col gap-2 rounded-3xl bg-card p-5 text-sm sm:p-6"
     >
       <div className="flex flex-wrap items-baseline justify-between gap-2">
-        <h3 className="font-medium">{change.habitName}</h3>
-        <span className="font-medium tabular-nums">{changeValues(change, units)}</span>
+        <h3 className="text-[0.9375rem] font-semibold">{change.habitName}</h3>
+        <span className="text-[0.9375rem] font-semibold tabular-nums">
+          {changeValues(change, units)}
+        </span>
       </div>
       <p className="text-muted-foreground">
         {reasonForKind(change.kind)}
@@ -245,19 +247,19 @@ function ChangeCard({
 
 function HoldingSteady({ entries }: { entries: readonly SummaryHabit[] }) {
   return (
-    <details className="group rounded-xl border">
-      <summary className="flex cursor-pointer list-none items-center gap-2 px-4 py-3 text-sm font-medium focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none [&::-webkit-details-marker]:hidden">
+    <details className="group rounded-3xl bg-card">
+      <summary className="flex cursor-pointer list-none items-center gap-2 rounded-3xl px-5 py-4 text-[0.9375rem] font-medium focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none sm:px-6 [&::-webkit-details-marker]:hidden">
         <ChevronRight
           className="size-4 transition-transform group-open:rotate-90"
           aria-hidden="true"
         />
         Holding steady ({entries.length})
       </summary>
-      <ul className="flex flex-col divide-y border-t">
+      <ul className="flex flex-col divide-y px-1 pb-2">
         {entries.map((entry) => (
           <li
             key={entry.habitId}
-            className="flex items-baseline justify-between gap-3 px-4 py-2.5 text-sm"
+            className="flex items-baseline justify-between gap-3 px-4 py-3 text-sm sm:px-5"
           >
             <span className="min-w-0">
               <span className="font-medium">{entry.name}</span>
@@ -286,9 +288,9 @@ function PastReviews({ currentId }: { currentId: string }) {
     return null;
   }
   return (
-    <section aria-label="Past reviews" className="mt-10 flex flex-col gap-2">
-      <h2 className="font-medium">Past reviews</h2>
-      <ul className="flex flex-col divide-y rounded-xl border">
+    <section aria-label="Past reviews" className="mt-10 flex flex-col gap-3">
+      <h2 className="px-1 text-xl font-semibold tracking-tight">Past reviews</h2>
+      <ul className="flex flex-col rounded-3xl bg-card p-2 sm:p-3">
         {reviews.map((review) => {
           const up = review.changes.filter((change) => change.kind === 'LEVEL_UP').length;
           const down = review.changes.filter((change) => change.kind === 'DELOAD').length;
@@ -297,21 +299,32 @@ function PastReviews({ currentId }: { currentId: string }) {
             : [up > 0 && `${up} up`, down > 0 && `${down} eased off`].filter(Boolean).join(' · ') ||
               'No changes';
           return (
-            <li key={review.id}>
+            <li
+              key={review.id}
+              className="[&+li]:before:ml-[4.25rem] [&+li]:before:block [&+li]:before:h-px [&+li]:before:bg-border"
+            >
               <Link
                 to={`/review/${review.weekStart}`}
-                className="flex items-center justify-between gap-3 px-4 py-3 text-sm hover:bg-muted/50 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+                className="flex items-center gap-4 rounded-2xl px-3 py-3 transition-colors hover:bg-muted/70 focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none"
               >
-                <span className="font-medium">{weekRangeTitle(review.weekStart)}</span>
-                <span className="flex shrink-0 items-center gap-3 whitespace-nowrap text-muted-foreground">
-                  {detail}
-                  {review.summary.overallRate !== null && (
-                    <span className="tabular-nums">
-                      {Math.round(review.summary.overallRate * 100)}%
-                    </span>
-                  )}
-                  <ChevronRight className="size-4" aria-hidden="true" />
+                <span className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-muted">
+                  <CalendarCheck className="size-5" aria-hidden="true" />
                 </span>
+                <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+                  <span className="truncate text-[0.9375rem] font-medium">
+                    {weekRangeTitle(review.weekStart)}
+                  </span>
+                  <span className="truncate text-sm text-muted-foreground">{detail}</span>
+                </span>
+                {review.summary.overallRate !== null && (
+                  <span className="shrink-0 font-semibold tabular-nums">
+                    {Math.round(review.summary.overallRate * 100)}%
+                  </span>
+                )}
+                <ChevronRight
+                  className="size-4 shrink-0 text-muted-foreground"
+                  aria-hidden="true"
+                />
               </Link>
             </li>
           );
@@ -319,7 +332,7 @@ function PastReviews({ currentId }: { currentId: string }) {
       </ul>
       {list.hasNextPage && (
         <Button
-          variant="ghost"
+          variant="surface"
           size="sm"
           className="self-start"
           disabled={list.isFetchingNextPage}
@@ -336,8 +349,8 @@ function ReviewSkeleton() {
   return (
     <div className="flex flex-col gap-4" aria-busy="true" aria-label="Loading the review">
       <Skeleton className="h-8 w-56" />
-      <Skeleton className="h-24 rounded-xl" />
-      <Skeleton className="h-24 rounded-xl" />
+      <Skeleton className="h-28 rounded-3xl" />
+      <Skeleton className="h-28 rounded-3xl" />
     </div>
   );
 }

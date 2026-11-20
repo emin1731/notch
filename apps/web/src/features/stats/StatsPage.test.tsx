@@ -72,6 +72,7 @@ const overview = statsOverview({
 });
 
 const keyNumbers = () => screen.findByLabelText('Key numbers');
+const completion = () => screen.findByRole('region', { name: 'Completion over time' });
 
 describe('stats page', () => {
   beforeEach(() => {
@@ -83,8 +84,8 @@ describe('stats page', () => {
     mockStatsApi({ overview });
     renderApp('/stats');
 
+    expect(await completion()).toHaveTextContent('87%of what you planned');
     const numbers = await keyNumbers();
-    expect(numbers).toHaveTextContent('Completion87%of what you planned');
     expect(numbers).toHaveTextContent('Best streak16days · Journal');
     expect(numbers).toHaveTextContent('Goals completed21 active');
     expect(within(numbers).getByLabelText('3 up, 1 eased off')).toBeInTheDocument();
@@ -121,10 +122,10 @@ describe('stats page', () => {
     const user = userEvent.setup();
     const { router } = renderApp('/stats');
 
-    expect(await keyNumbers()).toHaveTextContent('Completion90%');
+    expect(await completion()).toHaveTextContent('90%');
     await user.click(screen.getByRole('radio', { name: '90 days' }));
 
-    await waitFor(async () => expect(await keyNumbers()).toHaveTextContent('Completion60%'));
+    await waitFor(async () => expect(await completion()).toHaveTextContent('60%'));
     expect(router.state.location.search).toBe('?range=90d');
     expect(api.ranges).toEqual(['30d', '90d']);
   });
@@ -193,7 +194,7 @@ describe('stats page', () => {
     renderApp('/stats');
 
     await user.click(await screen.findByRole('button', { name: 'Try again' }));
-    expect(await keyNumbers()).toHaveTextContent('Completion87%');
+    expect(await completion()).toHaveTextContent('87%');
   });
 });
 

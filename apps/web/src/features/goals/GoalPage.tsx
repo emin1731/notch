@@ -2,7 +2,6 @@ import type { GoalDto } from '@notch/shared';
 import {
   Archive,
   ArchiveRestore,
-  ArrowLeft,
   CircleCheck,
   Link2,
   MoreHorizontal,
@@ -16,10 +15,12 @@ import {
 import { useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router';
 import { toast } from 'sonner';
+import { BackLink } from '@/components/BackLink';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { CoreChip } from '@/components/CoreChip';
 import { EmptyState } from '@/components/EmptyState';
 import { ProgressBar } from '@/components/ProgressBar';
+import { Section } from '@/components/Section';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
@@ -114,20 +115,14 @@ export default function GoalPage() {
 
   return (
     <>
-      <Link
-        to="/cores"
-        className="mb-4 inline-flex items-center gap-1 rounded text-sm text-muted-foreground hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
-      >
-        <ArrowLeft className="size-4" aria-hidden="true" />
-        Cores & Goals
-      </Link>
+      <BackLink to="/cores">Cores & Goals</BackLink>
 
-      <header className="mb-6 flex flex-col gap-3">
+      <header className="mb-8 flex flex-col gap-3">
         <div className="flex items-center justify-between gap-2">
           {core ? <CoreChip name={core.name} icon={core.icon} color={core.color} /> : <span />}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="icon-sm" aria-label="Goal actions">
+              <Button variant="surface" size="icon" aria-label="Goal actions">
                 <MoreHorizontal />
               </Button>
             </DropdownMenuTrigger>
@@ -157,7 +152,7 @@ export default function GoalPage() {
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
-          <h1 className="text-2xl font-semibold tracking-tight text-balance">{data.title}</h1>
+          <h1 className="text-3xl font-bold tracking-tight text-balance">{data.title}</h1>
           {archived ? (
             <Badge variant="secondary">Archived</Badge>
           ) : completed ? (
@@ -190,24 +185,20 @@ export default function GoalPage() {
           <ProgressBar
             done={data.milestoneCounts.done}
             total={data.milestoneCounts.total}
-            color={color}
             label={data.title}
           />
         )}
       </header>
 
       {archived && (
-        <p className="mb-4 rounded-lg bg-muted px-3 py-2 text-sm text-muted-foreground">
+        <p className="mb-6 rounded-2xl bg-card px-5 py-3 text-sm text-muted-foreground">
           This goal is archived. Unarchive it to make changes.
         </p>
       )}
 
-      <section aria-labelledby="milestones-heading" className="flex flex-col gap-3">
-        <h2 id="milestones-heading" className="font-medium">
-          Milestones
-        </h2>
+      <Section title="Milestones">
         {!hasMilestones && !archived && (
-          <div className="flex flex-col items-start gap-3 rounded-xl border border-dashed p-4">
+          <div className="flex flex-col items-start gap-3 rounded-3xl bg-card p-5 sm:p-6">
             <p className="text-sm text-muted-foreground">
               {completed
                 ? 'This goal is done. Add a milestone to keep working on it.'
@@ -229,37 +220,41 @@ export default function GoalPage() {
             )}
           </div>
         )}
-        <MilestoneList goal={data} onGoalCompleted={() => setCelebrating(true)} />
-      </section>
+        <div className="rounded-3xl bg-card p-3 sm:p-4">
+          <MilestoneList goal={data} onGoalCompleted={() => setCelebrating(true)} />
+        </div>
+      </Section>
 
-      <section aria-labelledby="habits-heading" className="mt-10 flex flex-col gap-3">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <h2 id="habits-heading" className="font-medium">
-            Habits
-          </h2>
-          {!archived && (
-            <div className="flex gap-1">
-              <Button variant="ghost" size="sm" onClick={() => setDialog('link')}>
+      <Section
+        title="Habits"
+        className="mt-10"
+        action={
+          !archived && (
+            <div className="flex gap-2">
+              <Button variant="surface" size="sm" onClick={() => setDialog('link')}>
                 <Link2 />
                 Link existing
               </Button>
-              <Button asChild variant="outline" size="sm">
+              <Button asChild size="sm">
                 <Link to={`/habits/new?coreId=${data.coreId}&goalId=${data.id}`}>
                   <Plus />
                   Add habit
                 </Link>
               </Button>
             </div>
+          )
+        }
+      >
+        <div className="rounded-3xl bg-card p-2 sm:p-3">
+          {linkedHabits.length > 0 ? (
+            <HabitList habits={linkedHabits} includeArchived unlinkable={!archived} />
+          ) : (
+            <p className="px-3 py-2 text-sm text-muted-foreground">
+              No habits yet. The small things you do each week are what move a goal.
+            </p>
           )}
         </div>
-        {linkedHabits.length > 0 ? (
-          <HabitList habits={linkedHabits} includeArchived unlinkable={!archived} />
-        ) : (
-          <p className="text-sm text-muted-foreground">
-            No habits yet. The small things you do each week are what move a goal.
-          </p>
-        )}
-      </section>
+      </Section>
 
       <CelebrationModal
         goal={data}

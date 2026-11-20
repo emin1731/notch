@@ -1,18 +1,12 @@
 import type { StatsOverviewDto } from '@notch/shared';
-import {
-  CartesianGrid,
-  Line,
-  LineChart,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis,
-} from 'recharts';
+import type { ReactNode } from 'react';
+import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { percent, shortDate } from '@/lib/stats-format';
 import { ChartCard, StatTable } from './ChartCard';
 
 type Daily = StatsOverviewDto['daily'];
 
+const dayOfMonth = (date: string) => String(Number(date.slice(8, 10)));
 const monthDay = (date: string) =>
   new Date(`${date}T00:00:00Z`).toLocaleDateString(undefined, {
     month: 'short',
@@ -33,73 +27,79 @@ function summaryOf(daily: Daily): string {
 }
 
 /**
- * The daily rate over the range: a gap where a day had nothing due (plan 7.5). It starts at the
- * first day with anything due, so a long range doesn't open on months before the first habit.
+ * The daily rate over the range as bars (plan 7.5), empty where a day had nothing due. It starts
+ * at the first day with anything due, so a long range doesn't open on months before the first
+ * habit.
  */
-export function CompletionChart({ daily: all }: { daily: Daily }) {
+export function CompletionChart({ daily: all, headline }: { daily: Daily; headline?: ReactNode }) {
   const firstRated = all.findIndex((day) => day.rate !== null);
   const daily = firstRated === -1 ? all : all.slice(firstRated);
   const data = daily.map((day) => ({
     date: day.date,
     rate: day.rate === null ? null : Math.round(day.rate * 100),
   }));
+  // A month or less reads as day numbers under each bar; longer ranges get dates now and then.
+  const short = data.length <= 31;
+  const barSize = Math.max(2, Math.min(8, Math.floor(480 / Math.max(data.length, 1)) - 6));
+
   return (
     <ChartCard
       title="Completion over time"
+      headline={headline}
       summary={summaryOf(daily)}
       chart={
-        <div className="h-52" aria-hidden="true">
+        <div className="h-64" aria-hidden="true">
           <ResponsiveContainer
             width="100%"
             height="100%"
-            initialDimension={{ width: 600, height: 208 }}
+            initialDimension={{ width: 600, height: 256 }}
           >
-            <LineChart data={data} margin={{ top: 8, right: 8, bottom: 0, left: -12 }}>
+            <BarChart data={data} margin={{ top: 8, right: 0, bottom: 0, left: 0 }}>
               <CartesianGrid vertical={false} stroke="var(--border)" />
               <XAxis
                 dataKey="date"
-                tickFormatter={monthDay}
+                tickFormatter={short ? dayOfMonth : monthDay}
                 tick={axisTick}
                 tickLine={false}
                 axisLine={false}
-                minTickGap={24}
+                interval="preserveStartEnd"
+                minTickGap={short ? 6 : 24}
               />
               <YAxis
+                orientation="right"
                 domain={[0, 100]}
                 ticks={[0, 50, 100]}
                 tickFormatter={(value: number) => `${value}%`}
                 tick={axisTick}
                 tickLine={false}
                 axisLine={false}
+                width={44}
               />
               <Tooltip
-                cursor={{ stroke: 'var(--border)' }}
+                cursor={{ fill: 'var(--muted)', radius: 6 }}
                 content={({ active, payload }) => {
                   const point = payload?.[0]?.payload as (typeof data)[number] | undefined;
                   if (!active || !point) {
                     return null;
                   }
                   return (
-                    <div className="rounded-md border bg-popover px-2.5 py-1.5 text-xs text-popover-foreground shadow-sm">
+                    <div className="rounded-xl bg-popover px-3 py-2 text-xs text-popover-foreground shadow-lg ring-1 ring-foreground/5">
                       <div className="font-medium">{shortDate(point.date)}</div>
-                      <div className="tabular-nums">
+                      <div className="text-muted-foreground tabular-nums">
                         {point.rate === null ? 'Nothing due' : `${point.rate}%`}
                       </div>
                     </div>
                   );
                 }}
               />
-              <Line
-                type="linear"
+              <Bar
                 dataKey="rate"
-                stroke="var(--primary)"
-                strokeWidth={2}
-                dot={data.length <= 31 ? { r: 2, fill: 'var(--primary)' } : false}
-                activeDot={{ r: 4 }}
-                connectNulls={false}
+                fill="var(--foreground)"
+                radius={[999, 999, 0, 0]}
+                barSize={barSize}
                 isAnimationActive={false}
               />
-            </LineChart>
+            </BarChart>
           </ResponsiveContainer>
         </div>
       }
