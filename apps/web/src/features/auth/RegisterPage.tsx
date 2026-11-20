@@ -9,14 +9,14 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader } from '@/co
 import { FieldDescription, FieldGroup } from '@/components/ui/field';
 import { applyServerError, useZodForm } from '@/lib/forms';
 import { useRegister } from './hooks';
-import { detectTimezone } from './timezone';
+import { deviceTimezone } from '@/lib/timezone';
 
 const FIELDS = ['username', 'password', 'name', 'inviteCode'] as const;
 
 export default function RegisterPage() {
   const location = useLocation();
   const register = useRegister();
-  const [timezone] = useState(detectTimezone);
+  const [timezone] = useState(deviceTimezone);
   const form = useZodForm(registerSchema, {
     // The timezone has no input: it's this device's, and can be changed later in Settings.
     defaultValues: { username: '', password: '', name: undefined, inviteCode: '', timezone },

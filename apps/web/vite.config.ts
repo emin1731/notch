@@ -27,5 +27,8 @@ export default defineConfig({
     // tests) they can pass the 5 s default. Each `findBy` still gives up after 5 s.
     testTimeout: 15_000,
     css: false,
+    // The device's timezone matches the test user's (src/test/auth.ts), wherever the tests run:
+    // otherwise Today offers to switch timezones in every test.
+    env: { TZ: 'Asia/Baku' },
   },
 });

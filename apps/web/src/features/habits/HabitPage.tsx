@@ -6,9 +6,19 @@ import {
   maxLogValue,
   type StatsRange,
 } from '@notch/shared';
-import { Flame, Lock, Pencil, SearchX, Trophy, TriangleAlert } from 'lucide-react';
+import {
+  Archive,
+  ArchiveRestore,
+  Flame,
+  Lock,
+  Pencil,
+  SearchX,
+  Trophy,
+  TriangleAlert,
+} from 'lucide-react';
 import { useState } from 'react';
 import { Link, useParams } from 'react-router';
+import { toast } from 'sonner';
 import { CoreChip } from '@/components/CoreChip';
 import { EmptyState } from '@/components/EmptyState';
 import { Badge } from '@/components/ui/badge';
@@ -26,10 +36,12 @@ import { levelUpsInWindow } from '@/features/stats/stats-model';
 import { TargetHistoryChart } from '@/features/stats/TargetHistoryChart';
 import { earliestDate } from '@/features/today/today-model';
 import { isApiError } from '@/lib/api-client';
+import { apiErrorMessage } from '@/lib/forms';
 import { formatTarget, scheduleText } from '@/lib/habit-format';
-import { percent, shortDate, streakResetText, streakText, totalText } from '@/lib/stats-format';
+import { percent, shortDate, streakText, totalText } from '@/lib/stats-format';
+import { streakResetText } from './copy';
 import { useToday } from '@/lib/use-today';
-import { useHabit } from './hooks';
+import { useArchiveHabit, useHabit } from './hooks';
 
 const HABIT_RANGES = ['30d', '90d', '365d'] as const satisfies readonly StatsRange[];
 
@@ -87,6 +99,7 @@ function HabitDetail({ habit }: { habit: HabitDetailDto }) {
   const core = cores.data?.find((candidate) => candidate.id === habit.coreId);
   const goal = goals.data?.find((candidate) => candidate.id === habit.goalId);
   const archived = habit.archivedAt !== null;
+  const archive = useArchiveHabit();
   const weekly = habit.scheduleType === 'TIMES_PER_WEEK';
   const context: DayContext = { habit, weekly, today };
   const levelUps = stats.data && history.data ? levelUpsInWindow(history.data, stats.data) : null;
@@ -98,12 +111,36 @@ function HabitDetail({ habit }: { habit: HabitDetailDto }) {
       <header className="mb-6 flex flex-col gap-3">
         <div className="flex items-center justify-between gap-2">
           {core ? <CoreChip name={core.name} icon={core.icon} color={core.color} /> : <span />}
-          <Button asChild variant="ghost" size="sm">
-            <Link to={`/habits/${habit.id}/edit`}>
-              <Pencil />
-              Edit
-            </Link>
-          </Button>
+          <div className="flex items-center gap-1">
+            <Button asChild variant="ghost" size="sm">
+              <Link to={`/habits/${habit.id}/edit`}>
+                <Pencil />
+                Edit
+              </Link>
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              disabled={archive.isPending}
+              onClick={() =>
+                archive.mutate(
+                  { id: habit.id, archive: !archived },
+                  {
+                    onSuccess: () =>
+                      toast.success(
+                        archived
+                          ? `${habit.name} is back.`
+                          : `${habit.name} is archived. It no longer shows on Today.`,
+                      ),
+                    onError: (error) => toast.error(apiErrorMessage(error)),
+                  },
+                )
+              }
+            >
+              {archived ? <ArchiveRestore /> : <Archive />}
+              {archived ? 'Unarchive' : 'Archive'}
+            </Button>
+          </div>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <h1 className="text-2xl font-semibold tracking-tight">{habit.name}</h1>

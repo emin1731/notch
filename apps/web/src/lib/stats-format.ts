@@ -1,4 +1,4 @@
-import type { HabitDto, ScheduleType } from '@notch/shared';
+import type { ScheduleType } from '@notch/shared';
 import type { HabitUnits } from './change-format';
 import { formatValue } from './habit-format';
 
@@ -15,10 +15,6 @@ export const streakUnit = (count: number, scheduleType: ScheduleType) => {
 /** "21 days", "1 week". */
 export const streakText = (count: number, scheduleType: ScheduleType) =>
   `${count} ${streakUnit(count, scheduleType)}`;
-
-/** Plan 14: "Streak reset. Your longest is still 21 days. Go beat it." */
-export const streakResetText = (habit: Pick<HabitDto, 'longestStreak' | 'scheduleType'>) =>
-  `Streak reset. Your longest is still ${streakText(habit.longestStreak, habit.scheduleType)}. Go beat it.`;
 
 /** Everything logged in a range: "12 h 30 min", "340 pages", "18 times". */
 export function totalText(habit: HabitUnits, total: number): string {
