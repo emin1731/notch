@@ -278,7 +278,7 @@ All thresholds live in one config object in the shared package (`PROGRESSION_CON
 | Client state | Zustand (only for the duration timer and small UI state) |
 | HTTP | `fetch` wrapper: same-origin cookies, CSRF header, global 401 handler |
 | Forms | react-hook-form + `@hookform/resolvers/zod` (same schemas as the API) |
-| UI | Tailwind CSS 4 + shadcn/ui (`radix-nova` style, Radix primitives via `radix-ui`, neutral base, CSS variables). System font stack. Core accents as `--core-<color>` variables. Light/dark/system theme, applied before first paint by `public/theme.js` (external, so the CSP keeps `script-src 'self'`) |
+| UI | Tailwind CSS 4 + shadcn/ui (`radix-nova` style, Radix primitives via `radix-ui`, neutral base, CSS variables). Inter, self-hosted (`@fontsource-variable/inter`). Core accents as `--core-<color>` variables. Light/dark/system theme, applied before first paint by `public/theme.js` (external, so the CSP keeps `script-src 'self'`) |
 | Icons | lucide-react |
 | Charts | Recharts; heatmap as a custom CSS grid |
 | Drag and drop | dnd-kit (reordering cores, habits, milestones) |
@@ -1160,6 +1160,8 @@ Sections:
 ### 7.6 Shared UI components
 
 `HabitCard` (with `ToggleControl`, `CounterControl`, `DurationControl`), `ProgressRing`, `ProgressBar`, `StreakBadge`, `TargetChangeBadge` (+ popover), `CoreChip`, `CorePicker`, `IconPicker`, `ColorPicker`, `WeekdayPicker`, `DurationInput`, `SortableList`, `ConfirmDialog`, `EmptyState`, `Heatmap`, `TargetHistoryChart`, `CelebrationModal`, `PageHeader`, `DateNavigator`.
+
+**Design language.** A light grey page with borderless white cards (`rounded-3xl`) on it; grey fills (inputs, selects, icon tiles) inside the cards; pill-shaped buttons (`surface` white on the page, `default` black, `secondary` grey inside cards). Section titles sit on the page above their card (`Section`); dashboard cards carry a small muted label instead (`Panel`). Lists use the shadcn `Item` rows: an icon in a grey rounded tile, a title and a muted line, a value or chevron on the right, separators inset past the tile. Everything is monochrome (black progress bars, chart bars and rings); a core's color appears only where it identifies the core: its icon tile, the heatmap and the pickers. Navigation is a top bar (the sections as a pill group, then Settings and the account in one pill), with a floating pill tab bar on phones; detail pages get a "← Back" pill. Dark mode is the same design on a near-black page.
 
 ### 7.7 Accessibility and responsiveness
 
