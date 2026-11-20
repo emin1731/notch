@@ -14,7 +14,7 @@ describe('app shell', () => {
     expect(router.state.location.pathname).toBe('/today');
   });
 
-  it('has a labelled sidebar and tab bar with every section', async () => {
+  it('has a labelled top bar and tab bar with every section', async () => {
     renderApp('/today');
     await screen.findByRole('heading', { level: 1, name: 'Today' });
     for (const name of ['Main', 'Tabs']) {
@@ -40,6 +40,25 @@ describe('app shell', () => {
     expect(within(sidebar).getByRole('link', { name: 'Today' })).not.toHaveAttribute(
       'aria-current',
     );
+  });
+
+  it('opens Settings from the gear, and marks it current', async () => {
+    const user = userEvent.setup();
+    const { router } = renderApp('/today');
+    await screen.findByRole('heading', { level: 1, name: 'Today' });
+
+    await user.click(screen.getByRole('link', { name: 'Settings' }));
+    expect(await screen.findByRole('heading', { level: 1, name: 'Settings' })).toBeInTheDocument();
+    expect(router.state.location.pathname).toBe('/settings');
+    expect(screen.getByRole('link', { name: 'Settings' })).toHaveAttribute('aria-current', 'page');
+  });
+
+  it('keeps the theme and Log out in the account menu', async () => {
+    const user = userEvent.setup();
+    renderApp('/today');
+    await user.click(await screen.findByRole('button', { name: 'Account: Emin' }));
+    expect(await screen.findByRole('menuitemradio', { name: 'Dark' })).toBeInTheDocument();
+    expect(screen.getByRole('menuitem', { name: 'Log out' })).toBeInTheDocument();
   });
 
   it('shows Today with the local date from the shared package', async () => {

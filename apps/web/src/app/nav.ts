@@ -1,11 +1,4 @@
-import {
-  CalendarCheck,
-  ChartColumn,
-  ClipboardCheck,
-  Layers,
-  type LucideIcon,
-  Settings,
-} from 'lucide-react';
+import { CalendarCheck, ChartColumn, ClipboardCheck, Layers, type LucideIcon } from 'lucide-react';
 
 export interface NavItem {
   to: string;
@@ -20,5 +13,9 @@ export const NAV_ITEMS: NavItem[] = [
   { to: '/cores', label: 'Cores & Goals', short: 'Cores', icon: Layers },
   { to: '/stats', label: 'Stats', short: 'Stats', icon: ChartColumn },
   { to: '/review', label: 'Review', short: 'Review', icon: ClipboardCheck },
-  { to: '/settings', label: 'Settings', short: 'Settings', icon: Settings },
 ];
+
+/** A route's layout hints, read by the shell: form and detail pages use a narrower column. */
+export interface RouteHandle {
+  width?: 'narrow';
+}
