@@ -58,7 +58,7 @@ W4 holds most of the web risk: optimistic updates, debounced counters and the ti
 **Decided**
 
 - [x] **Dark-mode bootstrap:** an external `public/theme.js` in `<head>` applies the saved theme (light / dark / system) before first paint; the CSP keeps `script-src 'self'`.
-- [x] **Font:** the system font stack (Tailwind's default `font-sans`).
+- [x] **Font:** the system font stack (Tailwind's default `font-sans`). Replaced by Inter in the redesign below.
 - [x] shadcn/ui CLI 4 with the `radix-nova` preset on Radix (`radix-ui`), neutral base. Its Geist font and `next-themes` were removed in favour of the system font and our own `ThemeProvider`. `cn` comes from shadcn's `cn` package.
 - [x] `@notch/shared` is built unbundled with `sideEffects: false`, so the web bundle only includes the modules it imports (Today's chunk went from 164 kB to 71 kB).
 
@@ -365,6 +365,19 @@ W4 holds most of the web risk: optimistic updates, debounced counters and the ti
 - [x] Playwright: register → onboarding (2 cores, a goal with 3 milestones, 3 habits) → Today
 
 **Done when:** sign-up to a populated Today takes under two minutes, and no screen shows a raw error or an unstyled empty state.
+
+---
+
+## Redesign (between W7 and W8)
+
+**Goal:** notch in the same design language as the reference app: a grey page, borderless white cards, pills, grey fills, Inter, monochrome. Plan 7.6 "Design language" describes the result.
+
+- [x] Theme tokens (grey page, white cards, near-black primary, 14 px radius base) and Inter, self-hosted
+- [x] shadcn components restyled first (button pills with a new `surface` variant, grey inputs, borderless cards and dialogs, rounder menus), plus shadcn `item` and a `NativeSelect`
+- [x] Shared pieces: `Section` (title above the card), `BackLink`, `PageHeader`, `EmptyState`, `SegmentedControl` (`surface` on the page), thin black `ProgressBar`, larger core tiles
+- [x] A top bar instead of the sidebar (sections as a pill group; Settings and the account menu, with the theme and Log out, in one pill); a floating pill tab bar on phones; narrow form and detail pages
+- [x] Every page: Today in two columns on wide screens; Stats as a dashboard (completion as black bars with a big number, "By core" beside it); tile rows in Cores & Goals, Review, Settings and Stats; settings rows with the control on the right
+- [x] Core colors kept only on core icon tiles, the heatmap and the pickers; the streak flame stays orange
 
 ---
 

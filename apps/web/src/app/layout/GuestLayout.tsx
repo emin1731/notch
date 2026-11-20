@@ -6,12 +6,12 @@ import { ThemeMenu } from './ThemeMenu';
 export function GuestLayout() {
   return (
     <div className="flex min-h-dvh flex-col bg-background text-foreground">
-      <header className="flex h-14 items-center justify-between px-4">
+      <header className="flex items-center justify-between px-4 pt-4 sm:px-6 sm:pt-6">
         <Logo />
         <ThemeMenu />
       </header>
-      <main className="flex flex-1 items-start justify-center px-4 pt-[12vh]">
-        <div className="w-full max-w-sm">
+      <main className="flex flex-1 items-start justify-center px-4 pt-[10vh] pb-16">
+        <div className="w-full max-w-md">
           <Outlet />
         </div>
       </main>

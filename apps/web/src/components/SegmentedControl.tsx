@@ -14,6 +14,7 @@ export function SegmentedControl<T extends string>({
   onChange,
   options,
   disabled,
+  surface = false,
   className,
   ...aria
 }: {
@@ -21,6 +22,8 @@ export function SegmentedControl<T extends string>({
   onChange: (value: T) => void;
   options: readonly SegmentOption<T>[];
   disabled?: boolean;
+  /** On the page (white pill, black choice) rather than inside a card (grey pill, white choice). */
+  surface?: boolean;
   className?: string;
   'aria-labelledby'?: string;
   'aria-describedby'?: string;
@@ -33,7 +36,8 @@ export function SegmentedControl<T extends string>({
       orientation="horizontal"
       loop
       className={cn(
-        'grid auto-cols-fr grid-flow-col gap-0.5 rounded-lg bg-muted p-0.5',
+        'grid auto-cols-fr grid-flow-col gap-0.5 rounded-full p-1',
+        surface ? 'bg-card' : 'bg-muted',
         disabled && 'opacity-60',
         className,
       )}
@@ -44,9 +48,12 @@ export function SegmentedControl<T extends string>({
           key={option}
           value={option}
           className={cn(
-            'flex min-w-0 items-center justify-center gap-1.5 rounded-md px-2 py-1.5 text-sm text-muted-foreground transition-colors outline-none',
+            'flex h-8 min-w-0 items-center justify-center gap-1.5 rounded-full px-3 text-sm text-muted-foreground transition-colors outline-none',
             'hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed',
-            'data-[state=checked]:bg-background data-[state=checked]:font-medium data-[state=checked]:text-foreground data-[state=checked]:shadow-sm',
+            'data-[state=checked]:font-medium',
+            surface
+              ? 'data-[state=checked]:bg-primary data-[state=checked]:text-primary-foreground'
+              : 'data-[state=checked]:bg-card data-[state=checked]:text-foreground data-[state=checked]:shadow-sm',
           )}
         >
           {Icon && <Icon className="size-4 shrink-0" aria-hidden="true" />}

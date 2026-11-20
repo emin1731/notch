@@ -40,10 +40,10 @@ export function TargetChangeBadge({ habit }: { habit: TodayHabit }) {
           type="button"
           aria-label={`${up ? 'Levelled up' : 'Eased off'}: ${values}`}
           className={cn(
-            'shrink-0 rounded-full px-2 py-0.5 text-xs font-medium tabular-nums outline-none focus-visible:ring-2 focus-visible:ring-ring',
+            'h-7 shrink-0 rounded-full px-2.5 text-xs font-medium tabular-nums outline-none focus-visible:ring-3 focus-visible:ring-ring/50',
             up
-              ? 'bg-(--core)/15 text-(--core) hover:bg-(--core)/25'
-              : 'bg-muted text-muted-foreground hover:bg-muted/70',
+              ? 'bg-primary text-primary-foreground hover:bg-primary/85'
+              : 'bg-muted text-foreground hover:bg-accent',
           )}
         >
           {changeArrow(change.kind)} {values}

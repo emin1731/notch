@@ -1,7 +1,14 @@
 /** The day's progress as a ring (plan 7.5), with the percentage in the middle. */
-export function ProgressRing({ value, size = 72 }: { value: number; size?: number }) {
+export function ProgressRing({
+  value,
+  size = 72,
+  stroke = 7,
+}: {
+  value: number;
+  size?: number;
+  stroke?: number;
+}) {
   const percent = Math.round(value * 100);
-  const stroke = 7;
   const radius = (size - stroke) / 2;
   const circumference = 2 * Math.PI * radius;
   return (
@@ -32,10 +39,10 @@ export function ProgressRing({ value, size = 72 }: { value: number; size?: numbe
           strokeLinecap="round"
           strokeDasharray={circumference}
           strokeDashoffset={circumference * (1 - value)}
-          className="stroke-primary transition-[stroke-dashoffset] duration-300"
+          className="stroke-foreground transition-[stroke-dashoffset] duration-300"
         />
       </svg>
-      <span className="absolute inset-0 flex items-center justify-center text-sm font-semibold tabular-nums">
+      <span className="absolute inset-0 flex items-center justify-center text-lg font-bold tracking-tight tabular-nums">
         {percent}%
       </span>
     </div>

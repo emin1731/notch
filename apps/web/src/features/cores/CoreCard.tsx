@@ -22,7 +22,6 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { GoalRow } from '@/features/goals/GoalRow';
 import { HabitList } from '@/features/habits/HabitList';
-import { coreStyle } from '@/lib/core-colors';
 import { cn } from '@/lib/utils';
 
 export interface CoreCardActions {
@@ -64,16 +63,15 @@ export function CoreCard({
   return (
     <article
       aria-labelledby={titleId}
-      style={coreStyle(core.color)}
       className={cn(
-        'overflow-hidden rounded-xl border border-l-4 border-l-(--core) bg-card text-card-foreground',
-        archived && 'border-dashed border-l-muted-foreground/40',
+        'overflow-hidden rounded-3xl bg-card text-card-foreground',
+        archived && 'opacity-75',
       )}
     >
-      <header className="flex items-center gap-2 py-3 pr-2 pl-2">
+      <header className="flex items-center gap-3 px-3 pt-3 pb-1 sm:px-4 sm:pt-4">
         {handle}
-        <CoreIcon icon={core.icon} color={core.color} className={cn(!handle && 'ml-2')} />
-        <h2 id={titleId} className="min-w-0 flex-1 truncate font-medium">
+        <CoreIcon icon={core.icon} color={core.color} size="lg" className={cn(!handle && 'ml-1')} />
+        <h2 id={titleId} className="min-w-0 flex-1 truncate text-lg font-semibold tracking-tight">
           {core.name}
         </h2>
         {archived && <Badge variant="secondary">Archived</Badge>}
@@ -108,26 +106,25 @@ export function CoreCard({
         </DropdownMenu>
       </header>
 
-      <div className="flex flex-col gap-1 px-2 pb-3">
+      <div className="flex flex-col gap-0.5 px-1 pb-3 sm:px-2 sm:pb-4">
         {active.length === 0 && completed.length === 0 && habits.length === 0 && !archived && (
-          <p className="px-2 py-1 text-sm text-muted-foreground">No goals or habits yet.</p>
+          <p className="px-3 py-2 text-sm text-muted-foreground">No goals or habits yet.</p>
         )}
         {active.map((goal) => (
-          <GoalRow key={goal.id} goal={goal} color={core.color} today={today} />
+          <GoalRow key={goal.id} goal={goal} today={today} />
         ))}
         <Folded label="Completed" goals={completed}>
-          {(goal) => <GoalRow key={goal.id} goal={goal} color={core.color} today={today} />}
+          {(goal) => <GoalRow key={goal.id} goal={goal} today={today} />}
         </Folded>
         <Folded label="Archived" goals={archivedGoals}>
           {(goal) => (
             <GoalRow
               key={goal.id}
               goal={goal}
-              color={core.color}
               today={today}
               action={
                 <Button
-                  variant="ghost"
+                  variant="secondary"
                   size="sm"
                   onClick={() => actions.onUnarchiveGoal(goal)}
                   aria-label={`Unarchive ${goal.title}`}
@@ -140,7 +137,9 @@ export function CoreCard({
         </Folded>
         {habits.length > 0 && (
           <section aria-label={`${core.name} habits`} className="mt-2 flex flex-col gap-0.5">
-            <h3 className="px-2 pb-1 text-xs font-medium text-muted-foreground">Habits</h3>
+            <h3 className="px-3 pt-1 text-xs font-medium tracking-wide text-muted-foreground uppercase">
+              Habits
+            </h3>
             <HabitList
               habits={habits}
               includeArchived={includeArchived}
@@ -149,17 +148,12 @@ export function CoreCard({
           </section>
         )}
         {!archived && (
-          <div className="mt-1 flex flex-wrap gap-1">
-            <Button
-              variant="ghost"
-              size="sm"
-              className="text-muted-foreground"
-              onClick={actions.onAddGoal}
-            >
+          <div className="mt-2 flex flex-wrap gap-2 px-2">
+            <Button variant="secondary" size="sm" onClick={actions.onAddGoal}>
               <Plus />
               Add goal
             </Button>
-            <Button asChild variant="ghost" size="sm" className="text-muted-foreground">
+            <Button asChild variant="secondary" size="sm">
               <Link to={`/habits/new?coreId=${core.id}`}>
                 <Plus />
                 Add habit
@@ -187,7 +181,7 @@ function Folded({
   }
   return (
     <details className="group">
-      <summary className="flex cursor-pointer list-none items-center gap-1 rounded-md px-2 py-1 text-xs font-medium text-muted-foreground hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none [&::-webkit-details-marker]:hidden">
+      <summary className="flex cursor-pointer list-none items-center gap-1 rounded-lg px-3 py-1.5 text-xs font-medium text-muted-foreground hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none [&::-webkit-details-marker]:hidden">
         <ChevronRight
           className="size-3.5 transition-transform group-open:rotate-90"
           aria-hidden="true"

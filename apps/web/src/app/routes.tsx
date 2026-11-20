@@ -5,12 +5,16 @@ import { RequireNotOnboarded, RequireOnboarded } from '@/features/auth/RequireOn
 import { AppShell } from './layout/AppShell';
 import { GuestLayout } from './layout/GuestLayout';
 import { OnboardingLayout } from './layout/OnboardingLayout';
+import type { RouteHandle } from './nav';
 import { RouteError } from './RouteError';
 
 type PageModule = Promise<{ default: React.ComponentType }>;
 
 /** Each page is its own chunk. */
 const page = (load: () => PageModule) => async () => ({ Component: (await load()).default });
+
+/** Form and detail pages: a narrower column, like a settings page. */
+const narrow: RouteHandle = { width: 'narrow' };
 
 /** Plan 7.1. Every route shows `RouteError` instead of crashing. */
 export const routes: RouteObject[] = [
@@ -55,17 +59,24 @@ export const routes: RouteObject[] = [
                   { path: '/', element: <Navigate to="/today" replace /> },
                   { path: '/today', lazy: page(() => import('@/features/today/TodayPage')) },
                   { path: '/cores', lazy: page(() => import('@/features/cores/CoresPage')) },
-                  { path: '/goals/:goalId', lazy: page(() => import('@/features/goals/GoalPage')) },
+                  {
+                    path: '/goals/:goalId',
+                    handle: narrow,
+                    lazy: page(() => import('@/features/goals/GoalPage')),
+                  },
                   {
                     path: '/habits/new',
+                    handle: narrow,
                     lazy: page(() => import('@/features/habits/HabitFormPage')),
                   },
                   {
                     path: '/habits/:habitId',
+                    handle: narrow,
                     lazy: page(() => import('@/features/habits/HabitPage')),
                   },
                   {
                     path: '/habits/:habitId/edit',
+                    handle: narrow,
                     lazy: page(() => import('@/features/habits/HabitFormPage')),
                   },
                   { path: '/review', lazy: page(() => import('@/features/review/ReviewPage')) },
@@ -76,6 +87,7 @@ export const routes: RouteObject[] = [
                   { path: '/stats', lazy: page(() => import('@/features/stats/StatsPage')) },
                   {
                     path: '/settings',
+                    handle: narrow,
                     lazy: page(() => import('@/features/settings/SettingsPage')),
                   },
                   { path: '*', lazy: page(() => import('./NotFoundPage')) },

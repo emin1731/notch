@@ -1,86 +1,96 @@
-import { NavLink, Outlet } from 'react-router';
-import { cn } from '@/lib/utils';
-import { NAV_ITEMS } from '../nav';
-import { Logo } from './Logo';
+import { NavLink, Outlet, useMatches } from 'react-router';
 import { TimerDialogs } from '@/features/today/TimerDialogs';
-import { ThemeMenu } from './ThemeMenu';
+import { cn } from '@/lib/utils';
+import { NAV_ITEMS, type RouteHandle } from '../nav';
+import { AccountPill } from './AccountPill';
+import { Logo } from './Logo';
 import { TimerIndicator } from './TimerIndicator';
-import { UserMenu } from './UserMenu';
 
-/** Sidebar from `md` up; a top bar and a bottom tab bar on phones. */
+/**
+ * A top bar on a grey page: the logo and the sections as a pill group, then the running timer and
+ * the account pill (Settings, the avatar menu). On phones the sections move to a floating pill at
+ * the bottom.
+ */
 export function AppShell() {
+  const narrow = useMatches().some(
+    (match) => (match.handle as RouteHandle | undefined)?.width === 'narrow',
+  );
   return (
-    <div className="min-h-dvh bg-background text-foreground md:flex">
-      <aside className="sticky top-0 hidden h-dvh w-60 shrink-0 flex-col border-r bg-sidebar px-3 py-4 text-sidebar-foreground md:flex">
-        <div className="px-2 pb-6">
+    <div className="min-h-dvh bg-background text-foreground">
+      <header className="mx-auto flex w-full max-w-5xl items-center justify-between gap-3 px-4 pt-4 sm:px-6 sm:pt-6">
+        <div className="flex items-center gap-5">
           <Logo />
+          <MainNav />
         </div>
-        <nav aria-label="Main" className="flex flex-1 flex-col gap-1">
-          {NAV_ITEMS.map(({ to, label, icon: Icon }) => (
-            <NavLink
-              key={to}
-              to={to}
-              className={({ isActive }) =>
-                cn(
-                  'flex items-center gap-3 rounded-md px-3 py-2 text-sm text-sidebar-foreground/70 transition-colors',
-                  'hover:bg-sidebar-accent hover:text-sidebar-accent-foreground',
-                  'focus-visible:ring-2 focus-visible:ring-sidebar-ring focus-visible:outline-none',
-                  isActive && 'bg-sidebar-accent font-medium text-sidebar-accent-foreground',
-                )
-              }
-            >
-              <Icon className="size-4" aria-hidden="true" />
-              {label}
-            </NavLink>
-          ))}
-        </nav>
-        <TimerIndicator className="mb-2" />
-        <div className="flex items-center gap-1">
-          <UserMenu />
-          <ThemeMenu />
-        </div>
-      </aside>
-
-      <header className="sticky top-0 z-10 flex h-14 items-center justify-between border-b bg-background/90 px-4 backdrop-blur md:hidden">
-        <Logo />
-        <div className="flex min-w-0 items-center gap-1">
-          <TimerIndicator className="max-w-40" />
-          <ThemeMenu />
-          <UserMenu variant="compact" />
+        <div className="flex min-w-0 items-center gap-2">
+          <TimerIndicator className="max-w-52" />
+          <AccountPill />
         </div>
       </header>
 
       <TimerDialogs />
-      <main className="min-w-0 flex-1 pb-24 md:pb-0">
-        <div className="mx-auto w-full max-w-3xl px-4 py-6 md:px-8 md:py-10">
+      <main className="mx-auto w-full max-w-5xl px-4 pt-6 pb-32 sm:px-6 sm:pt-8 md:pb-16">
+        <div className={cn('flex flex-col', narrow && 'max-w-2xl')}>
           <Outlet />
         </div>
       </main>
 
-      <nav
-        aria-label="Tabs"
-        className="fixed inset-x-0 bottom-0 z-10 border-t bg-background/95 pb-[env(safe-area-inset-bottom)] backdrop-blur md:hidden"
-      >
-        <ul className="grid grid-cols-5">
-          {NAV_ITEMS.map(({ to, short, icon: Icon }) => (
-            <li key={to}>
-              <NavLink
-                to={to}
-                className={({ isActive }) =>
-                  cn(
-                    'flex flex-col items-center gap-1 py-2 text-[11px] text-muted-foreground',
-                    'focus-visible:bg-accent focus-visible:outline-none',
-                    isActive && 'font-medium text-foreground',
-                  )
-                }
-              >
-                <Icon className="size-5" aria-hidden="true" />
-                {short}
-              </NavLink>
-            </li>
-          ))}
-        </ul>
-      </nav>
+      <TabBar />
     </div>
+  );
+}
+
+function MainNav() {
+  return (
+    <nav aria-label="Main" className="hidden md:block">
+      <ul className="flex items-center gap-0.5 rounded-full bg-card p-1">
+        {NAV_ITEMS.map(({ to, label }) => (
+          <li key={to}>
+            <NavLink
+              to={to}
+              className={({ isActive }) =>
+                cn(
+                  'flex h-9 items-center rounded-full px-4 text-sm font-medium whitespace-nowrap text-muted-foreground transition-colors',
+                  'hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none',
+                  isActive && 'bg-primary text-primary-foreground hover:text-primary-foreground',
+                )
+              }
+            >
+              {label}
+            </NavLink>
+          </li>
+        ))}
+      </ul>
+    </nav>
+  );
+}
+
+/** Phones: the sections in a floating pill above the bottom edge. */
+function TabBar() {
+  return (
+    <nav
+      aria-label="Tabs"
+      className="fixed inset-x-3 bottom-[max(0.75rem,env(safe-area-inset-bottom))] z-20 md:hidden"
+    >
+      <ul className="grid grid-cols-4 gap-1 rounded-full bg-card p-1.5 shadow-lg ring-1 ring-foreground/5">
+        {NAV_ITEMS.map(({ to, short, icon: Icon }) => (
+          <li key={to}>
+            <NavLink
+              to={to}
+              className={({ isActive }) =>
+                cn(
+                  'flex flex-col items-center gap-0.5 rounded-full py-1.5 text-[11px] font-medium text-muted-foreground transition-colors',
+                  'focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none',
+                  isActive && 'bg-primary text-primary-foreground',
+                )
+              }
+            >
+              <Icon className="size-5" aria-hidden="true" />
+              {short}
+            </NavLink>
+          </li>
+        ))}
+      </ul>
+    </nav>
   );
 }

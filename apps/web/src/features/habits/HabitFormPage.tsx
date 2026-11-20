@@ -459,7 +459,7 @@ function HabitForm({
                 ) : (
                   <StepFields form={form} values={values} labelId={ids.step} />
                 )}
-                <details className="group rounded-lg border px-3 py-2">
+                <details className="group rounded-2xl bg-muted px-4 py-3">
                   <summary className="cursor-pointer text-sm font-medium">Advanced: limits</summary>
                   <div className="mt-3 grid gap-4 sm:grid-cols-2">
                     <TextField
@@ -511,7 +511,7 @@ function HabitForm({
       )}
 
       <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
-        <Button asChild variant="ghost">
+        <Button asChild variant="surface" size="lg">
           <Link to={backTo(initial.goalId)}>Cancel</Link>
         </Button>
         <Button type="submit" size="lg" disabled={form.formState.isSubmitting}>
@@ -574,9 +574,9 @@ function StepFields({
 
 function Section({ title, children }: { title: string; children: ReactNode }) {
   return (
-    <fieldset className="flex flex-col gap-4">
-      <legend className="mb-4 text-base font-medium">{title}</legend>
-      <FieldGroup className="gap-4">{children}</FieldGroup>
+    <fieldset className="flex min-w-0 flex-col">
+      <legend className="mb-3 px-1 text-xl font-semibold tracking-tight">{title}</legend>
+      <FieldGroup className="gap-5 rounded-3xl bg-card p-5 sm:p-7">{children}</FieldGroup>
     </fieldset>
   );
 }
@@ -586,9 +586,8 @@ function FormSkeleton({ title }: { title: string }) {
     <>
       <PageHeader title={title} />
       <div className="flex flex-col gap-4" aria-busy="true" aria-label="Loading">
-        <Skeleton className="h-8 w-full" />
-        <Skeleton className="h-8 w-full" />
-        <Skeleton className="h-24 w-full" />
+        <Skeleton className="h-48 w-full rounded-3xl" />
+        <Skeleton className="h-40 w-full rounded-3xl" />
       </div>
     </>
   );

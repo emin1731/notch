@@ -19,6 +19,7 @@ import {
 import { useState } from 'react';
 import { Link, useParams } from 'react-router';
 import { toast } from 'sonner';
+import { BackLink } from '@/components/BackLink';
 import { CoreChip } from '@/components/CoreChip';
 import { EmptyState } from '@/components/EmptyState';
 import { Badge } from '@/components/ui/badge';
@@ -58,7 +59,7 @@ export default function HabitPage() {
       <div className="flex flex-col gap-4" aria-busy="true" aria-label="Loading habit">
         <Skeleton className="h-5 w-32" />
         <Skeleton className="h-8 w-2/3" />
-        <Skeleton className="h-40 rounded-xl" />
+        <Skeleton className="h-40 rounded-3xl" />
       </div>
     );
   }
@@ -108,18 +109,19 @@ function HabitDetail({ habit }: { habit: HabitDetailDto }) {
 
   return (
     <>
-      <header className="mb-6 flex flex-col gap-3">
+      <BackLink to="/cores">Cores & Goals</BackLink>
+      <header className="mb-8 flex flex-col gap-4">
         <div className="flex items-center justify-between gap-2">
           {core ? <CoreChip name={core.name} icon={core.icon} color={core.color} /> : <span />}
-          <div className="flex items-center gap-1">
-            <Button asChild variant="ghost" size="sm">
+          <div className="flex items-center gap-2">
+            <Button asChild variant="surface" size="sm">
               <Link to={`/habits/${habit.id}/edit`}>
                 <Pencil />
                 Edit
               </Link>
             </Button>
             <Button
-              variant="ghost"
+              variant="surface"
               size="sm"
               disabled={archive.isPending}
               onClick={() =>
@@ -143,18 +145,18 @@ function HabitDetail({ habit }: { habit: HabitDetailDto }) {
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <h1 className="text-2xl font-semibold tracking-tight">{habit.name}</h1>
+          <h1 className="text-3xl font-bold tracking-tight">{habit.name}</h1>
           {archived && <Badge variant="secondary">Archived</Badge>}
         </div>
         {goal && (
           <Link
             to={`/goals/${goal.id}`}
-            className="self-start rounded text-sm text-muted-foreground hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+            className="-mt-2 self-start rounded text-sm text-muted-foreground hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none"
           >
             Goal: {goal.title}
           </Link>
         )}
-        <dl className="flex flex-wrap gap-x-6 gap-y-2 text-sm">
+        <dl className="grid grid-cols-2 gap-x-4 gap-y-5 rounded-3xl bg-card p-5 sm:grid-cols-4 sm:p-6">
           <Fact label="Target">{formatTarget(habit) ?? 'Done or not'}</Fact>
           <Fact label="Schedule">{scheduleText(habit)}</Fact>
           <Fact label="Current streak">
@@ -175,13 +177,15 @@ function HabitDetail({ habit }: { habit: HabitDetailDto }) {
         )}
       </header>
 
-      <RangeControl ranges={HABIT_RANGES} value={range} onChange={setRange} />
+      <div className="self-start">
+        <RangeControl ranges={HABIT_RANGES} value={range} onChange={setRange} />
+      </div>
 
-      <div className="mt-6 flex flex-col gap-6">
+      <div className="mt-6 flex flex-col gap-4 sm:gap-6">
         {stats.isPending ? (
           <div className="flex flex-col gap-6" aria-busy="true" aria-label="Loading stats">
-            <Skeleton className="h-24 rounded-xl" />
-            <Skeleton className="h-48 rounded-xl" />
+            <Skeleton className="h-28 rounded-3xl" />
+            <Skeleton className="h-56 rounded-3xl" />
           </div>
         ) : stats.isError ? (
           <EmptyState
@@ -197,7 +201,7 @@ function HabitDetail({ habit }: { habit: HabitDetailDto }) {
           </EmptyState>
         ) : (
           <>
-            <dl aria-label="Totals" className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+            <dl aria-label="Totals" className="grid grid-cols-2 gap-4 sm:grid-cols-3">
               <Kpi
                 label="Completion"
                 value={percent(stats.data.rate)}
@@ -230,9 +234,9 @@ function HabitDetail({ habit }: { habit: HabitDetailDto }) {
 
 function Fact({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <div className="flex flex-col">
-      <dt className="text-xs text-muted-foreground">{label}</dt>
-      <dd className="font-medium tabular-nums">{children}</dd>
+    <div className="flex min-w-0 flex-col gap-1">
+      <dt className="text-sm text-muted-foreground">{label}</dt>
+      <dd className="text-[0.9375rem] font-semibold tabular-nums">{children}</dd>
     </div>
   );
 }
@@ -261,7 +265,7 @@ function RecentLogs({
       {days.length === 0 ? (
         <p className="text-sm text-muted-foreground">Nothing to show before the habit started.</p>
       ) : (
-        <ul className="flex flex-col divide-y">
+        <ul className="-mx-1 flex flex-col divide-y">
           {days.map((day) => (
             <LogRow
               key={day.date}
@@ -273,7 +277,7 @@ function RecentLogs({
           ))}
         </ul>
       )}
-      <p className="text-xs text-muted-foreground">
+      <p className="text-sm text-muted-foreground">
         {archived
           ? 'Archived habits can’t be logged. Unarchive it to log again.'
           : `Days before ${shortDate(earliest)} can’t be changed.`}
@@ -302,10 +306,10 @@ function LogRow({
   };
 
   return (
-    <li className="flex items-center justify-between gap-3 py-2 text-sm">
+    <li className="flex items-center justify-between gap-3 px-1 py-3 text-sm">
       <div className="min-w-0">
-        <div className="font-medium">{name}</div>
-        <div className="truncate text-xs text-muted-foreground">{dayStatus(day, context)}</div>
+        <div className="text-[0.9375rem] font-medium">{name}</div>
+        <div className="truncate text-sm text-muted-foreground">{dayStatus(day, context)}</div>
       </div>
       {editable ? (
         <LogInput
@@ -396,7 +400,7 @@ function LogInput({
             event.currentTarget.blur();
           }
         }}
-        className="h-8 w-20 text-right tabular-nums"
+        className="h-9 w-20 text-right tabular-nums"
       />
       <span className="w-12 text-xs text-muted-foreground">
         {minutes ? 'min' : (habit.unit ?? '')}

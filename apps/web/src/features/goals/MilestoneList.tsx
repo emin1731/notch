@@ -48,7 +48,7 @@ export function MilestoneList({
   return (
     <div className="flex flex-col gap-3">
       {goal.milestones.length === 0 && (
-        <p className="text-sm text-muted-foreground">
+        <p className="px-2 py-1 text-sm text-muted-foreground">
           {readOnly
             ? 'No milestones.'
             : 'No milestones yet. Break the goal into steps to see your progress.'}
@@ -126,7 +126,7 @@ function MilestoneRow({
   };
 
   return (
-    <div className="group flex min-h-10 items-center gap-2 rounded-lg px-1 hover:bg-muted/50">
+    <div className="group flex min-h-12 items-center gap-3 rounded-2xl px-2 hover:bg-muted/70">
       {handle}
       <Checkbox
         checked={done}
@@ -153,7 +153,7 @@ function MilestoneRow({
               setEditing(false);
             }
           }}
-          className="h-7 flex-1"
+          className="h-9 flex-1"
         />
       ) : (
         <button
@@ -162,7 +162,7 @@ function MilestoneRow({
           onClick={() => setEditing(true)}
           aria-label={`Rename ${milestone.title}`}
           className={cn(
-            'min-w-0 flex-1 truncate rounded px-1 py-1 text-left text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring',
+            'min-w-0 flex-1 truncate rounded-lg px-1 py-1 text-left text-[0.9375rem] outline-none focus-visible:ring-3 focus-visible:ring-ring/50',
             done && 'text-muted-foreground line-through',
           )}
         >
@@ -227,7 +227,7 @@ function AddMilestone({ goalId, count }: { goalId: string; count: number }) {
           aria-invalid={error ? true : undefined}
           aria-describedby={error ? errorId : undefined}
         />
-        <Button type="submit" variant="outline" disabled={full || add.isPending || !draft.trim()}>
+        <Button type="submit" variant="secondary" disabled={full || add.isPending || !draft.trim()}>
           <Plus />
           Add
         </Button>

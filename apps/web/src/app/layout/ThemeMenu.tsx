@@ -22,7 +22,7 @@ export function ThemeMenu() {
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button variant="ghost" size="icon" aria-label="Theme">
+        <Button variant="surface" size="icon" aria-label="Theme">
           <Icon />
         </Button>
       </DropdownMenuTrigger>

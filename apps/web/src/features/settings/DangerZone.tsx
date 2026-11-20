@@ -28,20 +28,20 @@ export function DangerZone() {
   const [deleting, setDeleting] = useState(false);
 
   return (
-    <SettingsSection title="Danger zone" className="border-destructive/40">
+    <SettingsSection title="Danger zone">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div className="text-sm">
-          <div className="font-medium">Log out everywhere</div>
+          <div className="text-[0.9375rem] font-medium">Log out everywhere</div>
           <div className="text-muted-foreground">Every device, this one too.</div>
         </div>
-        <Button variant="outline" onClick={() => setConfirmLogout(true)}>
+        <Button variant="secondary" onClick={() => setConfirmLogout(true)}>
           <LogOut />
           Log out everywhere
         </Button>
       </div>
-      <div className="flex flex-col gap-4 border-t pt-4 sm:flex-row sm:items-center sm:justify-between">
+      <div className="flex flex-col gap-4 border-t pt-5 sm:flex-row sm:items-center sm:justify-between">
         <div className="text-sm">
-          <div className="font-medium">Delete account</div>
+          <div className="text-[0.9375rem] font-medium">Delete account</div>
           <div className="text-muted-foreground">
             Your cores, goals, habits and logs, gone for good.
           </div>

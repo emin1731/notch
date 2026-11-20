@@ -16,7 +16,7 @@ export function TimerIndicator({ className }: { className?: string }) {
     <Link
       to={running.date === today ? '/today' : `/today?date=${running.date}`}
       className={cn(
-        'flex min-w-0 items-center gap-2 rounded-md bg-primary/10 px-2.5 py-1.5 text-sm font-medium text-foreground hover:bg-primary/15 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none',
+        'flex h-11 min-w-0 items-center gap-2 rounded-full bg-card px-4 text-sm font-medium text-foreground transition-colors hover:bg-card/70 focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none',
         className,
       )}
       aria-label={`Timer running: ${running.habitName}, ${formatClock(elapsed)}`}

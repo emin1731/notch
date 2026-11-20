@@ -15,7 +15,7 @@ export interface StepProps {
 export function StepHeader({ title, children }: { title: string; children: ReactNode }) {
   return (
     <header className="flex flex-col gap-2">
-      <h1 id="step-title" className="text-2xl font-semibold tracking-tight">
+      <h1 id="step-title" className="text-3xl font-bold tracking-tight">
         {title}
       </h1>
       <p className="text-muted-foreground">{children}</p>

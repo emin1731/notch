@@ -36,7 +36,7 @@ export function StepGoal(props: StepProps) {
     return (
       <section className="flex flex-col gap-6" aria-labelledby="step-title">
         <StepHeader title={copy.title}>{copy.intro}</StepHeader>
-        <div className="flex items-center gap-3 rounded-xl border px-4 py-3">
+        <div className="flex items-center gap-3 rounded-3xl bg-card px-5 py-4">
           <span className="min-w-0 flex-1 truncate font-medium">{goal.title}</span>
           <span className="flex items-center gap-1 text-xs text-muted-foreground">
             <Lock className="size-3.5" aria-hidden="true" />

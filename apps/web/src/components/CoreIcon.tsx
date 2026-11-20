@@ -21,10 +21,10 @@ export function CoreIcon({
       aria-hidden="true"
       style={coreStyle(color)}
       className={cn(
-        'flex shrink-0 items-center justify-center rounded-lg bg-(--core)/15 text-(--core)',
-        size === 'sm' && 'size-6 [&>svg]:size-3.5',
-        size === 'md' && 'size-8 [&>svg]:size-4',
-        size === 'lg' && 'size-10 [&>svg]:size-5',
+        'flex shrink-0 items-center justify-center bg-(--core)/12 text-(--core)',
+        size === 'sm' && 'size-7 rounded-lg [&>svg]:size-4',
+        size === 'md' && 'size-10 rounded-xl [&>svg]:size-5',
+        size === 'lg' && 'size-11 rounded-xl [&>svg]:size-5',
         className,
       )}
     >

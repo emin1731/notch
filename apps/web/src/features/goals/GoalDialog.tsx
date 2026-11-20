@@ -14,6 +14,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Field, FieldError, FieldGroup, FieldLabel } from '@/components/ui/field';
+import { NativeSelect } from '@/components/ui/native-select';
 import { Textarea } from '@/components/ui/textarea';
 import { isApiError } from '@/lib/api-client';
 import { applyServerError, useZodForm } from '@/lib/forms';
@@ -135,17 +136,13 @@ function GoalForm({
             render={({ field, fieldState }) => (
               <Field data-invalid={fieldState.invalid || undefined}>
                 <FieldLabel htmlFor={coreSelect}>Core</FieldLabel>
-                <select
-                  id={coreSelect}
-                  {...field}
-                  className="h-8 w-full rounded-lg border border-input bg-transparent px-2 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 dark:bg-input/30"
-                >
+                <NativeSelect id={coreSelect} {...field}>
                   {cores.map((core) => (
                     <option key={core.id} value={core.id}>
                       {core.name}
                     </option>
                   ))}
-                </select>
+                </NativeSelect>
                 <FieldError errors={[fieldState.error]} />
               </Field>
             )}

@@ -1,4 +1,4 @@
-import { act, screen, within } from '@testing-library/react';
+import { act, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { delay, http, HttpResponse } from 'msw';
 import { describe, expect, it } from 'vitest';
@@ -126,8 +126,7 @@ describe('auth', () => {
     await heading('Today');
     client.setQueryData(queryKeys.cores.all, [{ id: 'core-1' }]);
 
-    const sidebar = screen.getByRole('complementary');
-    await user.click(within(sidebar).getByRole('button', { name: 'Emin' }));
+    await user.click(screen.getByRole('button', { name: 'Account: Emin' }));
     await user.click(await screen.findByRole('menuitem', { name: 'Log out' }));
 
     expect(await heading('Log in')).toBeInTheDocument();

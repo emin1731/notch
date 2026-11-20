@@ -25,7 +25,7 @@ export function DateNavigator({
   const backfilling = date !== today;
   return (
     <div className="flex flex-wrap items-center gap-2">
-      <div className="flex items-center gap-1 rounded-lg border p-0.5">
+      <div className="flex items-center gap-1 rounded-full bg-card p-1">
         <Button
           variant="ghost"
           size="icon-sm"
@@ -51,7 +51,7 @@ export function DateNavigator({
       {backfilling && (
         <>
           <Badge variant="secondary">Backfilling</Badge>
-          <Button variant="ghost" size="sm" onClick={() => onChange(today)}>
+          <Button variant="surface" size="sm" onClick={() => onChange(today)}>
             Back to today
           </Button>
         </>

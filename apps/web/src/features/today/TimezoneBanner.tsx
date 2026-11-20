@@ -19,7 +19,7 @@ export function TimezoneBanner() {
   return (
     <section
       aria-label="Timezone"
-      className="flex flex-col gap-3 rounded-xl border bg-card p-4 text-sm sm:flex-row sm:items-center"
+      className="flex flex-col gap-3 rounded-3xl bg-card p-5 text-sm sm:flex-row sm:items-center"
     >
       <Globe className="hidden size-5 shrink-0 text-muted-foreground sm:block" aria-hidden="true" />
       <span className="min-w-0 flex-1">{mismatchText(device, account)} Update?</span>

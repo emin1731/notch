@@ -29,7 +29,7 @@ export default function LoginPage() {
   return (
     <Card>
       <CardHeader>
-        <h1 className="text-xl font-semibold tracking-tight">Log in</h1>
+        <h1 className="text-2xl font-bold tracking-tight">Log in</h1>
         <CardDescription>Welcome back. Pick up where you left off.</CardDescription>
       </CardHeader>
       <CardContent>

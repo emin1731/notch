@@ -24,7 +24,7 @@ test('register, stay logged in across a reload, log out, and log back in', async
 
   await expect(page).toHaveURL('/today');
   await expect(pageHeading(page, 'Today')).toBeVisible();
-  const account = page.getByRole('complementary').getByRole('button', { name: 'Playwright' });
+  const account = page.getByRole('button', { name: 'Account: Playwright' });
   await expect(account).toBeVisible();
 
   // The session lives in an HttpOnly cookie, so it survives a reload.

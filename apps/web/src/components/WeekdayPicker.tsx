@@ -30,10 +30,10 @@ export function WeekdayPicker({
             aria-label={long}
             onClick={() => toggle(day)}
             className={cn(
-              'h-9 rounded-md border text-sm transition-colors outline-none focus-visible:ring-2 focus-visible:ring-ring',
+              'h-10 rounded-full border border-transparent text-sm transition-colors outline-none focus-visible:ring-2 focus-visible:ring-ring',
               on
-                ? 'border-primary bg-primary font-medium text-primary-foreground'
-                : 'border-input text-muted-foreground hover:bg-muted',
+                ? 'bg-primary font-medium text-primary-foreground'
+                : 'bg-muted text-muted-foreground hover:text-foreground',
               invalid && !on && 'border-destructive/60',
             )}
           >

@@ -1,7 +1,8 @@
-import { type ReactNode, useId } from 'react';
+import type { ReactNode } from 'react';
+import { Section } from '@/components/Section';
 import { cn } from '@/lib/utils';
 
-/** One settings card: a title, an optional line under it, and its controls. */
+/** A settings group: its title on the page, its controls in a white card under it. */
 export function SettingsSection({
   title,
   description,
@@ -13,19 +14,36 @@ export function SettingsSection({
   children: ReactNode;
   className?: string;
 }) {
-  const titleId = useId();
   return (
-    <section
-      aria-labelledby={titleId}
-      className={cn('flex flex-col gap-4 rounded-xl border bg-card p-4 sm:p-6', className)}
-    >
-      <div className="flex flex-col gap-1">
-        <h2 id={titleId} className="font-medium">
-          {title}
-        </h2>
-        {description && <p className="text-sm text-muted-foreground">{description}</p>}
+    <Section title={title} description={description}>
+      <div className={cn('flex flex-col gap-5 rounded-3xl bg-card p-5 sm:p-7', className)}>
+        {children}
       </div>
-      {children}
-    </section>
+    </Section>
+  );
+}
+
+/** One setting on a line: what it is (and a hint) on the left, its control on the right. */
+export function SettingsRow({
+  label,
+  hint,
+  labelId,
+  children,
+}: {
+  label: string;
+  hint?: ReactNode;
+  labelId?: string;
+  children: ReactNode;
+}) {
+  return (
+    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-8">
+      <div className="flex min-w-0 flex-col gap-0.5">
+        <span id={labelId} className="text-[0.9375rem] font-medium">
+          {label}
+        </span>
+        {hint && <span className="text-sm text-muted-foreground">{hint}</span>}
+      </div>
+      <div className="shrink-0 sm:w-72">{children}</div>
+    </div>
   );
 }

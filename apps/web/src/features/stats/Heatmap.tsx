@@ -39,7 +39,7 @@ export function Heatmap({
   const [hovered, setHovered] = useState<HeatmapDay | null>(null);
   const weeks = heatmapWeeks(days);
   const small = weeks.length > 20;
-  const cell = small ? 'size-3.5 rounded-[3px]' : 'size-6 rounded-md';
+  const cell = small ? 'size-3.5 rounded-[3px]' : 'size-6 rounded-[6px]';
   const scheduled = days.filter((day) => day.scheduled);
   const hits = scheduled.filter((day) => day.hit).length;
 

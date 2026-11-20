@@ -1,6 +1,7 @@
 import { type ReactNode, useId } from 'react';
 import { type Control, Controller, type FieldValues, type Path } from 'react-hook-form';
 import { Field, FieldDescription, FieldError, FieldLabel } from '@/components/ui/field';
+import { NativeSelect } from '@/components/ui/native-select';
 
 /** A labelled native select wired to react-hook-form (native: accessible, and right on phones). */
 export function SelectField<T extends FieldValues>({
@@ -29,7 +30,7 @@ export function SelectField<T extends FieldValues>({
       render={({ field, fieldState }) => (
         <Field data-invalid={fieldState.invalid || undefined}>
           <FieldLabel htmlFor={id}>{label}</FieldLabel>
-          <select
+          <NativeSelect
             id={id}
             name={field.name}
             ref={field.ref}
@@ -44,14 +45,13 @@ export function SelectField<T extends FieldValues>({
             aria-describedby={
               fieldState.error ? `${id}-error` : description ? `${id}-description` : undefined
             }
-            className="h-8 w-full rounded-lg border border-input bg-transparent px-2 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:opacity-60 dark:bg-input/30"
           >
             {options.map((option) => (
               <option key={option.value} value={option.value}>
                 {option.label}
               </option>
             ))}
-          </select>
+          </NativeSelect>
           {description && (
             <FieldDescription id={`${id}-description`}>{description}</FieldDescription>
           )}

@@ -40,7 +40,7 @@ export default function RegisterPage() {
   return (
     <Card>
       <CardHeader>
-        <h1 className="text-xl font-semibold tracking-tight">Create your account</h1>
+        <h1 className="text-2xl font-bold tracking-tight">Create your account</h1>
         <CardDescription>
           notch is invite-only. You'll need the code you were given.
         </CardDescription>

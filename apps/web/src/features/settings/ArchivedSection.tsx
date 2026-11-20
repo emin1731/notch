@@ -1,7 +1,18 @@
-import { ArchiveRestore } from 'lucide-react';
+import { ArchiveRestore, Flag, Repeat } from 'lucide-react';
+import { Fragment } from 'react';
 import { toast } from 'sonner';
 import { CoreIcon } from '@/components/CoreIcon';
 import { Button } from '@/components/ui/button';
+import {
+  Item,
+  ItemActions,
+  ItemContent,
+  ItemDescription,
+  ItemGroup,
+  ItemMedia,
+  ItemSeparator,
+  ItemTitle,
+} from '@/components/ui/item';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useArchiveCore, useCores } from '@/features/cores/hooks';
 import { useGoalAction, useGoals } from '@/features/goals/hooks';
@@ -69,7 +80,7 @@ export function ArchivedSection() {
               <ArchivedRow
                 key={core.id}
                 name={core.name}
-                icon={<CoreIcon icon={core.icon} color={core.color} size="sm" />}
+                media={<CoreIcon icon={core.icon} color={core.color} size="lg" />}
                 detail="Its goals and habits stay archived until you bring them back."
                 pending={archiveCore.isPending}
                 onUnarchive={() =>
@@ -84,6 +95,11 @@ export function ArchivedSection() {
               return (
                 <ArchivedRow
                   key={goal.id}
+                  media={
+                    <ItemMedia variant="tile">
+                      <Flag />
+                    </ItemMedia>
+                  }
                   name={goal.title}
                   detail={
                     blocked ? SETTINGS_COPY.coreArchivedFirst(blocked) : coreOf(goal.coreId)?.name
@@ -103,6 +119,11 @@ export function ArchivedSection() {
               return (
                 <ArchivedRow
                   key={habit.id}
+                  media={
+                    <ItemMedia variant="tile">
+                      <Repeat />
+                    </ItemMedia>
+                  }
                   name={habit.name}
                   detail={
                     blocked ? SETTINGS_COPY.coreArchivedFirst(blocked) : coreOf(habit.coreId)?.name
@@ -127,50 +148,55 @@ function ArchivedList({ title, children }: { title: string; children: React.Reac
     return null;
   }
   return (
-    <div className="flex flex-col gap-2">
-      <h3 className="text-sm text-muted-foreground">{title}</h3>
-      <ul
-        className="flex flex-col divide-y rounded-lg border"
-        aria-label={`Archived ${title.toLowerCase()}`}
-      >
-        {children}
-      </ul>
+    <div className="flex flex-col gap-1">
+      <h3 className="px-1 text-sm text-muted-foreground">{title}</h3>
+      <ItemGroup aria-label={`Archived ${title.toLowerCase()}`} className="-mx-3">
+        {children.map((child, index) => (
+          <Fragment key={index}>
+            {index > 0 && <ItemSeparator />}
+            {child}
+          </Fragment>
+        ))}
+      </ItemGroup>
     </div>
   );
 }
 
 function ArchivedRow({
   name,
-  icon,
+  media,
   detail,
   blocked = false,
   pending,
   onUnarchive,
 }: {
   name: string;
-  icon?: React.ReactNode;
+  /** The row's tile: a core's own, or an icon in a grey one. */
+  media: React.ReactNode;
   detail?: string;
   blocked?: boolean;
   pending: boolean;
   onUnarchive: () => void;
 }) {
   return (
-    <li className="flex items-center gap-3 px-3 py-2.5 text-sm">
-      {icon}
-      <div className="min-w-0 flex-1">
-        <div className="truncate font-medium">{name}</div>
-        {detail && <div className="text-xs text-muted-foreground">{detail}</div>}
-      </div>
-      <Button
-        variant="outline"
-        size="sm"
-        disabled={blocked || pending}
-        aria-label={`Unarchive ${name}`}
-        onClick={onUnarchive}
-      >
-        <ArchiveRestore />
-        <span className="hidden sm:inline">Unarchive</span>
-      </Button>
-    </li>
+    <Item role="listitem">
+      {media}
+      <ItemContent>
+        <ItemTitle>{name}</ItemTitle>
+        {detail && <ItemDescription>{detail}</ItemDescription>}
+      </ItemContent>
+      <ItemActions>
+        <Button
+          variant="secondary"
+          size="sm"
+          disabled={blocked || pending}
+          aria-label={`Unarchive ${name}`}
+          onClick={onUnarchive}
+        >
+          <ArchiveRestore />
+          <span className="hidden sm:inline">Unarchive</span>
+        </Button>
+      </ItemActions>
+    </Item>
   );
 }

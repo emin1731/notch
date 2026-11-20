@@ -56,7 +56,7 @@ export function TargetHistoryChart({
   }
   if (changes.length === 0) {
     return (
-      <section className="flex flex-col gap-1 rounded-xl border bg-card p-4">
+      <section className="flex flex-col gap-1 rounded-3xl bg-card p-5 sm:p-6">
         <h2 className="font-medium">Target over time</h2>
         <p className="text-sm text-muted-foreground">
           This target hasn&apos;t changed in this range: {say(first.target)} throughout.

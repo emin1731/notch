@@ -1,6 +1,7 @@
 import type { StatsRange } from '@notch/shared';
 import type { ReactNode } from 'react';
 import { SegmentedControl } from '@/components/SegmentedControl';
+import { cn } from '@/lib/utils';
 
 const RANGE_LABELS: Record<StatsRange, string> = {
   '7d': '7 days',
@@ -14,10 +15,13 @@ export function RangeControl<T extends StatsRange>({
   ranges,
   value,
   onChange,
+  surface = true,
 }: {
   ranges: readonly T[];
   value: T;
   onChange: (range: T) => void;
+  /** On the page (the default) rather than in a card. */
+  surface?: boolean;
 }) {
   return (
     <>
@@ -29,6 +33,7 @@ export function RangeControl<T extends StatsRange>({
         onChange={onChange}
         options={ranges.map((range) => ({ value: range, label: RANGE_LABELS[range] }))}
         aria-labelledby="range-label"
+        surface={surface}
       />
     </>
   );
@@ -48,20 +53,37 @@ export function Kpi({
   detail?: ReactNode;
 }) {
   return (
-    <div className="flex min-w-0 flex-col gap-0.5 rounded-xl border bg-card p-4">
+    <div className="flex min-w-0 flex-col gap-1 rounded-3xl bg-card p-5 sm:p-6">
       <dt className="text-sm text-muted-foreground">{label}</dt>
-      <dd className="text-2xl font-semibold tabular-nums" aria-label={valueLabel}>
+      <dd className="text-3xl font-bold tracking-tight tabular-nums" aria-label={valueLabel}>
         {value}
       </dd>
-      {detail && <dd className="truncate text-xs text-muted-foreground">{detail}</dd>}
+      {detail && <dd className="truncate text-sm text-muted-foreground">{detail}</dd>}
     </div>
   );
 }
 
-export function Panel({ title, children }: { title: string; children: ReactNode }) {
+/** A white card with its name as a small muted label (and an optional note on the right). */
+export function Panel({
+  title,
+  aside,
+  children,
+  className,
+}: {
+  title: string;
+  aside?: ReactNode;
+  children: ReactNode;
+  className?: string;
+}) {
   return (
-    <section aria-label={title} className="flex flex-col gap-3 rounded-xl border bg-card p-4">
-      <h2 className="font-medium">{title}</h2>
+    <section
+      aria-label={title}
+      className={cn('flex min-w-0 flex-col gap-4 rounded-3xl bg-card p-5 sm:p-7', className)}
+    >
+      <div className="flex items-baseline justify-between gap-3">
+        <h2 className="text-[0.9375rem] text-muted-foreground">{title}</h2>
+        {aside && <span className="text-sm text-muted-foreground">{aside}</span>}
+      </div>
       {children}
     </section>
   );
