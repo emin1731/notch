@@ -22,7 +22,7 @@ export function StepHowItWorks({
         {copy.points.map((point, index) => {
           const Icon = ICONS[index]!;
           return (
-            <li key={point} className="flex items-start gap-3 rounded-xl border p-4 text-sm">
+            <li key={point} className="flex items-start gap-3 rounded-3xl bg-card p-5 text-sm">
               <Icon className="mt-0.5 size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
               {point}
             </li>

@@ -16,7 +16,6 @@ import { useCompleteOnboarding } from '@/features/auth/hooks';
 import { CoreForm } from '@/features/cores/CoreForm';
 import { useCores } from '@/features/cores/hooks';
 import { apiErrorMessage } from '@/lib/forms';
-import { cn } from '@/lib/utils';
 import { ONBOARDING_COPY } from './copy';
 import { type DraftCore, presetKey } from './onboarding-model';
 import { useOnboarding } from './onboarding-store';
@@ -93,26 +92,25 @@ export function StepCores(props: StepProps) {
             <Button
               key={preset.name}
               type="button"
-              variant="outline"
+              variant={on ? 'default' : 'surface'}
               aria-pressed={on}
               disabled={saved(key)}
               onClick={() => togglePreset(preset)}
-              className={cn(on && 'border-primary bg-primary/5')}
             >
               <CoreIcon icon={preset.icon} color={preset.color} size="sm" className="-ml-1" />
               {preset.name}
-              {on && <Check className="text-primary" aria-hidden="true" />}
+              {on && <Check aria-hidden="true" />}
             </Button>
           );
         })}
-        <Button type="button" variant="ghost" onClick={() => setEditing({ mode: 'new' })}>
+        <Button type="button" variant="surface" onClick={() => setEditing({ mode: 'new' })}>
           <Plus />
           Add your own
         </Button>
       </div>
 
       {cores.length > 0 && (
-        <ul className="flex flex-col divide-y rounded-xl border" aria-label="Your cores">
+        <ul className="flex flex-col divide-y rounded-3xl bg-card px-2" aria-label="Your cores">
           {cores.map((core) => (
             <li key={core.key} className="flex items-center gap-3 px-4 py-3">
               <CoreIcon icon={core.icon} color={core.color} />

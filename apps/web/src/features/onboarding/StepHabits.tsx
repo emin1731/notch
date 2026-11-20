@@ -39,7 +39,7 @@ export function StepHabits(props: StepProps) {
             <section
               key={core.key}
               aria-label={core.name}
-              className="flex flex-col gap-3 rounded-xl border p-4"
+              className="flex flex-col gap-3 rounded-3xl bg-card p-5"
             >
               <CoreChip name={core.name} icon={core.icon} color={core.color} />
               {templates.length > 0 && (
@@ -55,7 +55,7 @@ export function StepHabits(props: StepProps) {
                       <Button
                         key={key}
                         type="button"
-                        variant="outline"
+                        variant={on ? 'default' : 'secondary'}
                         aria-pressed={on}
                         disabled={saved(key)}
                         onClick={() =>
@@ -68,16 +68,18 @@ export function StepHabits(props: StepProps) {
                                 input: template,
                               })
                         }
-                        className={cn(
-                          'h-auto flex-col items-start gap-0 py-1.5',
-                          on && 'border-primary bg-primary/5',
-                        )}
+                        className="h-auto flex-col items-start gap-0 rounded-2xl py-2"
                       >
                         <span className="flex items-center gap-1.5 font-medium">
                           {template.name}
-                          {on && <Check className="size-3.5 text-primary" aria-hidden="true" />}
+                          {on && <Check className="size-3.5" aria-hidden="true" />}
                         </span>
-                        <span className="text-xs font-normal text-muted-foreground">
+                        <span
+                          className={cn(
+                            'text-xs font-normal',
+                            on ? 'text-primary-foreground/70' : 'text-muted-foreground',
+                          )}
+                        >
                           {templateSummary(template)}
                         </span>
                       </Button>
@@ -117,7 +119,7 @@ export function StepHabits(props: StepProps) {
               )}
               <Button
                 type="button"
-                variant="ghost"
+                variant="secondary"
                 size="sm"
                 className="self-start"
                 onClick={() => setAdding(core.key)}

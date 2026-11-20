@@ -18,7 +18,7 @@ import { isApiError } from '@/lib/api-client';
 import { applyServerError, useZodForm } from '@/lib/forms';
 import { mismatchText, timezoneOptions, useTimezoneMismatch } from '@/lib/timezone';
 import { SETTINGS_COPY } from './copy';
-import { SettingsSection } from './SettingsSection';
+import { SettingsRow, SettingsSection } from './SettingsSection';
 
 const profileSchema = z.object({ name: z.union([z.literal(''), nameSchema]) });
 
@@ -185,17 +185,19 @@ const THEME_OPTIONS = [
 export function ThemeSection() {
   const { theme, setTheme } = useTheme();
   return (
-    <SettingsSection title="Theme" description="System follows your device's setting.">
-      <span id="theme-label" className="sr-only">
-        Theme
-      </span>
-      <SegmentedControl
-        value={theme}
-        onChange={setTheme}
-        options={THEME_OPTIONS}
-        aria-labelledby="theme-label"
-        className="max-w-sm"
-      />
+    <SettingsSection title="Theme">
+      <SettingsRow
+        label="Appearance"
+        hint="System follows your device's setting."
+        labelId="theme-label"
+      >
+        <SegmentedControl
+          value={theme}
+          onChange={setTheme}
+          options={THEME_OPTIONS}
+          aria-labelledby="theme-label"
+        />
+      </SettingsRow>
     </SettingsSection>
   );
 }
