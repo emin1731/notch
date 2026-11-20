@@ -11,7 +11,7 @@ import {
   type StepType,
   type TimeOfDay,
 } from '@notch/shared';
-import { CircleCheck, Hash, Info, SearchX, Timer, TriangleAlert } from 'lucide-react';
+import { Info, SearchX, TriangleAlert } from 'lucide-react';
 import { type ReactNode, useId, useState } from 'react';
 import { Controller, useForm, useWatch } from 'react-hook-form';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router';
@@ -51,25 +51,8 @@ import {
   toHabitInput,
   valuesFromHabit,
 } from './habit-form';
+import { parseNumber, SCHEDULES, TYPE_HINTS, TYPES } from './habit-options';
 import { useCreateHabit, useHabit, useUpdateHabit } from './hooks';
-
-const TYPES = [
-  { value: 'TOGGLE', label: 'Yes / no', icon: CircleCheck },
-  { value: 'COUNT', label: 'Count', icon: Hash },
-  { value: 'DURATION', label: 'Duration', icon: Timer },
-] as const satisfies readonly { value: HabitType; label: string; icon: typeof Hash }[];
-
-const TYPE_HINTS: Record<HabitType, string> = {
-  TOGGLE: 'Done or not, like taking vitamins.',
-  COUNT: 'A number each time, like pages read or glasses of water.',
-  DURATION: 'Time spent, like 20 minutes of meditation.',
-};
-
-const SCHEDULES = [
-  { value: 'DAILY', label: 'Every day' },
-  { value: 'SPECIFIC_DAYS', label: 'Some days' },
-  { value: 'TIMES_PER_WEEK', label: 'Times a week' },
-] as const satisfies readonly { value: ScheduleType; label: string }[];
 
 const TIMES_OF_DAY = [
   { value: 'MORNING', label: 'Morning' },
@@ -95,8 +78,6 @@ const FIELDS: HabitFormField[] = [
   'maxTarget',
   'startDate',
 ];
-
-const parseNumber = (text: string) => (text.trim() === '' ? null : Number(text));
 
 export default function HabitFormPage() {
   const { habitId } = useParams();
