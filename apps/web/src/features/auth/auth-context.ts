@@ -13,7 +13,12 @@ export interface AuthState {
   retrying: boolean;
   /** Ends the session, even if the request fails: this browser is logged out either way. */
   logout: () => Promise<void>;
-  /** Anonymous because of `logout()`, not an expired session or a first visit. */
+  /**
+   * The server already ended the session (logged out everywhere, account deleted): forget it
+   * here too, as a deliberate logout.
+   */
+  signedOut: () => void;
+  /** Anonymous because of `logout()` or `signedOut()`, not an expired session or a first visit. */
   loggedOut: boolean;
 }
 
