@@ -34,7 +34,7 @@ export function ColorPicker({
           aria-label={label(color)}
           title={label(color)}
           style={coreStyle(color)}
-          className="flex size-8 items-center justify-center rounded-full bg-(--core) text-white outline-none ring-offset-2 ring-offset-background focus-visible:ring-2 focus-visible:ring-ring data-[state=checked]:ring-2 data-[state=checked]:ring-foreground"
+          className="flex size-8 items-center justify-center rounded-full bg-(--core) text-white outline-none ring-offset-2 ring-offset-card focus-visible:ring-2 focus-visible:ring-ring data-[state=checked]:ring-2 data-[state=checked]:ring-foreground"
         >
           <RadioGroupPrimitive.Indicator>
             <Check className="size-4" aria-hidden="true" />

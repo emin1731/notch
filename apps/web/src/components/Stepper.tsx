@@ -22,7 +22,7 @@ export function Stepper({
     <div className="flex items-center gap-3">
       <Button
         type="button"
-        variant="outline"
+        variant="secondary"
         size="icon"
         aria-label={`Fewer ${label}`}
         disabled={value <= min}
@@ -35,7 +35,7 @@ export function Stepper({
       </output>
       <Button
         type="button"
-        variant="outline"
+        variant="secondary"
         size="icon"
         aria-label={`More ${label}`}
         disabled={value >= max}

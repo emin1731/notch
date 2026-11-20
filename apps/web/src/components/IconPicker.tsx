@@ -38,7 +38,7 @@ export function IconPicker({
         onValueChange={onChange}
         aria-labelledby={labelledBy}
         loop
-        className="grid max-h-44 grid-cols-[repeat(auto-fill,minmax(2.5rem,1fr))] gap-1 overflow-y-auto rounded-lg border p-1"
+        className="grid max-h-44 grid-cols-[repeat(auto-fill,minmax(2.5rem,1fr))] gap-1 overflow-y-auto rounded-xl bg-muted p-1.5"
       >
         {results.map(({ name, label, icon: Icon }) => (
           <RadioGroupPrimitive.Item
@@ -46,7 +46,7 @@ export function IconPicker({
             value={name}
             aria-label={label}
             title={label}
-            className="flex aspect-square items-center justify-center rounded-md text-muted-foreground outline-none hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring data-[state=checked]:bg-(--core)/15 data-[state=checked]:text-(--core)"
+            className="flex aspect-square items-center justify-center rounded-lg text-muted-foreground outline-none hover:bg-card hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring data-[state=checked]:bg-card data-[state=checked]:text-(--core) data-[state=checked]:shadow-sm"
           >
             <Icon className="size-5" aria-hidden="true" />
           </RadioGroupPrimitive.Item>
