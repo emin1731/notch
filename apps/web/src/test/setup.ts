@@ -1,6 +1,7 @@
 import '@testing-library/jest-dom/vitest';
 import { cleanup, configure } from '@testing-library/react';
 import { afterAll, afterEach, beforeAll, vi } from 'vitest';
+import { useOnboarding } from '@/features/onboarding/onboarding-store';
 import { useOverrides } from '@/features/today/log-sync';
 import { useTimer } from '@/features/today/timer';
 import { useTimerPrompt } from '@/features/today/timer-actions';
@@ -38,11 +39,13 @@ afterEach(() => {
   server.resetHandlers();
   cleanup();
   localStorage.clear();
+  sessionStorage.clear();
   clearCookies();
   // Zustand stores live in memory across tests.
   useOverrides.getState().clear();
   useTimer.setState({ running: null });
   useTimerPrompt.setState({ prompt: null });
+  useOnboarding.getState().reset();
   document.documentElement.className = '';
 });
 afterAll(() => server.close());
