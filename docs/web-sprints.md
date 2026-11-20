@@ -293,33 +293,38 @@ W4 holds most of the web risk: optimistic updates, debounced counters and the ti
 
 **Goal:** readable, accurate stats that match the API's numbers. Spec: plan 7.5 "Stats" and "Habit detail".
 
-**Decide**
+**Decided**
 
-- [ ] **Heatmap colors.** Recommendation: intensity in the habit's core color, with hollow cells for unscheduled days and a dot for bonus logs. Every cell has an `aria-label`, so meaning never relies on color alone.
+- [x] **Heatmap colors:** intensity in the habit's core color (4 steps of `value / target`, full color = hit), hollow cells for unscheduled days and a dot for bonus logs. Every cell has an `aria-label` ("Tue, Nov 17: 25 min of 55 min"), so meaning never relies on color alone.
+- [x] **Table fallback:** each chart card has a Chart | Table switch, and the chart has a one-line summary for screen readers.
+- [x] **Recharts pinned to `~3.10.1`:** 3.11.0 is newer than the pnpm release-age policy allows. It sits in its own chunk, loaded only by these two pages.
+- [x] **The range lives in the URL (`?range=90d`):** reloads and Back keep it; an unknown value falls back to 30 days.
+- [x] **Every structure change refreshes the stats:** editing, archiving or moving a habit, goal or core invalidates `stats` too, not just log writes and undo.
 
 **App**
 
-- [ ] Stats page:
-  - range tabs
-  - KPI row
-  - completion line (daily series; gaps where `rate` is null)
-  - by-core bars
-  - streak leaderboard
-  - goals
-- [ ] Habit detail:
-  - header (target, schedule, streaks, plus the "streak reset" copy when it applies)
-  - range selector
+- [x] Stats page:
+  - range tabs (7 days / 30 days / 90 days / 1 year)
+  - KPI row: completion, best streak, goals completed, level-ups vs deloads
+  - completion line (daily series; gaps where `rate` is null, starting at the first day with anything due)
+  - by-core bars (CSS, with the percentage written next to each)
+  - streak leaderboard, linking to each habit
+  - goals: active ones with progress, then those completed in the range
+- [x] Habit detail:
+  - header (target, schedule, streaks in days or weeks, plus the "streak reset" copy when it applies)
+  - range selector (30 days / 90 days / 1 year)
+  - totals: completion ("18 of 24 days", or sessions for a weekly habit), total logged, level-ups in the range
   - `Heatmap`
   - `TargetHistoryChart`: steps, ↑ / ↓ markers, undone changes faded
-  - totals
-  - the last 14 days' logs, editable within the backfill window
-- [ ] A table fallback for each chart; Recharts loaded only on these pages
+  - the last 14 days' logs, editable inline by type within the backfill window (never before the start date; none for an archived habit)
+- [x] A table fallback for each chart; Recharts loaded only on these pages
 
 **Tests**
 
-- [ ] The heatmap renders the API's days and flags
-- [ ] Chart table fallbacks match the data
-- [ ] Editing a recent log updates the stats
+- [x] The heatmap renders the API's days and flags
+- [x] Chart table fallbacks match the data
+- [x] Editing a recent log updates the stats
+- [x] Playwright: the stats page matches `/stats/overview` at every range; a habit's totals match `/stats/habits/:id`, and editing yesterday moves them to the API's new numbers
 
 **Done when:** the demo user's stats pages show the same numbers as the API at every range, and are usable without seeing the charts.
 

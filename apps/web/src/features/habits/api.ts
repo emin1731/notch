@@ -1,4 +1,10 @@
-import type { CreateHabitInput, HabitDetailDto, HabitDto, UpdateHabitInput } from '@notch/shared';
+import type {
+  CreateHabitInput,
+  HabitDetailDto,
+  HabitDto,
+  TargetChangeDto,
+  UpdateHabitInput,
+} from '@notch/shared';
 import { api } from '@/lib/api-client';
 
 export const habitsApi = {
@@ -13,4 +19,6 @@ export const habitsApi = {
   delete: (id: string) => api.delete<void>(`/habits/${id}`),
   /** The listed habits first, in this order; the rest keep theirs after them. */
   order: (ids: string[]) => api.put<HabitDto[]>('/habits/order', { ids }),
+  /** Every target change, oldest first, undone ones included. */
+  targetHistory: (id: string) => api.get<TargetChangeDto[]>(`/habits/${id}/target-history`),
 };
