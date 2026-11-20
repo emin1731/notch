@@ -21,7 +21,7 @@ export function ReviewBanner({ today }: { today: TodayResponse }) {
   return (
     <Link
       to="/review"
-      className="flex items-center gap-3 rounded-xl border bg-card p-4 text-sm transition-colors hover:bg-muted/50 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+      className="flex items-center gap-3 rounded-3xl bg-card p-5 text-sm transition-colors hover:bg-card/70 focus-visible:ring-3 focus-visible:ring-ring focus-visible:outline-none"
     >
       {today.welcomeBack ? (
         <Hand className="size-5 shrink-0 text-muted-foreground" aria-hidden="true" />

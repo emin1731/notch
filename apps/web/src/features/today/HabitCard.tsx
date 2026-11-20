@@ -23,7 +23,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Input } from '@/components/ui/input';
 import { useArchiveHabit } from '@/features/habits/hooks';
-import { coreStyle } from '@/lib/core-colors';
+import { CoreIcon } from '@/components/CoreIcon';
 import { apiErrorMessage } from '@/lib/forms';
 import { cn } from '@/lib/utils';
 import { useLogSync } from './log-sync-context';
@@ -41,19 +41,20 @@ export function HabitCard({ habit, date }: { habit: TodayHabit; date: LocalDate 
   return (
     <article
       aria-labelledby={titleId}
-      style={coreStyle(habit.core.color)}
-      className={cn(
-        'flex flex-col gap-3 rounded-xl border border-l-4 border-l-(--core) bg-card p-3 text-card-foreground transition-colors',
-        done && 'bg-(--core)/5',
-      )}
+      data-done={done || undefined}
+      className="flex flex-col gap-4 rounded-3xl bg-card p-4 text-card-foreground sm:p-5"
     >
-      <div className="flex items-center gap-3">
-        {habit.type === 'TOGGLE' && <ToggleControl habit={habit} date={date} />}
+      <div className="flex items-center gap-3 sm:gap-4">
+        {habit.type === 'TOGGLE' ? (
+          <ToggleControl habit={habit} date={date} />
+        ) : (
+          <CoreIcon icon={habit.core.icon} color={habit.core.color} size="lg" />
+        )}
         <div className="min-w-0 flex-1">
-          <h3 id={titleId} className="truncate font-medium">
+          <h3 id={titleId} className="truncate text-[0.9375rem] font-semibold">
             {habit.name}
           </h3>
-          <p className="flex min-w-0 items-center gap-2 text-xs text-muted-foreground">
+          <p className="flex min-w-0 items-center gap-2 text-sm text-muted-foreground">
             <span className="truncate">{habit.goal?.title ?? habit.core.name}</span>
             {habit.week && <WeekDots hits={habit.week.hits} quota={habit.week.quota} />}
           </p>
@@ -131,10 +132,10 @@ function ToggleControl({ habit, date }: { habit: TodayHabit; date: LocalDate }) 
       aria-label={`${habit.name} done`}
       onClick={() => sync.set(date, logTarget(habit), done ? 0 : 1)}
       className={cn(
-        'flex size-11 shrink-0 items-center justify-center rounded-full border-2 transition-colors outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
+        'flex size-11 shrink-0 items-center justify-center rounded-full border-2 transition-colors outline-none focus-visible:ring-3 focus-visible:ring-ring/50',
         done
-          ? 'border-(--core) bg-(--core) text-white'
-          : 'border-muted-foreground/30 text-transparent hover:border-(--core) hover:text-(--core)/60',
+          ? 'border-primary bg-primary text-primary-foreground'
+          : 'border-foreground/15 text-transparent hover:border-foreground/40 hover:text-foreground/30',
       )}
     >
       <Check className="size-6" strokeWidth={3} aria-hidden="true" />
@@ -157,7 +158,7 @@ function CounterControl({
   return (
     <div className="flex items-center gap-2">
       <Button
-        variant="outline"
+        variant="secondary"
         size="icon"
         aria-label={`One less ${habit.name}`}
         disabled={value === 0}
@@ -179,7 +180,7 @@ function CounterControl({
         </span>
       </InlineNumber>
       <Button
-        variant="outline"
+        variant="secondary"
         size="icon"
         aria-label={`One more ${habit.name}`}
         onClick={() => sync.tap(date, logTarget(habit), 1)}
@@ -215,7 +216,7 @@ function DurationControl({
     <div className="flex flex-col gap-2">
       <div className="flex flex-wrap items-center gap-2">
         <Button
-          variant={mine ? 'default' : 'outline'}
+          variant={mine ? 'default' : 'secondary'}
           size="icon"
           aria-label={mine ? `Stop timer for ${habit.name}` : `Start timer for ${habit.name}`}
           onClick={() => (mine ? timer.stop() : timer.start(habit, date))}
@@ -232,7 +233,7 @@ function DurationControl({
           <span className="text-muted-foreground"> / {Math.round(target / 60)} min</span>
         </InlineNumber>
         {mine && (
-          <span className="text-sm font-medium tabular-nums text-(--core)" aria-live="off">
+          <span className="text-sm font-medium tabular-nums" aria-live="off">
             {formatClock(elapsed)}
           </span>
         )}
@@ -296,7 +297,7 @@ function AddTime({
         value={minutes}
         onChange={(event) => setMinutes(event.target.value)}
         onKeyDown={(event) => event.key === 'Escape' && onCancel()}
-        className="h-8 w-28"
+        className="h-9 w-28"
       />
       <Button type="submit" size="sm" disabled={!valid}>
         Add
@@ -329,7 +330,7 @@ function InlineNumber({
       <button
         type="button"
         onClick={() => setDraft(String(value))}
-        className="rounded-md px-2 py-1 text-sm tabular-nums outline-none hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring"
+        className="rounded-lg px-2 py-1 text-[0.9375rem] tabular-nums outline-none hover:bg-muted focus-visible:ring-3 focus-visible:ring-ring/50"
       >
         {children}
         <span className="sr-only">, edit {label}</span>
@@ -369,16 +370,16 @@ function InlineNumber({
           setDraft(null);
         }
       }}
-      className="h-8 w-24"
+      className="h-9 w-24"
     />
   );
 }
 
 function Bar({ progress }: { progress: number }) {
   return (
-    <div className="h-1.5 overflow-hidden rounded-full bg-muted" aria-hidden="true">
+    <div className="h-1 overflow-hidden rounded-full bg-muted" aria-hidden="true">
       <div
-        className="h-full rounded-full bg-(--core) transition-[width] duration-300"
+        className="h-full rounded-full bg-foreground transition-[width] duration-300"
         style={{ width: `${Math.round(progress * 100)}%` }}
       />
     </div>
@@ -395,7 +396,7 @@ function WeekDots({ hits, quota }: { hits: number; quota: number }) {
           aria-hidden="true"
           className={cn(
             'size-1.5 rounded-full',
-            index < hits ? 'bg-(--core)' : 'bg-muted-foreground/25',
+            index < hits ? 'bg-foreground' : 'bg-foreground/15',
           )}
         />
       ))}
