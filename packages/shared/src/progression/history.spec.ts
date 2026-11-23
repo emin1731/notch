@@ -57,6 +57,7 @@ describe('scheduleOn', () => {
     scheduleType: 'SPECIFIC_DAYS',
     daysOfWeek: [1, 3, 5],
     timesPerWeek: null,
+    intervalDays: null,
     startDate: '2026-01-01',
   };
 
@@ -80,8 +81,41 @@ describe('scheduleOn', () => {
     expect(scheduleOn('2026-11-17', tpw, changes).timesPerWeek).toBe(4);
   });
 
-  it('leaves a daily habit alone', () => {
-    const daily: ScheduleSnapshot = { ...base, scheduleType: 'DAILY', daysOfWeek: [] };
-    expect(scheduleOn('2026-11-10', daily, [])).toEqual(daily);
+  it('counts a daily interval from the day it took effect', () => {
+    const daily: ScheduleSnapshot = {
+      ...base,
+      scheduleType: 'DAILY',
+      daysOfWeek: [],
+      intervalDays: 3,
+    };
+    expect(scheduleOn('2026-11-10', daily, [])).toEqual({ ...daily, intervalFrom: '2026-01-01' });
+    const changes = [
+      change('2026-11-12', 1, 2, { field: 'INTERVAL_DAYS' }),
+      change('2026-11-17', 2, 3, { field: 'INTERVAL_DAYS' }),
+    ];
+    expect(scheduleOn('2026-11-11', daily, changes)).toMatchObject({
+      intervalDays: 1,
+      intervalFrom: '2026-01-01',
+    });
+    expect(scheduleOn('2026-11-14', daily, changes)).toMatchObject({
+      intervalDays: 2,
+      intervalFrom: '2026-11-12',
+    });
+    expect(scheduleOn('2026-11-20', daily, changes)).toMatchObject({
+      intervalDays: 3,
+      intervalFrom: '2026-11-17',
+    });
+  });
+
+  it('counts an interval edited before the start date from the start date', () => {
+    const later: ScheduleSnapshot = {
+      ...base,
+      scheduleType: 'DAILY',
+      daysOfWeek: [],
+      intervalDays: 3,
+      startDate: '2026-11-25',
+    };
+    const changes = [change('2026-11-20', 1, 3, { field: 'INTERVAL_DAYS' })];
+    expect(scheduleOn('2026-11-25', later, changes).intervalFrom).toBe('2026-11-25');
   });
 });

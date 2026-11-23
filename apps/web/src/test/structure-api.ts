@@ -47,6 +47,7 @@ export function fakeHabit(fields: Partial<HabitDto> & Pick<HabitDto, 'coreId' | 
     scheduleType: 'DAILY',
     daysOfWeek: [],
     timesPerWeek: null,
+    intervalDays: (fields.scheduleType ?? 'DAILY') === 'DAILY' ? 1 : null,
     initialTimesPerWeek: null,
     timeOfDay: 'ANYTIME',
     adaptiveEnabled: true,

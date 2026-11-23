@@ -47,7 +47,7 @@ test('create one habit of each type, then edit a target', async ({ page }) => {
   await page.getByRole('radio', { name: 'Count' }).click();
   await page.getByLabel('Target', { exact: true }).fill('20');
   await page.getByLabel('Unit (optional)').fill('pages');
-  await page.getByRole('radio', { name: 'Some days' }).click();
+  await page.getByRole('radio', { name: 'Weekly' }).click();
   for (const day of ['Monday', 'Wednesday', 'Friday']) {
     await page.getByRole('button', { name: day }).click();
   }

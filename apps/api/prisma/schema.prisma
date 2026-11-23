@@ -45,6 +45,7 @@ enum TargetField {
   TARGET_VALUE
   TIMES_PER_WEEK
   DAYS_OF_WEEK // values are bitmasks, Mon = 1 … Sun = 64
+  INTERVAL_DAYS
 }
 
 model User {
@@ -95,8 +96,8 @@ model Core {
   @@index([userId, archivedAt])
 }
 
-// CHECK constraints (target ≥ 1, timesPerWeek 1–7) live in the migration SQL: Prisma can't express
-// them. Cross-field rules are in habitShapeIssues() in @notch/shared.
+// CHECK constraints (target ≥ 1, timesPerWeek 1–7, intervalDays 1–30) live in the migration SQL:
+// Prisma can't express them. Cross-field rules are in habitShapeIssues() in @notch/shared.
 model Habit {
   id                  String       @id @default(uuid())
   userId              String
@@ -109,6 +110,7 @@ model Habit {
   scheduleType        ScheduleType
   daysOfWeek          Int[] // SPECIFIC_DAYS only, ISO 1..7
   timesPerWeek        Int? // TIMES_PER_WEEK only
+  intervalDays        Int? // DAILY only: every N days, 1 = every day
   initialTimesPerWeek Int?
   timeOfDay           TimeOfDay    @default(ANYTIME)
 

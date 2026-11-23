@@ -1,6 +1,7 @@
 import {
   type HabitTemplate,
   type HabitType,
+  LIMITS,
   PROGRESSION_CONFIG,
   type ScheduleType,
 } from '@notch/shared';
@@ -23,6 +24,7 @@ import {
   toHabitInput,
 } from '@/features/habits/habit-form';
 import { parseNumber, SCHEDULES, TYPE_HINTS, TYPES } from '@/features/habits/habit-options';
+import { intervalText } from '@/lib/habit-format';
 import { useToday } from '@/lib/use-today';
 import type { DraftCore } from './onboarding-model';
 
@@ -128,7 +130,7 @@ export function CompactHabitForm({
           />
         )}
         <div className="flex flex-col gap-2">
-          <FieldLabel id={ids.schedule}>Schedule</FieldLabel>
+          <FieldLabel id={ids.schedule}>Repeat</FieldLabel>
           <SegmentedControl<ScheduleType>
             value={values.scheduleType}
             onChange={(scheduleType) => patch(resetForSchedule(form.getValues(), scheduleType))}
@@ -136,6 +138,25 @@ export function CompactHabitForm({
             aria-labelledby={ids.schedule}
           />
         </div>
+        {values.scheduleType === 'DAILY' && (
+          <Controller
+            control={form.control}
+            name="intervalDays"
+            render={({ field, fieldState }) => (
+              <div className="flex flex-col gap-2">
+                <Stepper
+                  value={field.value}
+                  onChange={field.onChange}
+                  min={1}
+                  max={LIMITS.intervalDays}
+                  format={intervalText}
+                  label="days between"
+                />
+                <FieldError errors={[fieldState.error]} />
+              </div>
+            )}
+          />
+        )}
         {values.scheduleType === 'SPECIFIC_DAYS' && (
           <Controller
             control={form.control}

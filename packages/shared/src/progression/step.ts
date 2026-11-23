@@ -17,7 +17,7 @@ export interface StepSettings {
  */
 export function progressingField(
   habit: Pick<StepSettings, 'type' | 'scheduleType'>,
-): Exclude<TargetField, 'DAYS_OF_WEEK'> | null {
+): Exclude<TargetField, 'DAYS_OF_WEEK' | 'INTERVAL_DAYS'> | null {
   if (habit.type !== 'TOGGLE') {
     return 'TARGET_VALUE';
   }

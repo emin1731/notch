@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   changeArrow,
+  changeValue,
   changeValues,
   movedText,
   ratesText,
@@ -23,6 +24,21 @@ describe('change format', () => {
     [{ field: 'TIMES_PER_WEEK', fromValue: 3, toValue: 4 }, toggle, '3× → 4× a week'],
   ] as const)('%j in %j terms reads "%s"', (change, habit, text) => {
     expect(changeValues({ kind: 'LEVEL_UP', ...change }, habit)).toBe(text);
+  });
+
+  it.each([
+    [2, 3, 'Every 2 → 3 days'],
+    [1, 2, 'Every day → every 2 days'],
+    [3, 1, 'Every 3 days → every day'],
+  ])('an interval edit from %i to %i reads "%s"', (fromValue, toValue, text) => {
+    const change = { kind: 'MANUAL', field: 'INTERVAL_DAYS', fromValue, toValue } as const;
+    expect(changeValues(change, toggle)).toBe(text);
+  });
+
+  it('says one interval in words', () => {
+    const change = { kind: 'MANUAL', field: 'INTERVAL_DAYS', fromValue: 1, toValue: 3 } as const;
+    expect(changeValue(change, toggle, 1)).toBe('Every day');
+    expect(changeValue(change, toggle, 3)).toBe('Every 3 days');
   });
 
   it('explains and undoes in the habit’s terms', () => {

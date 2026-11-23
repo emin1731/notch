@@ -35,7 +35,7 @@
 | Accounts | Invite-only registration (username + password), log in, log out, log out everywhere, timezone, profile, change password, delete account |
 | Onboarding | Pick cores (presets + custom), add first habits |
 | Structure | Cores → Habits; every habit belongs to one core |
-| Habits | Three types (toggle, count, duration); three schedules (daily, specific days, X times per week); time-of-day grouping; archive/delete; reorder |
+| Habits | Three types (toggle, count, duration); three schedules (daily or every N days, specific days, X times per week); time-of-day grouping; archive/delete; reorder |
 | Logging | One-click toggle, +/− counter, duration timer or manual minutes; partial progress; backfill up to 7 days |
 | Today screen | Habits grouped by time of day, progress per habit, daily completion %, weekly quota for times-per-week habits, streaks, "target changed" badges |
 | Adaptive difficulty | Weekly evaluation; automatic level-up / deload / hold; undo; change history |
@@ -80,7 +80,7 @@ User
 
 | Schedule | Meaning | Fields |
 |---|---|---|
-| `DAILY` | Every day | — |
+| `DAILY` | Every day, or every N days | `intervalDays`: 1–30 (1 = every day, the default) |
 | `SPECIFIC_DAYS` | Only on chosen weekdays | `daysOfWeek`: ISO numbers, Mon = 1 … Sun = 7 |
 | `TIMES_PER_WEEK` | Any N days per week | `timesPerWeek`: 1–7 |
 
@@ -88,7 +88,9 @@ User
 
 A habit has a `startDate`: the local today by default, up to 6 days back (the backfill window, so days already done this week can be logged), or a later date. It is never scheduled before that date, and it can't be changed afterwards.
 
-**Editing a schedule.** The habit type and the schedule type are fixed: to change either, create a new habit. The weekdays of a `SPECIFIC_DAYS` habit and the quota of a `TIMES_PER_WEEK` habit can be edited. Like target edits, each edit is recorded as a `MANUAL` `TargetChange` (field `DAYS_OF_WEEK` as a bitmask, Mon = 1 … Sun = 64, or `TIMES_PER_WEEK`) effective from the local today, so history is read with `scheduleOn(date)` / `targetOn(date)` and past weeks keep the schedule they had.
+A `DAILY` habit with an interval of N is due on its start date, then every N days (every 2 days from Monday: Monday, Wednesday, Friday, Sunday, Tuesday…). With N = 1 it's due every day.
+
+**Editing a schedule.** The habit type and the schedule type are fixed: to change either, create a new habit. The interval of a `DAILY` habit, the weekdays of a `SPECIFIC_DAYS` habit and the quota of a `TIMES_PER_WEEK` habit can be edited. Like target edits, each edit is recorded as a `MANUAL` `TargetChange` (field `INTERVAL_DAYS`, `DAYS_OF_WEEK` as a bitmask, Mon = 1 … Sun = 64, or `TIMES_PER_WEEK`) effective from the local today, so history is read with `scheduleOn(date)` / `targetOn(date)` and past weeks keep the schedule they had. A new interval counts from the day it takes effect: that day is due, then every N days after it. Days before it keep the old rhythm. An interval edited before the habit has started counts from its start date. `scheduleOn` returns the interval together with the day it started (`intervalFrom`).
 
 ### 2.4 Logging
 
@@ -110,17 +112,19 @@ For one habit and one week (Monday–Sunday):
 
 | Schedule | Occurrences | Hits | Weekly rate |
 |---|---|---|---|
-| `DAILY` | 7 | hit days | hits / 7 |
+| `DAILY` | due days in the week (7 when the interval is 1) | hit days among due days | hits / occurrences |
 | `SPECIFIC_DAYS` | number of chosen weekdays | hit days among chosen weekdays | hits / occurrences |
 | `TIMES_PER_WEEK` | `timesPerWeek` | `min(hit days, timesPerWeek)` | hits / `timesPerWeek` |
+
+A week with no due day (possible when the interval is over 7) has no rate.
 
 For stats over arbitrary ranges, the same logic applies per day (`DAILY`, `SPECIFIC_DAYS`) or per week (`TIMES_PER_WEEK`).
 
 ### 2.6 Streaks
 
-- **`DAILY` / `SPECIFIC_DAYS`:** number of consecutive *scheduled* days that were hits, counting back from today. If today is scheduled but not yet hit, counting starts from the previous scheduled day, so today doesn't break a streak until it's over.
+- **`DAILY` / `SPECIFIC_DAYS`:** number of consecutive *scheduled* (due) days that were hits, counting back from today. Days between the due days of an every-N-days habit don't break it. If today is scheduled but not yet hit, counting starts from the previous scheduled day, so today doesn't break a streak until it's over.
 - **`TIMES_PER_WEEK`:** number of consecutive weeks where hits ≥ `timesPerWeek`. The current week counts only once the quota is met, and an unfinished week doesn't break the streak.
-- Each day's schedule is read from the change history (`scheduleOn`), so editing a habit's weekdays or weekly quota doesn't rewrite past streaks.
+- Each day's schedule is read from the change history (`scheduleOn`), so editing a habit's interval, weekdays or weekly quota doesn't rewrite past streaks.
 - **Current streak** is computed on read, from the habit's full log history. **Longest streak** is stored on the habit and recomputed (in the same transaction) whenever a log for that habit changes.
 
 ### 2.7 Adaptive difficulty
@@ -133,6 +137,8 @@ For stats over arbitrary ranges, the same logic applies per day (`DAILY`, `SPECI
 | `DURATION` (any schedule) | `targetValue` | `PERCENT` (default 10%) or `ABSOLUTE` minutes |
 | `TOGGLE` + `TIMES_PER_WEEK` | `timesPerWeek` | always +1 / −1 |
 | `TOGGLE` + `DAILY` / `SPECIFIC_DAYS` | — | **not adaptive** (the UI hides the setting and explains why) |
+
+The interval of a `DAILY` habit and the weekdays of a `SPECIFIC_DAYS` habit never change automatically; only the user edits them.
 
 #### Step size
 
@@ -152,7 +158,10 @@ For stats over arbitrary ranges, the same logic applies per day (`DAILY`, `SPECI
 A week counts as **eligible** for a habit only if:
 
 1. the habit existed and was not archived for the whole week (`startDate <= weekStart`), and
-2. the progressing field had the **same value for the whole week**, and the weekdays didn't change during it. Undone changes are treated as if they never happened. Manual edits do count as changes.
+2. the progressing field had the **same value for the whole week**, and the weekdays or interval didn't change during it, and
+3. at least one day was due (a week with no due day has no rate, so the habit holds).
+
+Undone changes are treated as if they never happened. Manual edits do count as changes.
 
 #### Decision rules (evaluated for the week that just ended, W)
 
@@ -169,7 +178,7 @@ else                                  → HOLD
 - **Level-up** sets the target to `current + increment`, clamped to `maxTarget`.
 - **Deload:** if the current value came from a non-undone `LEVEL_UP` (the latest non-undone change of the progressing field is a level-up whose `toValue` is the current value), it returns to that change's `fromValue`. Otherwise it sets `current − increment`. Either way, the result is clamped to `minTarget`.
 - **Cooldown:** if a change of kind K was undone during the previous review cycle, the habit cannot receive another change of kind K in this review. It gets a `HOLD` instead, with the reason `"cooldown after undo"`. The previous review's changes took effect on the Monday of the week under review, so this is "an undone change of kind K with `effectiveFrom` = W's Monday".
-- **"Changed during the week"** means a non-undone change of any field (target, quota or weekdays) with `effectiveFrom` after W's Monday and on or before its Sunday. A change taking effect on the Monday itself (last review's level-up, or an edit made that Monday) leaves the whole week at one value. As a guard, a habit whose value was edited after W ended but before the review ran is also not eligible.
+- **"Changed during the week"** means a non-undone change of any field (target, quota, weekdays or interval) with `effectiveFrom` after W's Monday and on or before its Sunday. A change taking effect on the Monday itself (last review's level-up, or an edit made that Monday) leaves the whole week at one value. As a guard, a habit whose value was edited after W ended but before the review ran is also not eligible.
 - **Inactive week:** if the user logged **nothing at all** across all habits during W, every habit gets a `HOLD` and the review is flagged `inactive`. This avoids punishing vacations. The app shows a "welcome back" message instead of deloading everything.
 - Only the most recent completed week is evaluated. If the user was away for several weeks, the missed weeks are not evaluated one by one.
 
@@ -356,7 +365,7 @@ enum ScheduleType     { DAILY SPECIFIC_DAYS TIMES_PER_WEEK }
 enum TimeOfDay        { MORNING AFTERNOON EVENING ANYTIME }
 enum StepType         { PERCENT ABSOLUTE }
 enum TargetChangeKind { LEVEL_UP DELOAD MANUAL }
-enum TargetField      { TARGET_VALUE TIMES_PER_WEEK DAYS_OF_WEEK }   // DAYS_OF_WEEK values are bitmasks
+enum TargetField      { TARGET_VALUE TIMES_PER_WEEK DAYS_OF_WEEK INTERVAL_DAYS }   // DAYS_OF_WEEK values are bitmasks; INTERVAL_DAYS is a daily habit's N
 
 model User {
   id             String    @id @default(uuid())
@@ -419,6 +428,7 @@ model Habit {
   daysOfWeek          Int[]                    // SPECIFIC_DAYS only, ISO 1..7
   timesPerWeek        Int?                     // TIMES_PER_WEEK only
   initialTimesPerWeek Int?
+  intervalDays        Int?                     // DAILY only: every N days, 1..30 (1 = every day)
   timeOfDay           TimeOfDay    @default(ANYTIME)
 
   adaptiveEnabled     Boolean      @default(true)
@@ -504,6 +514,8 @@ Add these in a raw SQL migration:
 ALTER TABLE "Habit" ADD CONSTRAINT habit_target_positive CHECK ("targetValue" >= 1);
 ALTER TABLE "Habit" ADD CONSTRAINT habit_tpw_range
   CHECK ("timesPerWeek" IS NULL OR "timesPerWeek" BETWEEN 1 AND 7);
+ALTER TABLE "Habit" ADD CONSTRAINT habit_interval_range
+  CHECK ("intervalDays" IS NULL OR "intervalDays" BETWEEN 1 AND 30);
 ALTER TABLE "HabitLog" ADD CONSTRAINT log_value_nonneg CHECK ("value" >= 0);
 ```
 
@@ -512,6 +524,7 @@ Cross-field rules are enforced by the zod schemas and the service layer:
 - `TOGGLE` ⇒ `targetValue = 1`
 - `SPECIFIC_DAYS` ⇒ `daysOfWeek` is non-empty
 - `TIMES_PER_WEEK` ⇒ `timesPerWeek` is set
+- `DAILY` ⇒ `intervalDays` is set (1–30); other schedules ⇒ `intervalDays` is null
 
 ### 5.3 `WeeklyReview.summary` shape
 
@@ -613,7 +626,7 @@ A wrong `currentPassword` or `password` returns **403** `INVALID_CREDENTIALS`, n
 | GET | `/habits?coreId=&includeArchived=` | — | |
 | GET | `/habits/:id` | — | habit with current streak, recent target changes, and `adaptiveApplicable` |
 | POST | `/habits` | `CreateHabitDto` | sets `initial*` fields and a default `minTarget` (half the initial value); `startDate = today (local)` unless given. `409 CORE_ARCHIVED` |
-| PATCH | `/habits/:id` | `UpdateHabitDto` | changing `targetValue`, `timesPerWeek` or `daysOfWeek` writes a `MANUAL` TargetChange effective from the local today (several edits on one day fold into one change). `type`, `scheduleType` and `startDate` can't change (400). The merged habit is re-validated |
+| PATCH | `/habits/:id` | `UpdateHabitDto` | changing `targetValue`, `timesPerWeek`, `daysOfWeek` or `intervalDays` writes a `MANUAL` TargetChange effective from the local today (several edits on one day fold into one change). `type`, `scheduleType` and `startDate` can't change (400). The merged habit is re-validated |
 | GET | `/habits/:id/target-history` | — | every change, oldest first |
 | PUT | `/habits/order` | `{ ids: string[] }` | |
 | POST | `/habits/:id/archive` / `/unarchive` | — | |
@@ -631,6 +644,7 @@ A wrong `currentPassword` or `password` returns **403** `INVALID_CREDENTIALS`, n
   scheduleType: 'DAILY' | 'SPECIFIC_DAYS' | 'TIMES_PER_WEEK';
   daysOfWeek?: number[];
   timesPerWeek?: number;
+  intervalDays?: number;              // DAILY only, 1–30; defaults to 1
   timeOfDay?: 'MORNING' | 'AFTERNOON' | 'EVENING' | 'ANYTIME';
   adaptiveEnabled?: boolean;
   stepType?: 'PERCENT' | 'ABSOLUTE';
@@ -992,19 +1006,19 @@ Three steps with a progress indicator. State is held locally and submitted at th
 Sections, all in one page:
 
 1. **Basics:** name, core (select).
-2. **Type:** segmented control for Toggle / Count / Duration. It's disabled when editing, with a hint: "To change the type, create a new habit." The schedule type is locked the same way (its days or weekly count stay editable), and the start date can't change.
+2. **Type:** segmented control for Toggle / Count / Duration. It's disabled when editing, with a hint: "To change the type, create a new habit." The schedule type is locked the same way (its interval, days or weekly count stay editable), and the start date can't change.
 3. **Target:**
    - Count: number plus unit.
    - Duration: minutes, with hours shown when ≥ 60. Fixed steps and limits are in minutes too; the form converts to seconds.
    - Toggle: hidden.
-4. **Schedule:** Daily / Specific days (weekday chips) / X times per week (stepper 1–7).
+4. **Repeat:** a segmented control for **Daily | Weekly | Times a week** (`DAILY`, `SPECIFIC_DAYS`, `TIMES_PER_WEEK`). Daily shows an "Every N days" stepper (1–30, 1 by default), Weekly the weekday chips, and Times a week its stepper (1–7).
 5. **Time of day:** Morning / Afternoon / Evening / Anytime.
 6. **Levels (adaptive difficulty):**
    - A switch.
    - Step: "+10%" (default) or a custom absolute value.
    - Min and max target (advanced, collapsed by default).
    - A preview line computed with shared logic: "If you're consistent: 10 → 11 → 12 → 13 min over the next 6 weeks."
-   - For toggle habits on daily or specific days, the section shows: "Levels work on how often you do a yes/no habit. Switch the schedule to 'X times per week' to use them."
+   - For toggle habits on daily or specific days, the section shows: "Levels work on how often you do a yes/no habit. Switch the schedule to 'Times a week' to use them."
 7. **Start date** (optional): today by default, from 6 days back (so recent days can be logged) to a year ahead.
 
 When editing the target of an existing habit, a note says: "This counts as a manual change. Levels will wait for two full weeks at the new target before adjusting."
@@ -1155,6 +1169,7 @@ Getting this wrong causes the subtlest bugs, so the rules are strict:
 10. Toggle + daily → HOLD / NOT_ADAPTIVE. Toggle + 3×/week → frequency changes to 4×, capped at 7.
 11. `SPECIFIC_DAYS` habit logged on an unscheduled day → the log doesn't affect the rate.
 12. Overachievement (value > target) counts as one hit, not more.
+13. `DAILY` habit every 10 days, a week with no due day → HOLD / NOT_ELIGIBLE. An interval edit mid-week → that week is NOT_ELIGIBLE.
 
 **Playwright golden paths:**
 

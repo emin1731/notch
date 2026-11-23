@@ -15,6 +15,17 @@ export interface ChangeLite {
   createdAt: Date;
 }
 
+/** The changes of `field` that weren't undone, oldest first. */
+function changesOf(field: TargetField, changes: readonly ChangeLite[]): ChangeLite[] {
+  return changes
+    .filter((change) => change.field === field && !change.undone)
+    .toSorted(
+      (a, b) =>
+        a.effectiveFrom.localeCompare(b.effectiveFrom) ||
+        a.createdAt.getTime() - b.createdAt.getTime(),
+    );
+}
+
 /**
  * The value of `field` on `date`. Reads the change history: the last change in effect on that date
  * wins; before the first change, the first change's `fromValue`; with no changes, `current`.
@@ -25,13 +36,7 @@ export function valueOn(
   current: number,
   changes: readonly ChangeLite[],
 ): number {
-  const relevant = changes
-    .filter((change) => change.field === field && !change.undone)
-    .toSorted(
-      (a, b) =>
-        a.effectiveFrom.localeCompare(b.effectiveFrom) ||
-        a.createdAt.getTime() - b.createdAt.getTime(),
-    );
+  const relevant = changesOf(field, changes);
   const inEffect = relevant.filter((change) => change.effectiveFrom <= date).at(-1);
   if (inEffect) {
     return inEffect.toValue;
@@ -44,7 +49,11 @@ export function targetOn(date: LocalDate, current: number, changes: readonly Cha
   return valueOn('TARGET_VALUE', date, current, changes);
 }
 
-/** The habit's schedule on `date`: weekdays and weekly frequency as they were then. */
+/**
+ * The habit's schedule on `date`: weekdays, weekly frequency and interval as they were then. A new
+ * interval counts from the day it took effect, so past days keep the old rhythm; an edit made
+ * before the habit started counts from its start date.
+ */
 export function scheduleOn(
   date: LocalDate,
   current: ScheduleSnapshot,
@@ -58,5 +67,15 @@ export function scheduleOn(
     const times = valueOn('TIMES_PER_WEEK', date, current.timesPerWeek ?? 0, changes);
     return { ...current, timesPerWeek: times };
   }
-  return current;
+  const inEffect = changesOf('INTERVAL_DAYS', changes)
+    .filter((change) => change.effectiveFrom <= date)
+    .at(-1);
+  return {
+    ...current,
+    intervalDays: valueOn('INTERVAL_DAYS', date, current.intervalDays ?? 1, changes),
+    intervalFrom:
+      inEffect && inEffect.effectiveFrom > current.startDate
+        ? inEffect.effectiveFrom
+        : current.startDate,
+  };
 }

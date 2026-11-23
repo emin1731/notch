@@ -30,6 +30,7 @@ export function scheduleOf(habit: Habit): ScheduleSnapshot {
     scheduleType: habit.scheduleType,
     daysOfWeek: habit.daysOfWeek,
     timesPerWeek: habit.timesPerWeek,
+    intervalDays: habit.intervalDays,
     startDate: toDateString(habit.startDate),
   };
 }

@@ -20,19 +20,16 @@ describe('habit format', () => {
   });
 
   it.each([
-    [{ scheduleType: 'DAILY', daysOfWeek: [], timesPerWeek: null }, 'Every day'],
-    [{ scheduleType: 'TIMES_PER_WEEK', daysOfWeek: [], timesPerWeek: 3 }, '3× a week'],
-    [{ scheduleType: 'SPECIFIC_DAYS', daysOfWeek: [5, 1, 3], timesPerWeek: null }, 'Mon, Wed, Fri'],
-    [
-      { scheduleType: 'SPECIFIC_DAYS', daysOfWeek: [1, 2, 3, 4, 5], timesPerWeek: null },
-      'Weekdays',
-    ],
-    [{ scheduleType: 'SPECIFIC_DAYS', daysOfWeek: [6, 7], timesPerWeek: null }, 'Weekends'],
-    [
-      { scheduleType: 'SPECIFIC_DAYS', daysOfWeek: [1, 2, 3, 4, 5, 6, 7], timesPerWeek: null },
-      'Every day',
-    ],
-  ] as const)('schedule %j reads "%s"', (habit, text) => {
-    expect(scheduleText(habit)).toBe(text);
+    [{ scheduleType: 'DAILY', intervalDays: 1 }, 'Every day'],
+    [{ scheduleType: 'DAILY', intervalDays: 2 }, 'Every 2 days'],
+    [{ scheduleType: 'TIMES_PER_WEEK', timesPerWeek: 3 }, '3× a week'],
+    [{ scheduleType: 'SPECIFIC_DAYS', daysOfWeek: [5, 1, 3] }, 'Mon, Wed, Fri'],
+    [{ scheduleType: 'SPECIFIC_DAYS', daysOfWeek: [1, 2, 3, 4, 5] }, 'Weekdays'],
+    [{ scheduleType: 'SPECIFIC_DAYS', daysOfWeek: [6, 7] }, 'Weekends'],
+    [{ scheduleType: 'SPECIFIC_DAYS', daysOfWeek: [1, 2, 3, 4, 5, 6, 7] }, 'Every day'],
+  ] as const)('schedule %j reads "%s"', (schedule, text) => {
+    expect(
+      scheduleText({ daysOfWeek: [], timesPerWeek: null, intervalDays: null, ...schedule }),
+    ).toBe(text);
   });
 });

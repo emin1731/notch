@@ -18,6 +18,7 @@ const daily: ScheduleSnapshot = {
   scheduleType: 'DAILY',
   daysOfWeek: [],
   timesPerWeek: null,
+  intervalDays: 1,
   startDate: '2026-10-01',
 };
 const weekly: ScheduleSnapshot = { ...daily, scheduleType: 'TIMES_PER_WEEK', timesPerWeek: 3 };

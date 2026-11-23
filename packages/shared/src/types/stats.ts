@@ -34,6 +34,6 @@ export interface HabitStatsDto {
   totalValue: number;
   heatmap: HeatmapDay[];
   /** The field that progresses (TARGET_VALUE for habits that don't adapt). */
-  field: Exclude<TargetField, 'DAYS_OF_WEEK'>;
+  field: Exclude<TargetField, 'DAYS_OF_WEEK' | 'INTERVAL_DAYS'>;
   targetSeries: { date: LocalDate; target: number }[];
 }

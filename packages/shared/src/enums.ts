@@ -15,7 +15,13 @@ export type TargetChangeKind = (typeof TARGET_CHANGE_KINDS)[number];
 
 /**
  * What a TargetChange changed. DAYS_OF_WEEK values are bitmasks (Mon = 1 … Sun = 64), so every
- * change fits the same `fromValue` / `toValue` integers.
+ * change fits the same `fromValue` / `toValue` integers. INTERVAL_DAYS is a daily habit's "every N
+ * days".
  */
-export const TARGET_FIELDS = ['TARGET_VALUE', 'TIMES_PER_WEEK', 'DAYS_OF_WEEK'] as const;
+export const TARGET_FIELDS = [
+  'TARGET_VALUE',
+  'TIMES_PER_WEEK',
+  'DAYS_OF_WEEK',
+  'INTERVAL_DAYS',
+] as const;
 export type TargetField = (typeof TARGET_FIELDS)[number];

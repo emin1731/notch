@@ -4,6 +4,7 @@ import {
   createHabitSchema,
   type HabitDto,
   type HabitType,
+  LIMITS,
   PROGRESSION_CONFIG,
   progressingField,
   type ScheduleType,
@@ -32,6 +33,7 @@ import { WeekdayPicker } from '@/components/WeekdayPicker';
 import { useCores } from '@/features/cores/hooks';
 import { isApiError } from '@/lib/api-client';
 import { applyServerError } from '@/lib/forms';
+import { intervalText } from '@/lib/habit-format';
 import { useToday } from '@/lib/use-today';
 import {
   changedFields,
@@ -40,7 +42,7 @@ import {
   habitFormResolver,
   type HabitFormField,
   type HabitFormValues,
-  isManualChange,
+  manualChangeNote,
   minutesHint,
   previewText,
   resetForSchedule,
@@ -59,6 +61,13 @@ const TIMES_OF_DAY = [
   { value: 'ANYTIME', label: 'Anytime' },
 ] as const satisfies readonly { value: TimeOfDay; label: string }[];
 
+/** What an edit can still change about how a habit repeats (not whether it's daily or weekly). */
+const EDITABLE_SCHEDULE: Record<ScheduleType, string> = {
+  DAILY: 'its interval',
+  SPECIFIC_DAYS: 'its days',
+  TIMES_PER_WEEK: 'its count',
+};
+
 const FIELDS: HabitFormField[] = [
   'name',
   'coreId',
@@ -68,6 +77,7 @@ const FIELDS: HabitFormField[] = [
   'scheduleType',
   'daysOfWeek',
   'timesPerWeek',
+  'intervalDays',
   'timeOfDay',
   'stepType',
   'stepValue',
@@ -225,6 +235,7 @@ function HabitForm({
       ? 'minutes'
       : values.unit || 'units';
   const range = startDateRange(today);
+  const note = editing ? manualChangeNote(habit, values) : null;
 
   return (
     <form onSubmit={onSubmit} noValidate className="flex flex-col gap-8">
@@ -302,7 +313,7 @@ function HabitForm({
 
       <Section title="When">
         <div className="flex flex-col gap-2">
-          <FieldLabel id={ids.schedule}>Schedule</FieldLabel>
+          <FieldLabel id={ids.schedule}>Repeat</FieldLabel>
           <SegmentedControl<ScheduleType>
             value={values.scheduleType}
             onChange={(scheduleType) => patch(resetForSchedule(form.getValues(), scheduleType))}
@@ -313,12 +324,31 @@ function HabitForm({
           />
           {editing && (
             <FieldDescription id={ids.scheduleHint}>
-              To change the schedule, create a new habit.
-              {values.scheduleType !== 'DAILY' && ' You can still change its days or count.'}
+              To switch between Daily, Weekly and Times a week, create a new habit. You can still
+              change {EDITABLE_SCHEDULE[values.scheduleType]}.
             </FieldDescription>
           )}
         </div>
 
+        {values.scheduleType === 'DAILY' && (
+          <Controller
+            control={form.control}
+            name="intervalDays"
+            render={({ field, fieldState }) => (
+              <div className="flex flex-col gap-2">
+                <Stepper
+                  value={field.value}
+                  onChange={field.onChange}
+                  min={1}
+                  max={LIMITS.intervalDays}
+                  format={intervalText}
+                  label="days between"
+                />
+                <FieldError errors={[fieldState.error]} />
+              </div>
+            )}
+          />
+        )}
         {values.scheduleType === 'SPECIFIC_DAYS' && (
           <Controller
             control={form.control}
@@ -463,13 +493,10 @@ function HabitForm({
         )}
       </Section>
 
-      {editing && isManualChange(habit, values) && (
+      {note && (
         <Alert>
           <Info aria-hidden="true" />
-          <AlertDescription>
-            This counts as a manual change. Levels will wait for two full weeks at the new target
-            before adjusting.
-          </AlertDescription>
+          <AlertDescription>{note}</AlertDescription>
         </Alert>
       )}
 

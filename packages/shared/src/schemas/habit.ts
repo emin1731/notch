@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { LIMITS } from '../constants.js';
 import { localDateSchema } from '../dates/local-date.js';
 import { HABIT_TYPES, SCHEDULE_TYPES, STEP_TYPES, TIMES_OF_DAY } from '../enums.js';
 import { habitShapeIssues } from '../habits/shape.js';
@@ -29,6 +30,13 @@ export const timesPerWeekSchema = z
   .min(1, 'At least once a week')
   .max(PROGRESSION_CONFIG.maxTimesPerWeek, 'At most 7 times a week');
 
+/** A daily habit's "every N days" (1 = every day). */
+export const intervalDaysSchema = z
+  .number()
+  .int('Use a whole number')
+  .min(1, 'At least every day')
+  .max(LIMITS.intervalDays, `At most every ${LIMITS.intervalDays} days`);
+
 const shapeRefinement = (habit: Parameters<typeof habitShapeIssues>[0], ctx: z.RefinementCtx) => {
   for (const { path, message } of habitShapeIssues(habit)) {
     ctx.addIssue({ code: 'custom', path: [path], message });
@@ -49,6 +57,8 @@ export const createHabitSchema = z
     scheduleType: z.enum(SCHEDULE_TYPES),
     daysOfWeek: daysOfWeekSchema.optional(),
     timesPerWeek: timesPerWeekSchema.nullish(),
+    /** Defaults to 1 (every day) for a daily habit. */
+    intervalDays: intervalDaysSchema.nullish(),
     timeOfDay: z.enum(TIMES_OF_DAY).default('ANYTIME'),
     adaptiveEnabled: z.boolean().default(true),
     stepType: z.enum(STEP_TYPES).default('PERCENT'),
@@ -64,6 +74,7 @@ export const createHabitSchema = z
     targetValue: input.targetValue ?? (input.type === 'TOGGLE' ? 1 : 0),
     daysOfWeek: input.daysOfWeek ?? [],
     timesPerWeek: input.timesPerWeek ?? null,
+    intervalDays: input.intervalDays ?? (input.scheduleType === 'DAILY' ? 1 : null),
     minTarget: input.minTarget ?? null,
     maxTarget: input.maxTarget ?? null,
   }))
@@ -88,6 +99,7 @@ export const updateHabitSchema = z
     targetValue: positiveInt.optional(),
     daysOfWeek: daysOfWeekSchema.optional(),
     timesPerWeek: timesPerWeekSchema.optional(),
+    intervalDays: intervalDaysSchema.optional(),
     timeOfDay: z.enum(TIMES_OF_DAY).optional(),
     adaptiveEnabled: z.boolean().optional(),
     stepType: z.enum(STEP_TYPES).optional(),

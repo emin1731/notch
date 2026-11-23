@@ -16,10 +16,12 @@ const daily: ScheduleSnapshot = {
   scheduleType: 'DAILY',
   daysOfWeek: [],
   timesPerWeek: null,
+  intervalDays: 1,
   startDate: '2026-10-01',
 };
 const monWedFri: ScheduleSnapshot = {
   ...daily,
+  intervalDays: null,
   scheduleType: 'SPECIFIC_DAYS',
   daysOfWeek: [1, 3, 5],
 };

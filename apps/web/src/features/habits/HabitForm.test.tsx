@@ -22,8 +22,9 @@ function setup() {
     stepValue: 300,
     minTarget: 900,
   });
-  const api = mockStructureApi({ cores: [health, career], habits: [run] });
-  return { api, health, career, run };
+  const plants = fakeHabit({ coreId: career.id, name: 'Water plants', intervalDays: 2 });
+  const api = mockStructureApi({ cores: [health, career], habits: [run, plants] });
+  return { api, health, career, run, plants };
 }
 
 /** The page title shows on the loading skeleton too: wait for the form itself. */
@@ -55,10 +56,36 @@ describe('habit form: creating', () => {
       type: 'TOGGLE',
       targetValue: 1,
       scheduleType: 'DAILY',
+      intervalDays: 1,
       daysOfWeek: [],
       timesPerWeek: null,
       minTarget: null,
       maxTarget: null,
+    });
+  });
+
+  it('creates a daily habit every few days with the interval stepper', async () => {
+    const { api } = setup();
+    const user = userEvent.setup();
+    renderApp('/habits/new');
+
+    await heading('New habit');
+    expect(radio('Daily')).toBeChecked();
+    expect(screen.getByText('Every day')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Fewer days between' })).toBeDisabled();
+    await user.type(screen.getByLabelText('Name'), 'Water plants');
+    await user.click(screen.getByRole('button', { name: 'More days between' }));
+    await user.click(screen.getByRole('button', { name: 'More days between' }));
+    expect(screen.getByText('Every 3 days')).toBeInTheDocument();
+    await submit(user);
+
+    await waitFor(() => expect(api.sent('POST', '/habits')).toHaveLength(1));
+    expect(api.sent('POST', '/habits')[0]?.body).toMatchObject({
+      name: 'Water plants',
+      scheduleType: 'DAILY',
+      intervalDays: 3,
+      daysOfWeek: [],
+      timesPerWeek: null,
     });
   });
 
@@ -74,7 +101,7 @@ describe('habit form: creating', () => {
     await user.clear(target);
     await user.type(target, '12');
     await user.type(screen.getByLabelText('Unit (optional)'), 'minutes');
-    await user.click(radio('Some days'));
+    await user.click(radio('Weekly'));
     for (const day of ['Friday', 'Monday', 'Wednesday']) {
       await user.click(screen.getByRole('button', { name: day }));
     }
@@ -169,10 +196,10 @@ describe('habit form: creating', () => {
     expect(screen.getByLabelText('Unit (optional)')).toHaveValue('');
     expect(screen.getByLabelText('Target')).toHaveValue(1);
 
-    await user.click(radio('Some days'));
+    await user.click(radio('Weekly'));
     await user.click(screen.getByRole('button', { name: 'Tuesday' }));
-    await user.click(radio('Every day'));
-    await user.click(radio('Some days'));
+    await user.click(radio('Daily'));
+    await user.click(radio('Weekly'));
     expect(screen.getByRole('button', { name: 'Tuesday' })).toHaveAttribute(
       'aria-pressed',
       'false',
@@ -189,7 +216,7 @@ describe('habit form: creating', () => {
     const target = screen.getByLabelText('Target (minutes)');
     await user.clear(target);
     await user.type(target, '1500');
-    await user.click(radio('Some days'));
+    await user.click(radio('Weekly'));
     await submit(user);
 
     expect(await screen.findByText('Give it a name')).toBeInTheDocument();
@@ -233,7 +260,7 @@ describe('habit form: editing', () => {
     expect(screen.getByLabelText('Target (minutes)')).toHaveValue(30);
     expect(screen.getByLabelText('Step (minutes)')).toHaveValue(5);
     expect(radio('Count')).toBeDisabled();
-    expect(radio('Every day')).toBeDisabled();
+    expect(radio('Daily')).toBeDisabled();
     expect(screen.getByText('To change the type, create a new habit.')).toBeInTheDocument();
     expect(screen.queryByLabelText('Start date')).not.toBeInTheDocument();
     expect(screen.queryByText(/This counts as a manual change/)).not.toBeInTheDocument();
@@ -249,6 +276,30 @@ describe('habit form: editing', () => {
       name: 'Run',
       daysOfWeek: [1, 2, 3, 5],
     });
+  });
+
+  it('keeps a daily habit’s interval editable, and sends only the new one', async () => {
+    const { api, plants } = setup();
+    const user = userEvent.setup();
+    const { router } = renderApp(`/habits/${plants.id}/edit`);
+
+    await heading('Edit habit');
+    expect(radio('Weekly')).toBeDisabled();
+    expect(
+      screen.getByText(
+        'To switch between Daily, Weekly and Times a week, create a new habit. You can still change its interval.',
+      ),
+    ).toBeInTheDocument();
+    expect(screen.getByText('Every 2 days')).toBeInTheDocument();
+    expect(screen.queryByText(/The new rhythm starts today/)).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'More days between' }));
+    expect(screen.getByText('Every 3 days')).toBeInTheDocument();
+    expect(screen.getByText(/The new rhythm starts today/)).toBeInTheDocument();
+    await submit(user, 'Save changes');
+
+    await waitFor(() => expect(router.state.location.pathname).toBe('/cores'));
+    expect(api.sent('PATCH', `/habits/${plants.id}`)[0]?.body).toEqual({ intervalDays: 3 });
   });
 
   it('sends nothing when nothing changed', async () => {

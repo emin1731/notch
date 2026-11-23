@@ -5,7 +5,7 @@ import {
   defaultValues,
   habitFormResolver,
   type HabitFormValues,
-  isManualChange,
+  manualChangeNote,
   previewText,
   resetForSchedule,
   resetForType,
@@ -43,6 +43,7 @@ const habit = (fields: Partial<HabitDto> = {}): HabitDto => ({
   scheduleType: 'DAILY',
   daysOfWeek: [],
   timesPerWeek: null,
+  intervalDays: 1,
   initialTimesPerWeek: null,
   timeOfDay: 'MORNING',
   adaptiveEnabled: true,
@@ -91,11 +92,13 @@ describe('habit form: conversion', () => {
     });
   });
 
-  it('only sends the days or the weekly count the schedule uses', () => {
-    expect(toHabitInput(base({ daysOfWeek: [1, 3], timesPerWeek: 4 }))).toMatchObject({
-      daysOfWeek: [],
-      timesPerWeek: null,
-    });
+  it('only sends the interval, the days or the weekly count the schedule uses', () => {
+    expect(
+      toHabitInput(base({ intervalDays: 2, daysOfWeek: [1, 3], timesPerWeek: 4 })),
+    ).toMatchObject({ intervalDays: 2, daysOfWeek: [], timesPerWeek: null });
+    expect(
+      toHabitInput(base({ scheduleType: 'SPECIFIC_DAYS', daysOfWeek: [1, 3], intervalDays: 2 })),
+    ).toMatchObject({ intervalDays: null, daysOfWeek: [1, 3] });
   });
 
   it('round-trips a saved habit', () => {
@@ -201,6 +204,7 @@ describe('habit form: switching', () => {
       scheduleType: 'DAILY',
       daysOfWeek: [],
       timesPerWeek: 3,
+      intervalDays: 1,
       minTarget: null,
       maxTarget: null,
     });
@@ -222,10 +226,26 @@ describe('habit form: editing', () => {
     expect(changedFields(saved, values)).toEqual({ name: 'Run outside', daysOfWeek: [1, 3, 5] });
   });
 
-  it('flags target, days and weekly-count edits as manual changes', () => {
+  it('sends a changed interval, and only for a daily habit', () => {
+    const saved = habit({ intervalDays: 2 });
+    expect(changedFields(saved, { ...valuesFromHabit(saved), intervalDays: 3 })).toEqual({
+      intervalDays: 3,
+    });
+    expect(changedFields(saved, valuesFromHabit(saved))).toEqual({});
+    const weekly = habit({ scheduleType: 'SPECIFIC_DAYS', daysOfWeek: [1], intervalDays: null });
+    expect(changedFields(weekly, { ...valuesFromHabit(weekly), intervalDays: 3 })).toEqual({});
+  });
+
+  it('notes target, days, weekly-count and interval edits as manual changes', () => {
     const saved = habit();
-    expect(isManualChange(saved, { ...valuesFromHabit(saved), name: 'Jog' })).toBe(false);
-    expect(isManualChange(saved, { ...valuesFromHabit(saved), target: 45 })).toBe(true);
+    const values = valuesFromHabit(saved);
+    expect(manualChangeNote(saved, { ...values, name: 'Jog' })).toBeNull();
+    expect(manualChangeNote(saved, { ...values, target: 45 })).toBe(
+      'This counts as a manual change. Levels will wait for two full weeks at the new target before adjusting.',
+    );
+    expect(manualChangeNote(saved, { ...values, intervalDays: 2 })).toBe(
+      'The new rhythm starts today. Past days keep the old one. This counts as a manual change. Levels will wait for two full weeks before adjusting.',
+    );
   });
 });
 

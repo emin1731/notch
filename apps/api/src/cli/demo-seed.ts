@@ -39,6 +39,8 @@ interface DemoHabit {
   scheduleType: ScheduleType;
   daysOfWeek?: number[];
   timesPerWeek?: number;
+  /** DAILY only, defaults to 1. */
+  intervalDays?: number;
   timeOfDay: TimeOfDay;
   adaptiveEnabled?: boolean;
   maxTarget?: number;
@@ -50,9 +52,10 @@ interface DemoHabit {
 
 /**
  * The demo account's habits and what was logged each day, relative to `today`. Every type and
- * schedule appears, one target edit and one weekday edit happen partway through, and the weekly
- * reviews produce real changes: Meditate levels up twice (480 → 540 → 600 s, its max), Deep work
- * levels up twice (3000 → 3300 → 3600 s, its max) and deloads back to 3300 after a weak last week.
+ * schedule appears (Run is every 2 days), one target edit and one weekday edit happen partway
+ * through, and the weekly reviews produce real changes: Meditate levels up twice (480 → 540 →
+ * 600 s, its max), Deep work levels up twice (3000 → 3300 → 3600 s, its max) and deloads back to
+ * 3300 after a weak last week.
  */
 function demoHabits(today: LocalDate): DemoHabit[] {
   const week = weekStartOf(today);
@@ -149,6 +152,16 @@ function demoHabits(today: LocalDate): DemoHabit[] {
       daysOfWeek: [6, 7],
       timeOfDay: 'EVENING',
       value: (date, ctx) => (date === ctx.today ? undefined : hitIfDue(date, ctx)),
+    },
+    {
+      name: 'Run',
+      core: 'Health',
+      type: 'TOGGLE',
+      target: 1,
+      scheduleType: 'DAILY',
+      intervalDays: 2,
+      timeOfDay: 'MORNING',
+      value: hitIfDue,
     },
   ];
 }
@@ -308,6 +321,7 @@ async function createAccount(
           scheduleType: spec.scheduleType,
           daysOfWeek: spec.daysOfWeek ?? [],
           timesPerWeek: spec.timesPerWeek ?? null,
+          intervalDays: spec.scheduleType === 'DAILY' ? (spec.intervalDays ?? 1) : null,
           initialTimesPerWeek: spec.timesPerWeek ?? null,
           timeOfDay: spec.timeOfDay,
           adaptiveEnabled: spec.adaptiveEnabled ?? true,

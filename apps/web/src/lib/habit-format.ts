@@ -39,14 +39,18 @@ export function formatTarget(
   return habit.type === 'TOGGLE' ? null : formatValue(habit.type, habit.targetValue, habit.unit);
 }
 
-/** "Every day", "Weekdays", "Weekends", "Mon, Wed, Fri", "3× a week". */
+/** A daily habit's interval: "Every day", "Every 3 days". */
+export const intervalText = (days: number) => (days === 1 ? 'Every day' : `Every ${days} days`);
+
+/** "Every day", "Every 2 days", "Weekdays", "Weekends", "Mon, Wed, Fri", "3× a week". */
 export function scheduleText(habit: {
   scheduleType: ScheduleType;
   daysOfWeek: readonly number[];
   timesPerWeek: number | null;
+  intervalDays: number | null;
 }): string {
   if (habit.scheduleType === 'DAILY') {
-    return 'Every day';
+    return intervalText(habit.intervalDays ?? 1);
   }
   if (habit.scheduleType === 'TIMES_PER_WEEK') {
     return `${habit.timesPerWeek ?? 1}× a week`;

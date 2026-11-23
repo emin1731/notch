@@ -69,6 +69,7 @@ describe('habits (e2e)', () => {
         daysOfWeek: combo.daysOfWeek ?? [],
         timesPerWeek: combo.timesPerWeek ?? null,
         initialTimesPerWeek: combo.timesPerWeek ?? null,
+        intervalDays: combo.scheduleType === 'DAILY' ? 1 : null,
         adaptiveApplicable: adaptive,
         startDate: today,
         archivedAt: null,
@@ -126,6 +127,29 @@ describe('habits (e2e)', () => {
       expect(res.status).toBe(400);
       const paths = res.body.details.issues.map((issue: { path: string }) => issue.path);
       expect(paths).toEqual(expect.arrayContaining(['targetValue', 'daysOfWeek']));
+    });
+
+    it('takes an interval for daily habits only, every 1 to 30 days', async () => {
+      expect((await createHabit(client, core.id, { intervalDays: 3 })).intervalDays).toBe(3);
+
+      const issuesOf = async (body: object) => {
+        const res = await client.post('/habits', {
+          coreId: core.id,
+          name: 'X',
+          type: 'TOGGLE',
+          ...body,
+        });
+        expect(res.status, JSON.stringify(body)).toBe(400);
+        return res.body.details.issues.map((issue: { path: string }) => issue.path);
+      };
+      expect(
+        await issuesOf({ scheduleType: 'TIMES_PER_WEEK', timesPerWeek: 3, intervalDays: 2 }),
+      ).toContain('intervalDays');
+      expect(
+        await issuesOf({ scheduleType: 'SPECIFIC_DAYS', daysOfWeek: [1], intervalDays: 1 }),
+      ).toContain('intervalDays');
+      expect(await issuesOf({ scheduleType: 'DAILY', intervalDays: 31 })).toContain('intervalDays');
+      expect(await issuesOf({ scheduleType: 'DAILY', intervalDays: 0 })).toContain('intervalDays');
     });
 
     it('needs an owned, active core', async () => {
@@ -262,6 +286,37 @@ describe('habits (e2e)', () => {
         fromValue: 3,
         toValue: 4,
       });
+    });
+
+    it('records an interval edit like a weekday edit, and drops it when undone by hand', async () => {
+      const habit = await createHabit(client, core.id);
+      const res = await client.patch(`/habits/${habit.id}`, { intervalDays: 2 });
+      expect(res.status).toBe(200);
+      expect(res.body.intervalDays).toBe(2);
+      expect(res.body.recentChanges).toEqual([
+        expect.objectContaining({
+          kind: 'MANUAL',
+          field: 'INTERVAL_DAYS',
+          fromValue: 1,
+          toValue: 2,
+          effectiveFrom: today,
+          undoDeadline: null,
+        }),
+      ]);
+      // Unchanged: nothing new is recorded.
+      await client.patch(`/habits/${habit.id}`, { intervalDays: 2, name: 'Renamed' });
+      expect(await history(habit.id)).toHaveLength(1);
+
+      await client.patch(`/habits/${habit.id}`, { intervalDays: 1 });
+      expect(await history(habit.id)).toEqual([]);
+
+      const days = await createHabit(client, core.id, {
+        scheduleType: 'SPECIFIC_DAYS',
+        daysOfWeek: [1, 3, 5],
+      });
+      const refused = await client.patch(`/habits/${days.id}`, { intervalDays: 2 });
+      expect(refused.status).toBe(400);
+      expect(refused.body.details.issues[0].path).toBe('intervalDays');
     });
 
     it('refuses to change the type, schedule type or start date', async () => {

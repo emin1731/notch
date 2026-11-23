@@ -29,6 +29,7 @@ const schedule = (
   scheduleType: habit.scheduleType,
   daysOfWeek: [],
   timesPerWeek: habit.timesPerWeek,
+  intervalDays: habit.scheduleType === 'DAILY' ? 1 : null,
   startDate: '2026-10-01',
   ...extra,
 });
@@ -80,7 +81,7 @@ const fullTwoWeeks = (habit: HabitForProgression) => [
   ...week(W, ALL, habit.targetValue),
 ];
 
-describe('decideForHabit: the 12 cases of plan section 11', () => {
+describe('decideForHabit: the 13 cases of plan section 11', () => {
   it('1. a new habit in its first, partial week → HOLD / NOT_ELIGIBLE', () => {
     const result = decide(count, week(W, [2, 3, 4, 5, 6], 20), {
       scheduleExtra: { startDate: addDays(W, 2) },
@@ -206,6 +207,22 @@ describe('decideForHabit: the 12 cases of plan section 11', () => {
 
   it('12. overachievement counts as one hit, not more', () => {
     expect(decide(count, week(W, [0], 60, 20)).rate).toBe(1 / 7);
+  });
+
+  it('13. every 10 days with no due day in the week, or an interval edit mid-week → NOT_ELIGIBLE', () => {
+    // Due on 10-29, 11-08 and 11-18: nothing in W.
+    expect(
+      decide(count, fullTwoWeeks(count), {
+        scheduleExtra: { intervalDays: 10, startDate: '2026-10-29' },
+      }),
+    ).toMatchObject({ decision: 'HOLD', reason: 'NOT_ELIGIBLE', rate: null });
+    const interval = change('MANUAL', addDays(W, 3), 1, 2, { field: 'INTERVAL_DAYS' });
+    expect(
+      decide(count, fullTwoWeeks(count), {
+        changes: [interval],
+        scheduleExtra: { intervalDays: 2 },
+      }),
+    ).toMatchObject({ reason: 'NOT_ELIGIBLE', rate: null });
   });
 });
 

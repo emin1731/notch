@@ -124,8 +124,10 @@ describe('onboarding', () => {
     await user.clear(within(habitDialog).getByLabelText('Target'));
     await user.type(within(habitDialog).getByLabelText('Target'), '3');
     await user.type(within(habitDialog).getByLabelText('Unit (optional)'), 'rounds');
+    await user.click(within(habitDialog).getByRole('button', { name: 'More days between' }));
+    expect(within(habitDialog).getByText('Every 2 days')).toBeInTheDocument();
     await user.click(within(habitDialog).getByRole('button', { name: 'Add habit' }));
-    expect(within(music).getByRole('list')).toHaveTextContent('Scales · 3 rounds · Every day');
+    expect(within(music).getByRole('list')).toHaveTextContent('Scales · 3 rounds · Every 2 days');
     expect(screen.getByText('2 habits picked.')).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Next' }));
 
@@ -148,7 +150,13 @@ describe('onboarding', () => {
     ]);
     expect(api.bodies('/habits')).toEqual([
       expect.objectContaining({ name: 'Walk', type: 'DURATION', targetValue: 1200 }),
-      expect.objectContaining({ name: 'Scales', type: 'COUNT', targetValue: 3, unit: 'rounds' }),
+      expect.objectContaining({
+        name: 'Scales',
+        type: 'COUNT',
+        targetValue: 3,
+        unit: 'rounds',
+        intervalDays: 2,
+      }),
     ]);
   });
 

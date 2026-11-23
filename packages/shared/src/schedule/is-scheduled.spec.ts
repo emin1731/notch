@@ -7,14 +7,22 @@ const daily: ScheduleSnapshot = {
   scheduleType: 'DAILY',
   daysOfWeek: [],
   timesPerWeek: null,
+  intervalDays: 1,
   startDate: '2026-01-01',
 };
 const monWedFri: ScheduleSnapshot = {
   ...daily,
+  intervalDays: null,
   scheduleType: 'SPECIFIC_DAYS',
   daysOfWeek: [1, 3, 5],
 };
-const threeTimes: ScheduleSnapshot = { ...daily, scheduleType: 'TIMES_PER_WEEK', timesPerWeek: 3 };
+const threeTimes: ScheduleSnapshot = {
+  ...daily,
+  scheduleType: 'TIMES_PER_WEEK',
+  timesPerWeek: 3,
+  intervalDays: null,
+};
+const everyThird: ScheduleSnapshot = { ...daily, intervalDays: 3, startDate: '2026-11-16' };
 
 describe('day masks', () => {
   it('round-trips', () => {
@@ -37,6 +45,15 @@ describe('isScheduledOn', () => {
     expect(isScheduledOn(monWedFri, '2026-11-20')).toBe(true);
   });
 
+  it('every N days from the start date, or from the day the interval changed', () => {
+    expect(isScheduledOn(everyThird, '2026-11-16')).toBe(true);
+    expect(isScheduledOn(everyThird, '2026-11-17')).toBe(false);
+    expect(isScheduledOn(everyThird, '2026-11-18')).toBe(false);
+    expect(isScheduledOn(everyThird, '2026-11-19')).toBe(true);
+    expect(isScheduledOn({ ...everyThird, intervalFrom: '2026-11-17' }, '2026-11-20')).toBe(true);
+    expect(isScheduledOn({ ...everyThird, intervalFrom: '2026-11-17' }, '2026-11-19')).toBe(false);
+  });
+
   it('never before the start date', () => {
     const late = { ...daily, startDate: '2026-11-18' };
     expect(isScheduledOn(late, '2026-11-17')).toBe(false);
@@ -49,6 +66,7 @@ describe('occurrencesInWeek', () => {
     expect(occurrencesInWeek(daily, WEEK)).toBe(7);
     expect(occurrencesInWeek(monWedFri, WEEK)).toBe(3);
     expect(occurrencesInWeek(threeTimes, WEEK)).toBe(3);
+    expect(occurrencesInWeek(everyThird, WEEK)).toBe(3);
   });
 
   it('a habit started mid-week asks only for the days left', () => {

@@ -148,10 +148,16 @@ export class TodayService {
           candidate.kind !== 'MANUAL' &&
           candidate.undoneAt === null &&
           candidate.field !== 'DAYS_OF_WEEK' &&
+          candidate.field !== 'INTERVAL_DAYS' &&
           toDateString(candidate.effectiveFrom) === weekStart,
       )
       .at(-1);
-    if (!change || change.kind === 'MANUAL' || change.field === 'DAYS_OF_WEEK') {
+    if (
+      !change ||
+      change.kind === 'MANUAL' ||
+      change.field === 'DAYS_OF_WEEK' ||
+      change.field === 'INTERVAL_DAYS'
+    ) {
       return undefined;
     }
     const effectiveFrom = toDateString(change.effectiveFrom);

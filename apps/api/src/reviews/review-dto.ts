@@ -11,7 +11,7 @@ import { toTargetChangeDto } from '../habits/habit-dto.js';
 
 /** The habit's current value of the field a change touched, to check it wasn't edited since. */
 export function currentValueOf(
-  habit: Pick<Habit, 'targetValue' | 'timesPerWeek' | 'daysOfWeek'>,
+  habit: Pick<Habit, 'targetValue' | 'timesPerWeek' | 'daysOfWeek' | 'intervalDays'>,
   field: TargetChange['field'],
 ): number {
   switch (field) {
@@ -21,11 +21,13 @@ export function currentValueOf(
       return habit.timesPerWeek ?? 0;
     case 'DAYS_OF_WEEK':
       return daysToMask(habit.daysOfWeek);
+    case 'INTERVAL_DAYS':
+      return habit.intervalDays ?? 0;
   }
 }
 
 export type ChangeWithHabit = TargetChange & {
-  habit: Pick<Habit, 'name' | 'targetValue' | 'timesPerWeek' | 'daysOfWeek'>;
+  habit: Pick<Habit, 'name' | 'targetValue' | 'timesPerWeek' | 'daysOfWeek' | 'intervalDays'>;
 };
 
 /** `hasLogSince(change)`: whether the habit has a log on or after the change took effect. */

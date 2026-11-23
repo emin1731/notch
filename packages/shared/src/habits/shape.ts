@@ -10,6 +10,7 @@ export interface HabitShape {
   scheduleType: ScheduleType;
   daysOfWeek: readonly number[];
   timesPerWeek: number | null;
+  intervalDays: number | null;
   stepType: StepType;
   stepValue: number;
   minTarget: number | null;
@@ -62,6 +63,13 @@ export function habitShapeIssues(habit: HabitShape): ShapeIssue[] {
     }
   } else if (habit.timesPerWeek !== null) {
     issue('timesPerWeek', 'Only for habits done N times per week');
+  }
+  if (habit.scheduleType === 'DAILY') {
+    if (habit.intervalDays === null) {
+      issue('intervalDays', 'Required for daily habits');
+    }
+  } else if (habit.intervalDays !== null) {
+    issue('intervalDays', 'Only for daily habits');
   }
 
   if (habit.stepType === 'PERCENT' && habit.stepValue > 100) {

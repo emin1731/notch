@@ -24,6 +24,8 @@ export const CORE_PRESETS = [
 ] as const satisfies readonly { name: string; color: CoreColor; icon: string }[];
 
 export const LIMITS = {
+  /** A daily habit's longest interval: every 30 days. */
+  intervalDays: 30,
   orderIds: 200,
   batchCores: 20,
 } as const;

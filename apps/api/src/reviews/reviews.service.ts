@@ -31,7 +31,15 @@ import { currentValueOf, toReviewDto } from './review-dto.js';
 const changesInclude = {
   changes: {
     include: {
-      habit: { select: { name: true, targetValue: true, timesPerWeek: true, daysOfWeek: true } },
+      habit: {
+        select: {
+          name: true,
+          targetValue: true,
+          timesPerWeek: true,
+          daysOfWeek: true,
+          intervalDays: true,
+        },
+      },
     },
     orderBy: { createdAt: 'asc' },
   },

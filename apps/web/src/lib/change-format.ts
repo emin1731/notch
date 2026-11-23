@@ -6,6 +6,7 @@ import {
   type TargetField,
   addDays,
 } from '@notch/shared';
+import { intervalText } from './habit-format';
 import { percent } from './stats-format';
 
 /** What a level-up or deload changed (from a Today habit's `change` or a review's). */
@@ -39,13 +40,22 @@ function suffix(field: TargetField, habit: HabitUnits): string {
   return habit.unit ? ` ${habit.unit}` : '';
 }
 
-/** One value in the habit's terms: "55 min", "3× a week", "25 pages". */
+/** One value in the habit's terms: "55 min", "3× a week", "25 pages", "Every 2 days". */
 export const changeValue = (change: ChangeLike, habit: HabitUnits, value: number) =>
-  `${number(change.field, habit, value)}${suffix(change.field, habit)}`;
+  change.field === 'INTERVAL_DAYS'
+    ? intervalText(value)
+    : `${number(change.field, habit, value)}${suffix(change.field, habit)}`;
 
-/** "50 → 55 min", "4× → 3× a week". */
-export const changeValues = (change: ChangeLike, habit: HabitUnits) =>
-  `${number(change.field, habit, change.fromValue)} → ${number(change.field, habit, change.toValue)}${suffix(change.field, habit)}`;
+/** "50 → 55 min", "4× → 3× a week", "Every 2 → 3 days", "Every day → every 2 days". */
+export function changeValues(change: ChangeLike, habit: HabitUnits): string {
+  const { field, fromValue, toValue } = change;
+  if (field === 'INTERVAL_DAYS') {
+    return fromValue > 1 && toValue > 1
+      ? `Every ${fromValue} → ${toValue} days`
+      : `${intervalText(fromValue)} → ${intervalText(toValue).toLowerCase()}`;
+  }
+  return `${number(field, habit, fromValue)} → ${number(field, habit, toValue)}${suffix(field, habit)}`;
+}
 
 export const changeArrow = (kind: TargetChangeKind) => (kind === 'DELOAD' ? '↓' : '↑');
 

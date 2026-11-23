@@ -20,6 +20,8 @@ export interface HabitDto {
   scheduleType: ScheduleType;
   daysOfWeek: number[];
   timesPerWeek: number | null;
+  /** DAILY only: due every N days (1 = every day). */
+  intervalDays: number | null;
   initialTimesPerWeek: number | null;
   timeOfDay: TimeOfDay;
   adaptiveEnabled: boolean;

@@ -107,8 +107,8 @@ export class HabitsService {
   }
 
   /**
-   * `type`, `scheduleType` and `startDate` never change. A new target, weekly quota or set of
-   * weekdays is recorded as a MANUAL TargetChange effective from the local today.
+   * `type`, `scheduleType` and `startDate` never change. A new target, weekly quota, set of
+   * weekdays or interval is recorded as a MANUAL TargetChange effective from the local today.
    */
   async update(user: AuthUser, id: string, input: UpdateHabitInput): Promise<HabitDetailDto> {
     // Last week's review decides on last week's values, so it runs before they can change.
@@ -129,6 +129,7 @@ export class HabitsService {
         ['TARGET_VALUE', habit.targetValue, merged.targetValue],
         ['TIMES_PER_WEEK', habit.timesPerWeek ?? 0, merged.timesPerWeek ?? 0],
         ['DAYS_OF_WEEK', daysToMask(habit.daysOfWeek), daysToMask(merged.daysOfWeek)],
+        ['INTERVAL_DAYS', habit.intervalDays ?? 0, merged.intervalDays ?? 0],
       ];
       for (const [field, from, to] of changes) {
         if (from !== to) {

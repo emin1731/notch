@@ -21,6 +21,7 @@ describe('createHabitSchema', () => {
     expect(createHabitSchema.parse(base)).toMatchObject({
       daysOfWeek: [],
       timesPerWeek: null,
+      intervalDays: 1,
       timeOfDay: 'ANYTIME',
       adaptiveEnabled: true,
       stepType: 'PERCENT',
@@ -71,6 +72,15 @@ describe('createHabitSchema', () => {
       'timesPerWeek',
     ]);
     expect(issues({ ...base, timesPerWeek: 3 })).toEqual(['timesPerWeek']);
+  });
+
+  it('every N days is for daily habits only, up to 30 days', () => {
+    expect(createHabitSchema.parse({ ...base, intervalDays: 3 }).intervalDays).toBe(3);
+    expect(issues({ ...base, intervalDays: 0 })).toEqual(['intervalDays']);
+    expect(issues({ ...base, intervalDays: 31 })).toEqual(['intervalDays']);
+    const weekly = { ...base, scheduleType: 'TIMES_PER_WEEK', timesPerWeek: 3 };
+    expect(createHabitSchema.parse(weekly).intervalDays).toBeNull();
+    expect(issues({ ...weekly, intervalDays: 2 })).toEqual(['intervalDays']);
   });
 
   it('bounds must contain the current value', () => {

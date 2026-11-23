@@ -61,6 +61,7 @@ describe('stats (e2e)', () => {
     Strength: 1, // Fri 13, Mon 16, Wed 18
     'Deep work': 0.25, // week 11-09: 1/4; this week 3/4 so far, not counted yet
     Journal: 1, // Sat 14, Sun 15
+    Run: 1, // Sat 14, Mon 16, Wed 18 (every 2 days from 09-21; not due today)
   };
   // 90d (08-22 …) covers the whole history from 09-21, so 365d is the same.
   const RATES_FULL = {
@@ -71,6 +72,7 @@ describe('stats (e2e)', () => {
     Strength: 1,
     'Deep work': 29 / 32, // 7 weeks at 4/4, then 1/4
     Journal: 1,
+    Run: 1, // 30 runs, 09-21 … 11-18
   };
   const mean = (values: number[]) => values.reduce((sum, value) => sum + value, 0) / values.length;
 
@@ -84,26 +86,26 @@ describe('stats (e2e)', () => {
   it('7d: per core, daily series, streaks and changes', async () => {
     const stats = await overview('7d');
     expect(stats.cores.map((core) => [core.name, core.rate])).toEqual([
-      ['Health', (6 / 7 + 1 + 1) / 3],
+      ['Health', (6 / 7 + 1 + 1 + 1) / 4],
       ['Mind', (5 / 6 + 1 + 1) / 3],
       ['Career', 0.25],
     ]);
     // Due daily/specific-day habits each day, hits / due (today: only Cold shower is done).
     expect(stats.daily).toEqual([
       { date: '2026-11-13', rate: 1 }, // Cold, Read, Meditate, Strength
-      { date: '2026-11-14', rate: 0.75 }, // Cold shower missed
+      { date: '2026-11-14', rate: 0.8 }, // Cold shower missed; Run due
       { date: '2026-11-15', rate: 1 },
       { date: '2026-11-16', rate: 1 },
       { date: '2026-11-17', rate: 1 },
-      { date: '2026-11-18', rate: 0.75 }, // Read missed
+      { date: '2026-11-18', rate: 0.8 }, // Read missed; Run due
       { date: '2026-11-19', rate: 1 },
     ]);
     expect(stats.topStreaks.map((h) => [h.name, h.currentStreak])).toEqual([
       ['Meditate', 59],
+      ['Run', 30],
       ['Strength', 21],
       ['Journal', 16],
       ['Gym', 8],
-      ['Cold shower', 5],
     ]);
     expect(stats.changes).toEqual({ levelUps: 0, deloads: 1 }); // Deep work, Monday
   });
@@ -114,7 +116,7 @@ describe('stats (e2e)', () => {
     const stats = await overview('90d');
     expect(stats.overallRate).toBeCloseTo(mean(Object.values(RATES_FULL)));
     expect(stats.cores.map((core) => core.rate)).toEqual([
-      (59 / 60 + 1 + 1) / 3,
+      (59 / 60 + 1 + 1 + 1) / 4,
       (58 / 59 + 1 + 1) / 3,
       29 / 32,
     ]);
@@ -205,6 +207,7 @@ describe('stats (e2e)', () => {
     expect(after.cores).toEqual(before.cores);
     expect(after.topStreaks.map((h) => h.name)).toEqual([
       'Meditate',
+      'Run',
       'Strength',
       'Gym',
       'Cold shower',

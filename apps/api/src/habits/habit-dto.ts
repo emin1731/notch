@@ -18,6 +18,7 @@ export function toHabitDto(habit: Habit): HabitDto {
     scheduleType: habit.scheduleType,
     daysOfWeek: habit.daysOfWeek,
     timesPerWeek: habit.timesPerWeek,
+    intervalDays: habit.intervalDays,
     initialTimesPerWeek: habit.initialTimesPerWeek,
     timeOfDay: habit.timeOfDay,
     adaptiveEnabled: habit.adaptiveEnabled,

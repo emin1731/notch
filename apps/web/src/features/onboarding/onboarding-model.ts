@@ -59,6 +59,7 @@ export function templateSummary(template: HabitTemplate): string {
     scheduleType: template.scheduleType,
     daysOfWeek: template.daysOfWeek ?? [],
     timesPerWeek: template.timesPerWeek ?? null,
+    intervalDays: template.intervalDays ?? null,
   });
   if (template.type === 'TOGGLE' || template.targetValue === undefined) {
     return schedule;

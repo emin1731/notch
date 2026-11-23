@@ -71,8 +71,9 @@ describe('weekly review of the demo seed, on Monday morning (e2e)', () => {
       Strength: ['HOLD', 'AT_MAX', 1],
       'Deep work': ['DELOAD', 'STRUGGLING', 0.25], // 1 of 4 sessions
       Journal: ['HOLD', 'NOT_ADAPTIVE', 1],
+      Run: ['HOLD', 'NOT_ADAPTIVE', 1], // Tue, Thu, Sat: every 2 days from Mon 09-21
     });
-    expect(review.summary.overallRate).toBeCloseTo((6 / 7 + 6 / 7 + 1 + 1 + 1 + 0.25 + 1) / 7);
+    expect(review.summary.overallRate).toBeCloseTo((6 / 7 + 6 / 7 + 1 + 1 + 1 + 0.25 + 1 + 1) / 8);
     expect(review.changes).toEqual([
       expect.objectContaining({
         habitName: 'Deep work',

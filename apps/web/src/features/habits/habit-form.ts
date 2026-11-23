@@ -21,7 +21,7 @@ import { formatMinutes } from '@/lib/habit-format';
 
 /**
  * The habit form's values, in the units people think in: minutes for durations, times a week for
- * a frequency. `toHabitInput` converts them to the API's (seconds).
+ * a frequency, days between for a daily habit. `toHabitInput` converts them to the API's (seconds).
  */
 export interface HabitFormValues {
   name: string;
@@ -33,6 +33,8 @@ export interface HabitFormValues {
   scheduleType: ScheduleType;
   daysOfWeek: number[];
   timesPerWeek: number;
+  /** A daily habit's "every N days" (1 = every day). */
+  intervalDays: number;
   timeOfDay: TimeOfDay;
   adaptiveEnabled: boolean;
   stepType: StepType;
@@ -66,6 +68,7 @@ export function defaultValues({
     scheduleType: 'DAILY',
     daysOfWeek: [],
     timesPerWeek: DEFAULT_TIMES_PER_WEEK,
+    intervalDays: 1,
     timeOfDay: 'ANYTIME',
     adaptiveEnabled: true,
     stepType: 'PERCENT',
@@ -98,6 +101,7 @@ export function valuesFromHabit(habit: HabitDto): HabitFormValues {
     scheduleType: habit.scheduleType,
     daysOfWeek: habit.daysOfWeek,
     timesPerWeek: habit.timesPerWeek ?? DEFAULT_TIMES_PER_WEEK,
+    intervalDays: habit.intervalDays ?? 1,
     timeOfDay: habit.timeOfDay,
     adaptiveEnabled: habit.adaptiveEnabled,
     stepType: habit.stepType,
@@ -122,6 +126,7 @@ export function toHabitInput(values: HabitFormValues): z.input<typeof createHabi
     scheduleType: values.scheduleType,
     daysOfWeek: values.scheduleType === 'SPECIFIC_DAYS' ? values.daysOfWeek : [],
     timesPerWeek: values.scheduleType === 'TIMES_PER_WEEK' ? values.timesPerWeek : null,
+    intervalDays: values.scheduleType === 'DAILY' ? values.intervalDays : null,
     timeOfDay: values.timeOfDay,
     adaptiveEnabled: values.adaptiveEnabled,
     stepType: values.stepType,
@@ -143,6 +148,7 @@ function shapeOf(input: z.input<typeof createHabitSchema>): HabitShape {
     scheduleType: input.scheduleType,
     daysOfWeek: input.daysOfWeek ?? [],
     timesPerWeek: input.timesPerWeek ?? null,
+    intervalDays: input.intervalDays ?? (input.scheduleType === 'DAILY' ? 1 : null),
     stepType: input.stepType ?? 'PERCENT',
     stepValue: input.stepValue ?? PROGRESSION_CONFIG.defaultStepPercent,
     minTarget: input.minTarget ?? null,
@@ -160,6 +166,7 @@ const FIELD_BY_PATH: Record<string, HabitFormField> = {
   scheduleType: 'scheduleType',
   daysOfWeek: 'daysOfWeek',
   timesPerWeek: 'timesPerWeek',
+  intervalDays: 'intervalDays',
   timeOfDay: 'timeOfDay',
   stepValue: 'stepValue',
   stepType: 'stepType',
@@ -263,6 +270,7 @@ export function resetForSchedule(
     scheduleType,
     daysOfWeek: [],
     timesPerWeek: DEFAULT_TIMES_PER_WEEK,
+    intervalDays: 1,
   };
   // A toggle's bounds count times a week; they mean nothing once it isn't weekly any more.
   if (progressingField(values) !== progressingField({ type: values.type, scheduleType })) {
@@ -300,6 +308,13 @@ export function changedFields(habit: HabitDto, values: HabitFormValues): UpdateH
   ) {
     changes.timesPerWeek = next.timesPerWeek;
   }
+  if (
+    habit.scheduleType === 'DAILY' &&
+    next.intervalDays !== null &&
+    next.intervalDays !== habit.intervalDays
+  ) {
+    changes.intervalDays = next.intervalDays;
+  }
   if (next.timeOfDay !== habit.timeOfDay) changes.timeOfDay = next.timeOfDay;
   if (next.adaptiveEnabled !== habit.adaptiveEnabled)
     changes.adaptiveEnabled = next.adaptiveEnabled;
@@ -310,15 +325,30 @@ export function changedFields(habit: HabitDto, values: HabitFormValues): UpdateH
   return changes;
 }
 
-/** Editing the target, the days or the times a week writes a manual change (plan 7.5's note). */
-export function isManualChange(habit: HabitDto, values: HabitFormValues): boolean {
+/**
+ * What saving an edit means for levels (plan 7.5's note): editing the target, the days, the times
+ * a week or the interval writes a manual change. A new interval counts from today. `null` when the
+ * edit changes none of them.
+ */
+export function manualChangeNote(habit: HabitDto, values: HabitFormValues): string | null {
   const changes = changedFields(habit, values);
-  return (
-    changes !== null &&
-    (changes.targetValue !== undefined ||
-      changes.daysOfWeek !== undefined ||
-      changes.timesPerWeek !== undefined)
-  );
+  if (changes === null) {
+    return null;
+  }
+  const target =
+    changes.targetValue !== undefined ||
+    changes.daysOfWeek !== undefined ||
+    changes.timesPerWeek !== undefined;
+  const interval = changes.intervalDays !== undefined;
+  if (!target && !interval) {
+    return null;
+  }
+  return [
+    interval && 'The new rhythm starts today. Past days keep the old one.',
+    `This counts as a manual change. Levels will wait for two full weeks${target ? ' at the new target' : ''} before adjusting.`,
+  ]
+    .filter(Boolean)
+    .join(' ');
 }
 
 const PREVIEW_LEVELS = 3;

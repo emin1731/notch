@@ -14,9 +14,10 @@ export const TYPE_HINTS: Record<HabitType, string> = {
   DURATION: 'Time spent, like 20 minutes of meditation.',
 };
 
+/** How a habit repeats, in Apple Calendar's words. */
 export const SCHEDULES = [
-  { value: 'DAILY', label: 'Every day' },
-  { value: 'SPECIFIC_DAYS', label: 'Some days' },
+  { value: 'DAILY', label: 'Daily' },
+  { value: 'SPECIFIC_DAYS', label: 'Weekly' },
   { value: 'TIMES_PER_WEEK', label: 'Times a week' },
 ] as const satisfies readonly { value: ScheduleType; label: string }[];
 

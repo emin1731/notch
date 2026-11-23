@@ -3,7 +3,7 @@ import type { TodayHabit, TodayResponse } from '@notch/shared';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { PasswordService } from '../src/auth/password.service.js';
 import { DEMO_PASSWORD, DEMO_USERNAME, seedDemo } from '../src/cli/demo-seed.js';
-import { createTestApp } from './create-test-app.js';
+import { createTestApp, testClock } from './create-test-app.js';
 import { loginAs, registerUser, resetDb } from './helpers/auth.js';
 import type { TestClient } from './helpers/test-client.js';
 
@@ -62,7 +62,8 @@ describe('today (e2e)', () => {
         ['EVENING', ['Read']],
       ],
     );
-    // Strength (Mon/Wed/Fri) and Journal (Sat/Sun) aren't due on a Thursday.
+    // Strength (Mon/Wed/Fri) and Journal (Sat/Sun) aren't due on a Thursday, nor Run (every 2 days
+    // from Sep 21, so on even days since: today is day 59).
     expect(summary(today.groups.flatMap((group) => group.habits))).toEqual({
       // Missed on Saturday the 14th: Sun–Thu is 5.
       'Cold shower': { target: 1, value: 1, progress: 1, streak: 5 },
@@ -114,7 +115,7 @@ describe('today (e2e)', () => {
     expect(
       yesterday.groups.map((group) => [group.timeOfDay, group.habits.map((h) => h.name)]),
     ).toEqual([
-      ['MORNING', ['Cold shower', 'Meditate']],
+      ['MORNING', ['Cold shower', 'Meditate', 'Run']],
       ['EVENING', ['Read']],
       ['ANYTIME', ['Strength']],
     ]);
@@ -126,8 +127,10 @@ describe('today (e2e)', () => {
       // Tue/Thu for 5 weeks (10), then Mon/Wed/Fri: 9 + Mon and Wed this week. Reading the old
       // weekdays from the history is what keeps this from breaking at the edit.
       Strength: { target: 30, value: 30, progress: 1, streak: 21 },
+      // Every 2 days from Sep 21: 30 runs.
+      Run: { target: 1, value: 1, progress: 1, streak: 30 },
     });
-    expect(yesterday.dayProgress).toBeCloseTo((1 + 1 + 0.4 + 1) / 4);
+    expect(yesterday.dayProgress).toBeCloseTo((1 + 1 + 0.4 + 1 + 1) / 5);
     expect(summary(yesterday.weeklyQuota)['Deep work']).toEqual({
       target: 3300,
       value: 3300,
@@ -147,6 +150,7 @@ describe('today (e2e)', () => {
     expect(await longest('Strength')).toBe(21);
     expect(await longest('Deep work')).toBe(7);
     expect(await longest('Journal')).toBe(16); // 8 weekends
+    expect(await longest('Run')).toBe(30); // every 2 days
   });
 
   it('only today and the 6 days before', async () => {
@@ -168,5 +172,37 @@ describe('today (e2e)', () => {
       g.habits.map((h) => h.name),
     );
     expect(names).not.toContain('Cold shower');
+  });
+
+  it('a new interval starts today; earlier days keep the old rhythm', async () => {
+    const runOn = async (date?: string) => {
+      const res = await client.get(`/today${date ? `?date=${date}` : ''}`);
+      expect(res.status).toBe(200);
+      const habits = (res.body as TodayResponse).groups.flatMap((group) => group.habits);
+      return habits.find((habit) => habit.name === 'Run');
+    };
+    // Every 2 days from Sep 21: Wed 11-18 yes, Thu 11-19 (today) no.
+    expect(await runOn()).toBeUndefined();
+
+    const res = await client.patch(`/habits/${habitIds.Run}`, { intervalDays: 3 });
+    expect(res.body.recentChanges[0]).toMatchObject({
+      kind: 'MANUAL',
+      field: 'INTERVAL_DAYS',
+      fromValue: 2,
+      toValue: 3,
+      effectiveFrom: '2026-11-19',
+    });
+    // Every 3 days from today, without breaking the streak.
+    expect(await runOn()).toMatchObject({ currentStreak: 30, log: null });
+    expect(await runOn('2026-11-18')).toBeDefined();
+    expect(await runOn('2026-11-17')).toBeUndefined();
+
+    const clock = testClock(app);
+    clock.set('2026-11-21T09:00:00Z');
+    expect(await runOn('2026-11-20')).toBeUndefined();
+    expect(await runOn()).toBeUndefined();
+    clock.set('2026-11-22T09:00:00Z');
+    expect(await runOn()).toBeDefined();
+    clock.set(NOW);
   });
 });

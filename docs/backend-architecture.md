@@ -289,9 +289,9 @@ User ─┬─< Session                     (login sessions; see 7)
 | `User` | Username (lower-cased), argon2 password hash, display name, IANA timezone, onboarding timestamp. |
 | `Session` | One logged-in browser: the **hash** of its cookie token, expiry, last seen, user agent. |
 | `Core` | A life area ("Health", "Career") with a colour, icon and sort order. Can be archived. |
-| `Habit` | The thing you do. A type (`TOGGLE`, `COUNT`, `DURATION`), a schedule (`DAILY`, `SPECIFIC_DAYS`, `TIMES_PER_WEEK`), a current target, and adaptive-difficulty settings. |
+| `Habit` | The thing you do. A type (`TOGGLE`, `COUNT`, `DURATION`), a schedule (`DAILY` every N days, `SPECIFIC_DAYS`, `TIMES_PER_WEEK`), a current target, and adaptive-difficulty settings. |
 | `HabitLog` | What you did on a given day. Stores `targetSnapshot`: the target *on that day*, so old progress stays correct after the target changes. |
-| `TargetChange` | History of every change to a habit's target, weekly count or weekdays: `MANUAL`, `LEVEL_UP` or `DELOAD`, with undo info. |
+| `TargetChange` | History of every change to a habit's target, weekly count, weekdays or daily interval (`TargetField`: `TARGET_VALUE`, `TIMES_PER_WEEK`, `DAYS_OF_WEEK`, `INTERVAL_DAYS`): `MANUAL`, `LEVEL_UP` or `DELOAD`, with undo info. Only the user changes weekdays and intervals. |
 | `WeeklyReview` | The evaluation of one Monday–Sunday week, with a JSON summary per habit. |
 
 ### 6.3 Conventions worth knowing
@@ -665,7 +665,7 @@ All routes are under `/api/v1` and need a session unless marked *public*.
 | `auth` | `GET /auth/csrf` *(public)*, `POST /auth/register` *(public)*, `POST /auth/login` *(public)*, `GET /auth/me`, `POST /auth/logout` *(public)*, `POST /auth/logout-all` | Sessions, CSRF, credentials ([7](#7-authentication-and-security)). |
 | `users` | `PATCH /me`, `POST /me/password`, `POST /me/onboarding/complete`, `DELETE /me` | Profile (name, timezone), password, onboarding flag, account deletion. |
 | `cores` | `GET/POST /cores`, `POST /cores/batch`, `PUT /cores/order`, `PATCH/DELETE /cores/:id`, `POST /cores/:id/archive`, `…/unarchive` | Life areas. Archiving a core archives its active habits with the same timestamp. |
-| `habits` | `GET/POST /habits`, `PUT /habits/order`, `GET/PATCH/DELETE /habits/:id`, `GET /habits/:id/target-history`, `POST /habits/:id/archive`, `…/unarchive` | Habits. Editing a target by hand records a `MANUAL` `TargetChange`. |
+| `habits` | `GET/POST /habits`, `PUT /habits/order`, `GET/PATCH/DELETE /habits/:id`, `GET /habits/:id/target-history`, `POST /habits/:id/archive`, `…/unarchive` | Habits. Editing a target, weekly count, weekdays or daily interval by hand records a `MANUAL` `TargetChange`. |
 | `logs` | `GET /habits/:id/logs`, `PUT /habits/:id/logs/:date`, `POST /habits/:id/logs/:date/increment`, `DELETE /habits/:id/logs/:date` | Recording what you did. Only today and the 6 days before can be logged. A value of 0 deletes the log. `increment` is an atomic SQL upsert, so two quick taps on "+1" never lose a count. |
 | `today` | `GET /today?date=` | The Today screen in one call: habits due on that date grouped by time of day, progress, streaks, weekly quotas, "target changed" badges, and whether a review is waiting. Three queries, then everything is computed in memory. |
 | `reviews` | `GET /reviews`, `GET /reviews/latest`, `GET /reviews/:weekStart`, `POST /reviews/:id/seen`, `POST /target-changes/:id/undo` | Weekly reviews and undoing a level-up or deload ([10.3](#103-weekly-reviews-a-cron-job-without-a-cron)). |
@@ -752,7 +752,7 @@ HTTP. It contains:
 | `types/` | Response shapes (DTOs) the API returns and the web app consumes. |
 | `errors.ts` | The list of error codes and the error body type. |
 | `dates/`, `timezone.ts` | `LocalDate`, `todayIn`, week math, timezone validation. |
-| `schedule/` | "Is this habit scheduled on this date?" |
+| `schedule/` | "Is this habit scheduled on this date?", including a daily habit's "every N days". |
 | `progress/` | Progress per log, weekly completion rates, streaks, habit history. |
 | `progression/` | Adaptive difficulty: eligibility, cooldowns, step sizes, the decision, undo rules. |
 | `stats/` | Ranges, daily series, heatmaps, target-over-time. |
