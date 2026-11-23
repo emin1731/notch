@@ -1,8 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { daysToMask, maskToDays } from './days.js';
-import { isScheduledOn, occurrencesInWeek, type ScheduleSnapshot } from './is-scheduled.js';
+import { isScheduledOn, type ScheduleSnapshot } from './is-scheduled.js';
 
-const WEEK = '2026-11-16'; // a Monday
 const daily: ScheduleSnapshot = {
   scheduleType: 'DAILY',
   daysOfWeek: [],
@@ -58,22 +57,5 @@ describe('isScheduledOn', () => {
     const late = { ...daily, startDate: '2026-11-18' };
     expect(isScheduledOn(late, '2026-11-17')).toBe(false);
     expect(isScheduledOn(late, '2026-11-18')).toBe(true);
-  });
-});
-
-describe('occurrencesInWeek', () => {
-  it('counts scheduled days, or the weekly quota', () => {
-    expect(occurrencesInWeek(daily, WEEK)).toBe(7);
-    expect(occurrencesInWeek(monWedFri, WEEK)).toBe(3);
-    expect(occurrencesInWeek(threeTimes, WEEK)).toBe(3);
-    expect(occurrencesInWeek(everyThird, WEEK)).toBe(3);
-  });
-
-  it('a habit started mid-week asks only for the days left', () => {
-    const fromThursday = '2026-11-19';
-    expect(occurrencesInWeek({ ...daily, startDate: fromThursday }, WEEK)).toBe(4);
-    expect(occurrencesInWeek({ ...monWedFri, startDate: fromThursday }, WEEK)).toBe(1);
-    expect(occurrencesInWeek({ ...threeTimes, startDate: '2026-11-21' }, WEEK)).toBe(2);
-    expect(occurrencesInWeek({ ...daily, startDate: '2026-11-23' }, WEEK)).toBe(0);
   });
 });

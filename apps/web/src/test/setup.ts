@@ -8,8 +8,9 @@ import { useTimerPrompt } from '@/features/today/timer-actions';
 import { clearCookies } from './auth';
 import { server } from './server';
 
-// Pages are lazy chunks: the first import can take over a second when the whole suite runs.
-configure({ asyncUtilTimeout: 5000 });
+// Pages are lazy chunks: the first import can take seconds while turbo runs the API's database
+// tests alongside (as CI does). Still well under the 15 s test timeout.
+configure({ asyncUtilTimeout: 10_000 });
 
 // jsdom has no matchMedia; tests can override it per case.
 window.matchMedia ??= ((query: string) => ({

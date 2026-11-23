@@ -4,6 +4,7 @@ import {
   type CoreColor,
   currentStreak,
   fromDateString,
+  hasLaterChange,
   isScheduledOn,
   scheduleOn,
   targetOn,
@@ -164,6 +165,7 @@ export class TodayService {
     const blocked = undoBlockReason(change, {
       now,
       hasLogSinceEffective: [...logs.keys()].some((date) => date >= effectiveFrom),
+      editedSince: hasLaterChange(change, changes),
       currentValue: currentValueOf(habit, change.field),
     });
     return {

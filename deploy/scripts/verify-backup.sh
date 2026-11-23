@@ -12,7 +12,7 @@ createdb "$scratch"
 pg_restore --no-owner --exit-on-error --dbname="$scratch" "$file"
 
 status=0
-for table in User Session Core Goal Milestone Habit HabitLog TargetChange WeeklyReview; do
+for table in User Session Core Habit HabitLog TargetChange WeeklyReview; do
   live=$(psql -tAc "SELECT count(*) FROM \"$table\"")
   restored=$(psql -d "$scratch" -tAc "SELECT count(*) FROM \"$table\"")
   printf '%-14s live %6s  restored %6s\n' "$table" "$live" "$restored"

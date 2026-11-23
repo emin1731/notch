@@ -76,7 +76,9 @@ function Day({
             <div className="flex items-center gap-5 rounded-3xl bg-card p-5 sm:p-6 lg:flex-col lg:items-start">
               <ProgressRing value={view.dayProgress} size={88} stroke={8} />
               <div className="flex flex-col gap-1">
-                <p className="text-sm text-muted-foreground">Today&apos;s progress</p>
+                <p className="text-sm text-muted-foreground">
+                  {isToday ? 'Today' : weekdayName(date)}&apos;s progress
+                </p>
                 <p className="text-[0.9375rem] font-medium">{progressMessage(view.dayProgress)}</p>
               </div>
             </div>

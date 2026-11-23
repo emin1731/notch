@@ -113,11 +113,49 @@ export function valuesFromHabit(habit: HabitDto): HabitFormValues {
   };
 }
 
-/** The create payload in API units, before the shared schema parses it. */
-export function toHabitInput(values: HabitFormValues): z.input<typeof createHabitSchema> {
-  const target = targetFactor(values.type);
+/** Whether the form shows the level settings (step and limits): Levels apply and are on. */
+export const levelsShown = (
+  values: Pick<HabitFormValues, 'type' | 'scheduleType' | 'adaptiveEnabled'>,
+) => values.adaptiveEnabled && adaptiveApplicable(values);
+
+/**
+ * The bounds to send, in API units. With Levels on, the form's. With them off the limits are
+ * hidden, so they never block a save: a new habit gets none, and an edit keeps the stored ones
+ * the current value still fits and drops any it would break (the API checks bounds whenever a
+ * habit could level, on or off).
+ */
+function boundsFor(
+  values: HabitFormValues,
+  editing: boolean,
+): Pick<HabitShape, 'minTarget' | 'maxTarget'> {
+  if (!adaptiveApplicable(values) || (!values.adaptiveEnabled && !editing)) {
+    return { minTarget: null, maxTarget: null };
+  }
   const bound = boundFactor(values);
-  const adaptive = adaptiveApplicable(values);
+  const minTarget = times(values.minTarget, bound);
+  const maxTarget = times(values.maxTarget, bound);
+  if (values.adaptiveEnabled) {
+    return { minTarget, maxTarget };
+  }
+  const value =
+    progressingField(values) === 'TIMES_PER_WEEK'
+      ? values.timesPerWeek
+      : times(values.target, targetFactor(values.type));
+  return {
+    minTarget: minTarget !== null && value !== null && value < minTarget ? null : minTarget,
+    maxTarget: maxTarget !== null && value !== null && value > maxTarget ? null : maxTarget,
+  };
+}
+
+/**
+ * The create payload in API units, before the shared schema parses it. `editing` keeps a habit's
+ * stored step and limits while Levels are off (see `boundsFor`).
+ */
+export function toHabitInput(
+  values: HabitFormValues,
+  { editing = false }: { editing?: boolean } = {},
+): z.input<typeof createHabitSchema> {
+  const target = targetFactor(values.type);
   return {
     coreId: values.coreId,
     name: values.name,
@@ -130,12 +168,14 @@ export function toHabitInput(values: HabitFormValues): z.input<typeof createHabi
     intervalDays: values.scheduleType === 'DAILY' ? values.intervalDays : null,
     timeOfDay: values.timeOfDay,
     adaptiveEnabled: values.adaptiveEnabled,
-    stepType: values.stepType,
-    stepValue:
-      (values.stepType === 'ABSOLUTE' ? times(values.stepValue, target) : values.stepValue) ??
-      undefined,
-    minTarget: adaptive ? times(values.minTarget, bound) : null,
-    maxTarget: adaptive ? times(values.maxTarget, bound) : null,
+    // A new habit without Levels takes the default step, whatever was tried while they were on.
+    ...((editing || levelsShown(values)) && {
+      stepType: values.stepType,
+      stepValue:
+        (values.stepType === 'ABSOLUTE' ? times(values.stepValue, target) : values.stepValue) ??
+        undefined,
+    }),
+    ...boundsFor(values, editing),
     startDate: values.startDate,
   };
 }
@@ -206,13 +246,15 @@ export function habitFormResolver({
       errors[field] ??= { type: 'validate', message };
     };
 
+    // The step and limits only count while they show.
+    const levels = levelsShown(values);
     for (const field of ['target', 'stepValue', 'minTarget', 'maxTarget'] as const) {
       const value = values[field];
-      if (value !== null && !Number.isInteger(value)) {
+      if (value !== null && !Number.isInteger(value) && (field === 'target' || levels)) {
         add(field, 'Use a whole number');
       }
     }
-    if (adaptiveApplicable(values) && values.stepType === 'ABSOLUTE' && values.stepValue === null) {
+    if (levels && values.stepType === 'ABSOLUTE' && values.stepValue === null) {
       add('stepValue', 'Set a step');
     }
     if (!editing) {
@@ -222,7 +264,7 @@ export function habitFormResolver({
       }
     }
 
-    const input = toHabitInput(values);
+    const input = toHabitInput(values, { editing });
     const result = createHabitSchema.safeParse(input);
     if (!result.success) {
       for (const issue of result.error.issues) {
@@ -289,7 +331,7 @@ const sameDays = (a: readonly number[], b: readonly number[]) =>
  * change. Type, schedule type and start date never change. `null` if the values don't parse.
  */
 export function changedFields(habit: HabitDto, values: HabitFormValues): UpdateHabitInput | null {
-  const parsed = createHabitSchema.safeParse(toHabitInput(values));
+  const parsed = createHabitSchema.safeParse(toHabitInput(values, { editing: true }));
   if (!parsed.success) {
     return null;
   }
@@ -327,9 +369,9 @@ export function changedFields(habit: HabitDto, values: HabitFormValues): UpdateH
 }
 
 /**
- * What saving an edit means for levels (plan 7.5's note): editing the target, the days, the times
- * a week or the interval writes a manual change. A new interval counts from today. `null` when the
- * edit changes none of them.
+ * What saving an edit means (plan 7.5's note): a new interval counts from today, and editing the
+ * target, the days, the times a week or the interval writes a manual change that Levels wait out,
+ * which is only worth saying while Levels are on. `null` when there's nothing to say.
  */
 export function manualChangeNote(habit: HabitDto, values: HabitFormValues): string | null {
   const changes = changedFields(habit, values);
@@ -341,15 +383,13 @@ export function manualChangeNote(habit: HabitDto, values: HabitFormValues): stri
     changes.daysOfWeek !== undefined ||
     changes.timesPerWeek !== undefined;
   const interval = changes.intervalDays !== undefined;
-  if (!target && !interval) {
-    return null;
-  }
-  return [
+  const levels = levelsShown(values) && (target || interval);
+  const parts = [
     interval && 'The new rhythm starts today. Past days keep the old one.',
-    `This counts as a manual change. Levels will wait for two full weeks${target ? ' at the new target' : ''} before adjusting.`,
-  ]
-    .filter(Boolean)
-    .join(' ');
+    levels &&
+      `This counts as a manual change. Levels will wait for two full weeks${target ? ' at the new target' : ''} before adjusting.`,
+  ].filter(Boolean);
+  return parts.length > 0 ? parts.join(' ') : null;
 }
 
 const PREVIEW_LEVELS = 3;
@@ -360,7 +400,7 @@ const PREVIEW_LEVELS = 3;
  * preview (levels off, a toggle that isn't weekly, or values that don't parse yet).
  */
 export function previewText(values: HabitFormValues): string | null {
-  if (!values.adaptiveEnabled || !adaptiveApplicable(values)) {
+  if (!levelsShown(values)) {
     return null;
   }
   // Only the level settings matter here, not the name or the core.

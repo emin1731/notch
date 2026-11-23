@@ -1100,7 +1100,7 @@ packages/shared/src/
 │   ├── today.ts              # todayIn(tz), nowIn(tz)
 │   └── week.ts               # weekStartOf(date), weekRange, isoWeekday
 ├── schedule/
-│   └── is-scheduled.ts       # isScheduledOn(habit, date), occurrencesInWeek(habit)
+│   └── is-scheduled.ts       # isScheduledOn(schedule, date)
 ├── progress/
 │   ├── progress.ts           # computeProgress(value, target), isHit(log)
 │   ├── weekly-rate.ts        # weeklyRate(habit, logs, week)
@@ -1290,7 +1290,7 @@ Each phase ends in a working, demo-able state. Shared-package logic for a phase 
 ### Phase 3: Habits
 
 - [ ] Prisma: `Habit`, `TargetChange` (manual changes only for now)
-- [ ] Shared: habit schemas with cross-field refinements, `isScheduledOn`, `occurrencesInWeek`, step math, `projectLevels` preview, `adaptiveApplicable()`
+- [ ] Shared: habit schemas with cross-field refinements, `isScheduledOn`, step math, `projectLevels` preview, `adaptiveApplicable()`
 - [ ] API: habits CRUD, order, archive; manual target edits write a `MANUAL` TargetChange
 - [ ] Web: habit form (a dialog for new habits, a page for editing) with all sections, level preview and toggle-schedule hint; habits shown on core cards
 - [ ] Tests: schema refinements, schedule helpers, step math, manual change recording

@@ -240,6 +240,7 @@ problem at once. This prevents the classic "deployed with an empty secret" mista
 | `CSRF_SECRET` | — (≥ 32 chars) | Key used to sign CSRF tokens. |
 | `INVITE_CODE` | — (≥ 8 chars) | Needed to register. |
 | `MAX_USERS` | `1` | Registration closes once this many accounts exist. |
+| `AUTH_THROTTLE_LIMIT` | `10` | Login and register attempts per minute per IP. |
 | `WEB_DIST_DIR` | unset | Folder of the built web app. Unset = API only. |
 
 Services read config through Nest's typed `ConfigService`, e.g.

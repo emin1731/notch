@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { incrementLogSchema, logRangeQuerySchema, setLogSchema } from './log.js';
+import { incrementLogSchema, logRangeIssue, logRangeQuerySchema, setLogSchema } from './log.js';
 
 describe('log schemas', () => {
   it('values are non-negative integers', () => {
@@ -23,5 +23,11 @@ describe('log schemas', () => {
     expect(logRangeQuerySchema.safeParse({ from: '2025-01-01', to: '2026-12-31' }).success).toBe(
       false,
     );
+  });
+
+  it('logRangeIssue says why, for the API to check a defaulted `to` the same way', () => {
+    expect(logRangeIssue('2026-01-01', '2027-01-01')).toBeNull(); // 366 days
+    expect(logRangeIssue('2026-01-01', '2027-01-02')).toBe('At most 366 days');
+    expect(logRangeIssue('2026-01-02', '2026-01-01')).toBe('`from` is after `to`');
   });
 });

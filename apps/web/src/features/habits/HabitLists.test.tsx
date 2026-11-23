@@ -1,6 +1,7 @@
 import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it } from 'vitest';
+import { queryKeys } from '@/lib/query-keys';
 import { signedIn } from '@/test/auth';
 import { renderApp } from '@/test/render';
 import { mockSortableLayout } from '@/test/sortable';
@@ -56,8 +57,11 @@ describe('habits on a core card', () => {
     const { api, vitamins, water, run } = setup();
     mockSortableLayout();
     const user = userEvent.setup();
-    renderApp('/cores');
+    const { client } = renderApp('/cores');
     await within(await card()).findByRole('region', { name: 'Health habits' });
+    // Today and the stats list habits in this order too.
+    client.setQueryData(queryKeys.today.date('2026-11-19'), {});
+    client.setQueryData(queryKeys.stats.overview('30d'), {});
 
     screen.getByRole('button', { name: 'Reorder Water' }).focus();
     await user.keyboard(' ');
@@ -74,6 +78,10 @@ describe('habits on a core card', () => {
       'Vitamins',
       'Morning run',
     ]);
+    await waitFor(() =>
+      expect(client.getQueryState(queryKeys.today.date('2026-11-19'))?.isInvalidated).toBe(true),
+    );
+    expect(client.getQueryState(queryKeys.stats.overview('30d'))?.isInvalidated).toBe(true);
   });
 
   it('archives a habit, and brings it back with "Show archived"', async () => {

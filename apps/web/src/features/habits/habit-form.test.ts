@@ -65,6 +65,7 @@ describe('habit form: conversion', () => {
       base({
         type: 'DURATION',
         target: 30,
+        adaptiveEnabled: true,
         stepType: 'ABSOLUTE',
         stepValue: 5,
         minTarget: 15,
@@ -83,10 +84,16 @@ describe('habit form: conversion', () => {
   it('keeps a weekly toggle’s bounds in times a week, and leaves out a non-weekly toggle’s', () => {
     expect(
       toHabitInput(
-        base({ scheduleType: 'TIMES_PER_WEEK', timesPerWeek: 3, minTarget: 2, maxTarget: 6 }),
+        base({
+          scheduleType: 'TIMES_PER_WEEK',
+          timesPerWeek: 3,
+          adaptiveEnabled: true,
+          minTarget: 2,
+          maxTarget: 6,
+        }),
       ),
     ).toMatchObject({ targetValue: undefined, timesPerWeek: 3, minTarget: 2, maxTarget: 6 });
-    expect(toHabitInput(base({ minTarget: 2 }))).toMatchObject({
+    expect(toHabitInput(base({ adaptiveEnabled: true, minTarget: 2 }))).toMatchObject({
       minTarget: null,
       maxTarget: null,
     });
@@ -131,27 +138,27 @@ describe('habit form: validation uses the shared schema', () => {
     ],
     [
       'a percent step over 100',
-      { type: 'COUNT', target: 5, stepValue: 150 },
+      { type: 'COUNT', target: 5, adaptiveEnabled: true, stepValue: 150 },
       { stepValue: 'At most 100%' },
     ],
     [
       'an empty absolute step',
-      { type: 'COUNT', target: 5, stepType: 'ABSOLUTE', stepValue: null },
+      { type: 'COUNT', target: 5, adaptiveEnabled: true, stepType: 'ABSOLUTE', stepValue: null },
       { stepValue: 'Set a step' },
     ],
     [
       'min above max',
-      { type: 'COUNT', target: 5, minTarget: 4, maxTarget: 3 },
+      { type: 'COUNT', target: 5, adaptiveEnabled: true, minTarget: 4, maxTarget: 3 },
       { maxTarget: 'Must be at least the minimum' },
     ],
     [
       'a target below the minimum',
-      { type: 'COUNT', target: 5, minTarget: 6 },
+      { type: 'COUNT', target: 5, adaptiveEnabled: true, minTarget: 6 },
       { minTarget: 'The current target is below this minimum' },
     ],
     [
       'a weekly bound over 7',
-      { scheduleType: 'TIMES_PER_WEEK', timesPerWeek: 3, maxTarget: 8 },
+      { scheduleType: 'TIMES_PER_WEEK', timesPerWeek: 3, adaptiveEnabled: true, maxTarget: 8 },
       { maxTarget: 'At most 7 times per week' },
     ],
     [
@@ -246,6 +253,66 @@ describe('habit form: editing', () => {
     expect(manualChangeNote(saved, { ...values, intervalDays: 2 })).toBe(
       'The new rhythm starts today. Past days keep the old one. This counts as a manual change. Levels will wait for two full weeks before adjusting.',
     );
+  });
+
+  it('only mentions Levels while they are on and apply', () => {
+    const off = habit({ adaptiveEnabled: false });
+    expect(manualChangeNote(off, { ...valuesFromHabit(off), target: 45 })).toBeNull();
+    expect(manualChangeNote(off, { ...valuesFromHabit(off), intervalDays: 3 })).toBe(
+      'The new rhythm starts today. Past days keep the old one.',
+    );
+    // A daily yes/no habit can't level at all.
+    const toggle = habit({
+      type: 'TOGGLE',
+      targetValue: 1,
+      initialTargetValue: 1,
+      adaptiveApplicable: false,
+      stepType: 'PERCENT',
+      stepValue: 10,
+      minTarget: null,
+      maxTarget: null,
+    });
+    expect(manualChangeNote(toggle, { ...valuesFromHabit(toggle), intervalDays: 3 })).toBe(
+      'The new rhythm starts today. Past days keep the old one.',
+    );
+  });
+
+  it('with Levels off, drops a stored limit the new target breaks, and keeps the rest', () => {
+    // 15–60 min, Levels off: 90 min breaks the highest, not the lowest.
+    const saved = habit({ adaptiveEnabled: false });
+    expect(changedFields(saved, { ...valuesFromHabit(saved), target: 90 })).toEqual({
+      targetValue: 5400,
+      maxTarget: null,
+    });
+    expect(changedFields(saved, { ...valuesFromHabit(saved), target: 45 })).toEqual({
+      targetValue: 2700,
+    });
+  });
+
+  it('with Levels on, keeps a limit the new target breaks, as an error', async () => {
+    const saved = habit();
+    expect(changedFields(saved, { ...valuesFromHabit(saved), target: 90 })).toBeNull();
+    expect(await errorsOf({ ...valuesFromHabit(saved), target: 90 }, true)).toEqual({
+      maxTarget: 'The current target is above this maximum',
+    });
+  });
+});
+
+describe('habit form: Levels off on a new habit', () => {
+  it('sends no limits and the default step, whatever was tried while they were on', async () => {
+    const values = base({
+      type: 'DURATION',
+      target: 20,
+      stepType: 'ABSOLUTE',
+      stepValue: null,
+      minTarget: 1.5,
+      maxTarget: 15,
+    });
+    expect(await errorsOf(values)).toEqual({});
+    const input = toHabitInput(values);
+    expect(input).toMatchObject({ adaptiveEnabled: false, minTarget: null, maxTarget: null });
+    expect(input).not.toHaveProperty('stepType');
+    expect(input).not.toHaveProperty('stepValue');
   });
 });
 

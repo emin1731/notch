@@ -12,8 +12,8 @@ import {
   type TimeOfDay,
 } from '@notch/shared';
 import { Info } from 'lucide-react';
-import { type ReactNode, useId, useState } from 'react';
-import { Controller, useForm, useWatch } from 'react-hook-form';
+import { type BaseSyntheticEvent, type ReactNode, useId, useState } from 'react';
+import { Controller, type FieldErrors, useForm, useWatch } from 'react-hook-form';
 import { toast } from 'sonner';
 import { FormAlert } from '@/components/form/FormAlert';
 import { SelectField } from '@/components/form/SelectField';
@@ -60,6 +60,9 @@ const EDITABLE_SCHEDULE: Record<ScheduleType, string> = {
   SPECIFIC_DAYS: 'its days',
   TIMES_PER_WEEK: 'its count',
 };
+
+/** The level settings, which only show while Levels are on, by their labels. */
+const LEVEL_FIELDS = { stepValue: 'Step', minTarget: 'Lowest', maxTarget: 'Highest' } as const;
 
 const FIELDS: HabitFormField[] = [
   'name',
@@ -128,6 +131,30 @@ export function HabitForm({
     form.clearErrors();
   };
 
+  /**
+   * RHF shows and focuses field errors itself, but can't on the step and limits when they sit in
+   * the closed "Advanced: limits" (opened here, so its focus lands) or aren't rendered (Levels
+   * off). Those go in the form's alert rather than vanishing.
+   */
+  const onInvalid = (errors: FieldErrors<HabitFormValues>, event?: BaseSyntheticEvent) => {
+    const formElement = event?.target instanceof HTMLFormElement ? event.target : null;
+    const unseen: string[] = [];
+    for (const [field, label] of Object.entries(LEVEL_FIELDS)) {
+      const message = errors[field as keyof typeof LEVEL_FIELDS]?.message;
+      if (!message) {
+        continue;
+      }
+      const input = formElement?.querySelector(`[name="${field}"]`);
+      const details = input?.closest('details');
+      if (!input) {
+        unseen.push(`${label}: ${message}`);
+      } else if (details && !details.open) {
+        details.open = true;
+      }
+    }
+    setFormError(unseen.length > 0 ? unseen.join(' ') : null);
+  };
+
   const onSubmit = form.handleSubmit(async (submitted) => {
     setFormError(null);
     try {
@@ -147,7 +174,7 @@ export function HabitForm({
         applyServerError(form, error, { fields: FIELDS, fieldForPath: formFieldForPath }),
       );
     }
-  });
+  }, onInvalid);
 
   const applicable = adaptiveApplicable(values);
   const frequency = progressingField(values) === 'TIMES_PER_WEEK';

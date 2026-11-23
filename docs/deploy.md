@@ -127,17 +127,18 @@ Pushing to `main` publishes a new `latest`. On the server:
 
 ```bash
 cd ~/notch
+docker compose exec backup pg_dump --format=custom --no-owner --file=/backups/pre-update.dump
 docker compose pull api && docker compose up -d api
 ```
 
-Migrations run on start, and sessions survive the restart.
+The first line takes a fresh dump, because the daily one can be up to a day old and migrations run on start. Some migrations delete data for good: `20261122120000_remove_goals` drops the goals and milestones tables. Sessions survive the restart.
 
 **Roll back** by pinning the previous image:
 
 1. Set `NOTCH_TAG=sha-<commit>` in `.env`.
 2. Run `docker compose up -d api`.
 
-Migrations only roll forward, so roll back to an image whose migrations are already applied.
+Migrations only roll forward, so this only works for an image whose schema matches the database. To go back past a release that changed the schema (such as the one that removed goals), restore `pre-update.dump` first (see [Restore for real](#backups)), then pin the old tag.
 
 ## Backups
 

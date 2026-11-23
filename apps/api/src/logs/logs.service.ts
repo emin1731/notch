@@ -7,8 +7,8 @@ import {
   type LocalDate,
   type LogDto,
   type LogRangeQuery,
+  logRangeIssue,
   type LogWriteResult,
-  longestStreak,
   maxLogValue,
   PROGRESSION_CONFIG,
   targetOn,
@@ -22,7 +22,8 @@ import { AppException } from '../common/errors/app-exception.js';
 import { validationFailed } from '../common/errors/conflicts.js';
 import { habitNotFound } from '../common/not-found.js';
 import type { Habit, HabitLog, Prisma, TargetChange } from '../generated/prisma/client.js';
-import { historyOf, toChangeLite } from '../habits/habit-history.js';
+import { toChangeLite } from '../habits/habit-history.js';
+import { lockOwnedHabit, refreshLongestStreak } from '../habits/habit-tx.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { ReviewsService } from '../reviews/reviews.service.js';
 
@@ -56,6 +57,11 @@ export class LogsService {
     }
     const to = query.to ?? todayIn(user.timezone, this.clock.now());
     const from = query.from ?? addDays(to, -29);
+    // The query schema can only check a range it was given in full.
+    const issue = logRangeIssue(from, to);
+    if (issue) {
+      throw validationFailed([{ path: '', message: issue }]);
+    }
     const logs = await this.prisma.habitLog.findMany({
       where: { habitId, date: { gte: fromDateString(from), lte: fromDateString(to) } },
       orderBy: { date: 'asc' },
@@ -123,7 +129,7 @@ export class LogsService {
     await this.reviews.ensureDue(user);
     const today = todayIn(user.timezone, this.clock.now());
     return this.prisma.$transaction(async (tx) => {
-      const habit = await this.lockHabit(tx, user.id, habitId);
+      const habit = await lockOwnedHabit(tx, user.id, habitId);
       if (habit.archivedAt) {
         throw new AppException(
           'HABIT_ARCHIVED',
@@ -136,12 +142,7 @@ export class LogsService {
       const changes = await tx.targetChange.findMany({ where: { habitId } });
       await mutate(tx, habit, changes);
 
-      const logs = await tx.habitLog.findMany({ where: { habitId } });
-      const history = historyOf(habit, changes, logs);
-      const longest = longestStreak(history, today);
-      if (longest !== habit.longestStreak) {
-        await tx.habit.update({ where: { id: habitId }, data: { longestStreak: longest } });
-      }
+      const { history, logs, longest } = await refreshLongestStreak(tx, habit, changes, today);
       const log = logs.find((row) => toDateString(row.date) === date);
       return {
         log: log ? toLogDto(log) : null,
@@ -150,16 +151,6 @@ export class LogsService {
         longestStreak: longest,
       };
     });
-  }
-
-  /** 404 unless it's the user's habit; then holds its row lock until the transaction ends. */
-  private async lockHabit(tx: Tx, userId: string, habitId: string): Promise<Habit> {
-    const rows = await tx.$queryRaw<unknown[]>`
-      SELECT 1 FROM "Habit" WHERE "id" = ${habitId} AND "userId" = ${userId} FOR UPDATE`;
-    if (rows.length === 0) {
-      throw habitNotFound();
-    }
-    return tx.habit.findUniqueOrThrow({ where: { id: habitId } });
   }
 }
 

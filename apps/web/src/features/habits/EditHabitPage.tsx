@@ -1,5 +1,5 @@
 import { SearchX, TriangleAlert } from 'lucide-react';
-import { Link, useNavigate, useParams } from 'react-router';
+import { Link, useLocation, useNavigate, useParams } from 'react-router';
 import { EmptyState } from '@/components/EmptyState';
 import { PageHeader } from '@/components/PageHeader';
 import { Button } from '@/components/ui/button';
@@ -14,7 +14,14 @@ import { useHabit } from './hooks';
 export default function EditHabitPage() {
   const { habitId = '' } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
   const habit = useHabit(habitId);
+  // Save and Cancel go back where you came from (the habit's page, Today or Cores); with no page
+  // before this one in the app (a fresh tab, a reload), to the habit's page.
+  const back = () =>
+    location.key === 'default'
+      ? void navigate(`/habits/${habitId}`, { replace: true })
+      : void navigate(-1);
   const cores = useCores(true);
 
   if (habit.isPending || cores.isPending) {
@@ -53,11 +60,11 @@ export default function EditHabitPage() {
         cores={choosable}
         initial={valuesFromHabit(habit.data)}
         cancel={
-          <Button asChild variant="surface" size="lg">
-            <Link to="/cores">Cancel</Link>
+          <Button type="button" variant="surface" size="lg" onClick={back}>
+            Cancel
           </Button>
         }
-        onSaved={() => void navigate('/cores')}
+        onSaved={back}
       />
     </>
   );

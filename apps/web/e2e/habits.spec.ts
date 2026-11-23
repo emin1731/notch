@@ -66,11 +66,13 @@ test('create one habit of each type, then edit a target', async ({ page }) => {
   await expect(health.getByRole('link', { name: /Read\s*Mon, Wed, Fri · 20 pages/ })).toBeVisible();
   await expect(health.getByRole('link', { name: /Meditate\s*Every day · 30 min/ })).toBeVisible();
 
-  // A new target counts as a manual change.
+  // With Levels on, a new target counts as a manual change. Saving goes back to Cores.
   await health.getByRole('button', { name: 'Meditate actions' }).click();
   await page.getByRole('menuitem', { name: 'Edit' }).click();
   await expect(page.getByRole('radio', { name: 'Count' })).toBeDisabled();
   await page.getByLabel('Target (minutes)').fill('45');
+  await expect(page.getByText(/This counts as a manual change/)).toBeHidden();
+  await page.getByRole('switch', { name: 'Adjust the target as I go' }).click();
   await expect(page.getByText(/This counts as a manual change/)).toBeVisible();
   await page.getByRole('button', { name: 'Save changes' }).click();
   await expect(page).toHaveURL('/cores');

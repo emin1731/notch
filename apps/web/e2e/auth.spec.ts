@@ -19,7 +19,6 @@ test('register, stay logged in across a reload, log out, and log back in', async
   await page.getByRole('button', { name: 'Mind' }).click();
   await page.getByRole('button', { name: 'Next' }).click();
   await page.getByRole('button', { name: 'Skip for now' }).click();
-  await page.getByRole('button', { name: 'Skip for now' }).click();
   await page.getByRole('button', { name: 'Start' }).click();
 
   await expect(page).toHaveURL('/today');

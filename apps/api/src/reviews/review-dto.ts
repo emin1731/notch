@@ -30,10 +30,21 @@ export type ChangeWithHabit = TargetChange & {
   habit: Pick<Habit, 'name' | 'targetValue' | 'timesPerWeek' | 'daysOfWeek' | 'intervalDays'>;
 };
 
-/** `hasLogSince(change)`: whether the habit has a log on or after the change took effect. */
+/**
+ * `hasLogSince(change)`: whether the habit has a log on or after the change took effect.
+ * `editedSince(change)`: whether the same field changed again later (`hasLaterChange`).
+ */
 export function toReviewDto(
   review: WeeklyReview & { changes: ChangeWithHabit[] },
-  { now, hasLogSince }: { now: Date; hasLogSince: (change: TargetChange) => boolean },
+  {
+    now,
+    hasLogSince,
+    editedSince,
+  }: {
+    now: Date;
+    hasLogSince: (change: TargetChange) => boolean;
+    editedSince: (change: TargetChange) => boolean;
+  },
 ): ReviewDto {
   return {
     id: review.id,
@@ -46,6 +57,7 @@ export function toReviewDto(
       const blocked = undoBlockReason(change, {
         now,
         hasLogSinceEffective: hasLogSince(change),
+        editedSince: editedSince(change),
         currentValue: currentValueOf(change.habit, change.field),
       });
       return {

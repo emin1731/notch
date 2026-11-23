@@ -1,5 +1,5 @@
 import { addDays, todayIn } from '@notch/shared';
-import { screen, waitFor, within } from '@testing-library/react';
+import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { apiError, signedIn, testUser } from '@/test/auth';
@@ -81,13 +81,13 @@ describe('Today', () => {
 
   it('sends quick taps as one increment', async () => {
     const { api, water } = setup();
-    const user = userEvent.setup();
     renderApp('/today');
 
     const plus = within(await card('Water')).getByRole('button', { name: 'One more Water' });
-    await user.click(plus);
-    await user.click(plus);
-    await user.click(plus);
+    // In one go: under load, three awaited user clicks can land further apart than the debounce.
+    fireEvent.click(plus);
+    fireEvent.click(plus);
+    fireEvent.click(plus);
 
     expect(within(await card('Water')).getByText('3')).toBeInTheDocument();
     await waitFor(() => expect(api.valueOf(water.id, today)).toBe(3));
@@ -147,12 +147,15 @@ describe('Today', () => {
     const { router } = renderApp('/today');
 
     await card('Vitamins');
+    expect(screen.getByText("Today's progress")).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Next day' })).toBeDisabled();
     await user.click(screen.getByRole('button', { name: 'Previous day' }));
 
     expect(
       await screen.findByRole('heading', { level: 1, name: weekdayName(yesterday) }),
     ).toBeInTheDocument();
+    expect(await screen.findByText(`${weekdayName(yesterday)}'s progress`)).toBeInTheDocument();
+    expect(screen.queryByText("Today's progress")).not.toBeInTheDocument();
     expect(router.state.location.search).toBe(`?date=${yesterday}`);
     expect(screen.getByText('Past day')).toBeInTheDocument();
     expect(

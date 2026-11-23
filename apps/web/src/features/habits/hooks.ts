@@ -83,6 +83,6 @@ export function useReorderHabits(includeArchived: boolean) {
       client.setQueryData(queryKey, context?.previous);
       toast.error(`Couldn't save the new order. ${apiErrorMessage(error)}`);
     },
-    onSettled: () => client.invalidateQueries({ queryKey: queryKeys.habits.all }),
+    onSettled: () => invalidate.habitOrder(client),
   });
 }

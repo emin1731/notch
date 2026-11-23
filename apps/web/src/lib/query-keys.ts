@@ -49,18 +49,29 @@ const invalidateAll = (client: QueryClient, keys: (QueryKey | undefined)[]) =>
 export const invalidate = {
   /**
    * Every cached day, not just the one logged: streaks and the week's hits run across days, so
-   * backfilling yesterday changes today's streak.
+   * backfilling yesterday changes today's streak. Reviews too: logging at a new target ends its
+   * Undo.
    */
   logWrite: (client: QueryClient, { habitId }: { date: string; habitId: string }) =>
-    invalidateAll(client, [queryKeys.today.all, queryKeys.habit(habitId), queryKeys.stats.all]),
+    invalidateAll(client, [
+      queryKeys.today.all,
+      queryKeys.habit(habitId),
+      queryKeys.stats.all,
+      queryKeys.reviews.all,
+    ]),
+  /** Reviews too: an edit to the habit ends its level change's Undo. */
   habitChange: (client: QueryClient, { habitId }: { habitId?: string } = {}) =>
     invalidateAll(client, [
       queryKeys.habits.all,
       queryKeys.today.all,
       queryKeys.cores.all,
       queryKeys.stats.all,
+      queryKeys.reviews.all,
       habitId ? queryKeys.habit(habitId) : undefined,
     ]),
+  /** Today and the stats list habits in their order, as the lists do. */
+  habitOrder: (client: QueryClient) =>
+    invalidateAll(client, [queryKeys.habits.all, queryKeys.today.all, queryKeys.stats.all]),
   coreChange: (client: QueryClient) =>
     invalidateAll(client, [queryKeys.cores.all, queryKeys.today.all, queryKeys.stats.all]),
   /** Archiving or unarchiving a core: it cascades to its habits. */

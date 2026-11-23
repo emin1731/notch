@@ -70,16 +70,15 @@ export class CoresService {
         select: { id: true, sortOrder: true },
         orderBy: ORDER,
       });
-      const result = applyOrder(
+      const ordered = applyOrder(
         current.map((core) => core.id),
         ids,
-        { exact: false },
       );
-      if (!result.ok) {
+      if (!ordered) {
         throw coreNotFound();
       }
       const sortOrderById = new Map(current.map((core) => [core.id, core.sortOrder]));
-      for (const [sortOrder, id] of result.ids.entries()) {
+      for (const [sortOrder, id] of ordered.entries()) {
         if (sortOrderById.get(id) !== sortOrder) {
           await tx.core.update({ where: { id }, data: { sortOrder } });
         }
@@ -88,10 +87,10 @@ export class CoresService {
     return this.list(userId, false);
   }
 
-  /** Archives the core and its active habits with the same timestamp (plan 2.10). */
+  /** Archives the core and its active habits with the same timestamp (plan 2.9). */
   async archive(userId: string, id: string): Promise<CoreDto> {
     const core = await this.prisma.$transaction(async (tx) => {
-      const existing = await this.findOwned(userId, id, tx);
+      const existing = await this.lockOwned(tx, userId, id);
       if (existing.archivedAt) {
         return existing;
       }
@@ -132,6 +131,19 @@ export class CoresService {
       throw coreNotFound();
     }
     return core;
+  }
+
+  /**
+   * `findOwned`, holding the core's row lock until the transaction ends. Archiving the core and
+   * unarchiving one of its habits both take it first, so they can't interleave.
+   */
+  async lockOwned(tx: Prisma.TransactionClient, userId: string, id: string): Promise<Core> {
+    const rows = await tx.$queryRaw<unknown[]>`
+      SELECT 1 FROM "Core" WHERE "id" = ${id} AND "userId" = ${userId} FOR UPDATE`;
+    if (rows.length === 0) {
+      throw coreNotFound();
+    }
+    return tx.core.findUniqueOrThrow({ where: { id } });
   }
 
   private async dto(id: string): Promise<CoreDto> {

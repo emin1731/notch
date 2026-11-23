@@ -3,6 +3,7 @@ import {
   addDays,
   decideForHabit,
   fromDateString,
+  hasLaterChange,
   type LatestReviewDto,
   type ListReviewsQuery,
   type LocalDate,
@@ -161,12 +162,14 @@ export class ReviewsService {
       await tx.$queryRaw`SELECT 1 FROM "Habit" WHERE "id" = ${found.habitId} FOR UPDATE`;
       const change = await tx.targetChange.findUniqueOrThrow({ where: { id: changeId } });
       const habit = await tx.habit.findUniqueOrThrow({ where: { id: change.habitId } });
-      const logsSince = await tx.habitLog.count({
-        where: { habitId: habit.id, date: { gte: change.effectiveFrom } },
-      });
+      const [logsSince, changes] = await Promise.all([
+        tx.habitLog.count({ where: { habitId: habit.id, date: { gte: change.effectiveFrom } } }),
+        tx.targetChange.findMany({ where: { habitId: habit.id } }),
+      ]);
       const reason = undoBlockReason(change, {
         now,
         hasLogSinceEffective: logsSince > 0,
+        editedSince: hasLaterChange(change, changes),
         currentValue: currentValueOf(habit, change.field),
       });
       if (reason) {
@@ -210,7 +213,7 @@ export class ReviewsService {
       orderBy: [{ sortOrder: 'asc' }, { createdAt: 'asc' }],
     });
     const habitIds = habits.map((habit) => habit.id);
-    const [logs, changes] = await Promise.all([
+    const [logs, changes, logsInWeek] = await Promise.all([
       tx.habitLog.findMany({
         where: {
           habitId: { in: habitIds },
@@ -218,9 +221,13 @@ export class ReviewsService {
         },
       }),
       tx.targetChange.findMany({ where: { habitId: { in: habitIds } } }),
+      // Every habit's, archived ones included: a habit logged in W and archived since still counts.
+      tx.habitLog.count({
+        where: { userId, date: { gte: fromDateString(weekStart), lte: fromDateString(weekEnd) } },
+      }),
     ]);
     // Plan 2.7: no logs at all in W is a break, not a struggle. Nobody gets deloaded for it.
-    const inactiveWeek = !logs.some((log) => toDateString(log.date) >= weekStart);
+    const inactiveWeek = logsInWeek === 0;
 
     const effectiveFrom = addDays(weekStart, 7);
     const summary: WeeklyReviewSummary = { weekStart, overallRate: null, habits: [] };
@@ -284,29 +291,43 @@ export class ReviewsService {
     });
   }
 
-  /** `canUndo` needs, per change, whether its habit has been logged since it took effect. */
+  /** `canUndo` needs, per change, whether its habit has been logged or edited since. */
   private async toDtos(
     reviews: (WeeklyReview & Prisma.WeeklyReviewGetPayload<{ include: typeof changesInclude }>)[],
   ): Promise<ReviewDto[]> {
     const changes = reviews.flatMap((review) => review.changes);
-    const logs =
+    const habitIds = changes.map((change) => change.habitId);
+    const [logs, habitChanges] =
       changes.length === 0
-        ? []
-        : await this.prisma.habitLog.findMany({
-            where: {
-              habitId: { in: changes.map((change) => change.habitId) },
-              date: {
-                gte: new Date(Math.min(...changes.map((change) => change.effectiveFrom.getTime()))),
+        ? [[], []]
+        : await Promise.all([
+            this.prisma.habitLog.findMany({
+              where: {
+                habitId: { in: habitIds },
+                date: {
+                  gte: new Date(
+                    Math.min(...changes.map((change) => change.effectiveFrom.getTime())),
+                  ),
+                },
               },
-            },
-            select: { habitId: true, date: true },
-          });
+              select: { habitId: true, date: true },
+            }),
+            this.prisma.targetChange.findMany({
+              where: { habitId: { in: habitIds } },
+              select: { id: true, habitId: true, field: true, createdAt: true, undoneAt: true },
+            }),
+          ]);
     const hasLogSince = (change: TargetChange) =>
       logs.some(
         (log) =>
           log.habitId === change.habitId && log.date.getTime() >= change.effectiveFrom.getTime(),
       );
+    const editedSince = (change: TargetChange) =>
+      hasLaterChange(
+        change,
+        habitChanges.filter((other) => other.habitId === change.habitId),
+      );
     const now = this.clock.now();
-    return reviews.map((review) => toReviewDto(review, { now, hasLogSince }));
+    return reviews.map((review) => toReviewDto(review, { now, hasLogSince, editedSince }));
   }
 }

@@ -322,6 +322,36 @@ describe('habits (e2e)', () => {
       expect(refused.body.details.issues[0].path).toBe('intervalDays');
     });
 
+    it('serialises concurrent edits: a double submit records one change', async () => {
+      const habit = await createHabit(client, core.id);
+      const results = await Promise.all(
+        Array.from({ length: 5 }, () => client.patch(`/habits/${habit.id}`, { targetValue: 25 })),
+      );
+      expect(results.map((res) => res.status)).toEqual([200, 200, 200, 200, 200]);
+      expect((await history(habit.id)).map((c) => [c.fromValue, c.toValue])).toEqual([[20, 25]]);
+    });
+
+    it('a schedule edit recomputes the stored longest streak', async () => {
+      // Every 2 days from yesterday: yesterday is due, today is a bonus day.
+      const habit = await createHabit(client, core.id, {
+        type: 'TOGGLE',
+        unit: undefined,
+        targetValue: undefined,
+        intervalDays: 2,
+        startDate: addDays(today, -1),
+      });
+      await client.put(`/habits/${habit.id}/logs/${addDays(today, -1)}`, { value: 1 });
+      await client.put(`/habits/${habit.id}/logs/${today}`, { value: 1 });
+      expect((await client.get(`/habits/${habit.id}`)).body).toMatchObject({
+        currentStreak: 1,
+        longestStreak: 1,
+      });
+
+      // Every day from today: today's log now counts.
+      const res = await client.patch(`/habits/${habit.id}`, { intervalDays: 1 });
+      expect(res.body).toMatchObject({ currentStreak: 2, longestStreak: 2 });
+    });
+
     it('refuses to change the type, schedule type or start date', async () => {
       const habit = await createHabit(client, core.id);
       for (const body of [
@@ -403,6 +433,20 @@ describe('habits (e2e)', () => {
         expect.any(String),
       );
       expect((await client.post(`/habits/${habit.id}/unarchive`)).body.archivedAt).toBeNull();
+    });
+
+    it('unarchiving a habit while its core is archived never leaves it active there', async () => {
+      for (let round = 0; round < 10; round += 1) {
+        const roundCore = await createCore(client, { name: `Core ${round}` });
+        const habit = await createHabit(client, roundCore.id);
+        await client.post(`/habits/${habit.id}/archive`);
+        await Promise.all([
+          client.post(`/habits/${habit.id}/unarchive`),
+          client.post(`/cores/${roundCore.id}/archive`),
+        ]);
+        const after = (await client.get(`/habits/${habit.id}`)).body as HabitDetailDto;
+        expect(after.archivedAt, `round ${round}`).not.toBeNull();
+      }
     });
 
     it('archiving a core archives its habits; unarchiving a habit there is refused', async () => {

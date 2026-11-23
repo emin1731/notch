@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { daysBetween } from '../dates/week.js';
-import { localDateSchema } from '../dates/local-date.js';
+import { type LocalDate, localDateSchema } from '../dates/local-date.js';
 import { LOG_LIMITS } from '../progress/progress.js';
 
 const MAX_VALUE = Math.max(...Object.values(LOG_LIMITS));
@@ -22,11 +22,24 @@ export type IncrementLogInput = z.infer<typeof incrementLogSchema>;
 
 export const LOG_RANGE_MAX_DAYS = 366;
 
+/** Why `from` … `to` isn't a valid log range, or null. The API checks it again once `to` defaults. */
+export function logRangeIssue(from: LocalDate, to: LocalDate): string | null {
+  if (from > to) {
+    return '`from` is after `to`';
+  }
+  if (daysBetween(from, to) >= LOG_RANGE_MAX_DAYS) {
+    return `At most ${LOG_RANGE_MAX_DAYS} days`;
+  }
+  return null;
+}
+
 export const logRangeQuerySchema = z
   .object({ from: localDateSchema.optional(), to: localDateSchema.optional() })
-  .refine(({ from, to }) => !from || !to || from <= to, { message: '`from` is after `to`' })
-  .refine(({ from, to }) => !from || !to || daysBetween(from, to) < LOG_RANGE_MAX_DAYS, {
-    message: `At most ${LOG_RANGE_MAX_DAYS} days`,
+  .superRefine(({ from, to }, ctx) => {
+    const message = from && to ? logRangeIssue(from, to) : null;
+    if (message) {
+      ctx.addIssue({ code: 'custom', message });
+    }
   });
 export type LogRangeQuery = z.infer<typeof logRangeQuerySchema>;
 

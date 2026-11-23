@@ -207,6 +207,16 @@ describe('logs (e2e)', () => {
       400,
     );
   });
+
+  it('caps a range at 366 days, also when `to` defaults to today', async () => {
+    const habit = await createHabit(client, core.id);
+    const capped = await client.get(`/habits/${habit.id}/logs?from=${day(-366)}&to=${TODAY}`);
+    expect(capped.status).toBe(400);
+    const open = await client.get(`/habits/${habit.id}/logs?from=${day(-366)}`);
+    expect(open.status).toBe(400);
+    expect(open.body).toEqual(capped.body);
+    expect((await client.get(`/habits/${habit.id}/logs?from=${day(-365)}`)).status).toBe(200);
+  });
 });
 
 describe('logs where the local date is ahead of UTC (e2e)', () => {

@@ -31,6 +31,7 @@ import { PrismaService } from '../prisma/prisma.service.js';
 import { ReviewsService } from '../reviews/reviews.service.js';
 import { toHabitDto, toTargetChangeDto } from './habit-dto.js';
 import { historyOf } from './habit-history.js';
+import { lockOwnedHabit, refreshLongestStreak } from './habit-tx.js';
 
 type Db = PrismaService | Prisma.TransactionClient;
 
@@ -115,7 +116,7 @@ export class HabitsService {
     await this.reviews.ensureDue(user);
     const today = todayIn(user.timezone, this.clock.now());
     await this.prisma.$transaction(async (tx) => {
-      const habit = await this.findOwned(user.id, id, tx);
+      const habit = await lockOwnedHabit(tx, user.id, id);
       const merged = { ...habit, ...definedFields(input) };
       const issues = habitShapeIssues(merged);
       if (issues.length > 0) {
@@ -131,12 +132,19 @@ export class HabitsService {
         ['DAYS_OF_WEEK', daysToMask(habit.daysOfWeek), daysToMask(merged.daysOfWeek)],
         ['INTERVAL_DAYS', habit.intervalDays ?? 0, merged.intervalDays ?? 0],
       ];
+      let scheduleChanged = false;
       for (const [field, from, to] of changes) {
         if (from !== to) {
           await this.recordManualChange(tx, id, field, from, to, today);
+          scheduleChanged ||= field !== 'TARGET_VALUE';
         }
       }
-      await tx.habit.update({ where: { id }, data: definedFields(input) });
+      const updated = await tx.habit.update({ where: { id }, data: definedFields(input) });
+      // Other days are due now, so a streak can be longer than the stored longest.
+      if (scheduleChanged) {
+        const allChanges = await tx.targetChange.findMany({ where: { habitId: id } });
+        await refreshLongestStreak(tx, updated, allChanges, today);
+      }
     });
     return this.detailOf(id, user.timezone);
   }
@@ -149,16 +157,15 @@ export class HabitsService {
         select: { id: true, sortOrder: true },
         orderBy: ORDER,
       });
-      const result = applyOrder(
+      const ordered = applyOrder(
         current.map((habit) => habit.id),
         ids,
-        { exact: false },
       );
-      if (!result.ok) {
+      if (!ordered) {
         throw habitNotFound();
       }
       const sortOrderById = new Map(current.map((habit) => [habit.id, habit.sortOrder]));
-      for (const [sortOrder, habitId] of result.ids.entries()) {
+      for (const [sortOrder, habitId] of ordered.entries()) {
         if (sortOrderById.get(habitId) !== sortOrder) {
           await tx.habit.update({ where: { id: habitId }, data: { sortOrder } });
         }
@@ -176,12 +183,15 @@ export class HabitsService {
   }
 
   async unarchive(user: AuthUser, id: string): Promise<HabitDetailDto> {
-    const habit = await this.findOwned(user.id, id);
-    const core = await this.cores.findOwned(user.id, habit.coreId);
-    if (core.archivedAt) {
-      throw coreArchived();
-    }
-    await this.prisma.habit.update({ where: { id }, data: { archivedAt: null } });
+    await this.prisma.$transaction(async (tx) => {
+      const habit = await this.findOwned(user.id, id, tx);
+      // With the core locked, archiving it waits for this, or this sees it archived.
+      const core = await this.cores.lockOwned(tx, user.id, habit.coreId);
+      if (core.archivedAt) {
+        throw coreArchived();
+      }
+      await tx.habit.update({ where: { id }, data: { archivedAt: null } });
+    });
     return this.detailOf(id, user.timezone);
   }
 

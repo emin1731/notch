@@ -35,6 +35,8 @@ import { UsersModule } from './users/users.module.js';
             'req.headers["x-xsrf-token"]',
             'res.headers["set-cookie"]',
           ],
+          // Docker's health check calls this every 30 s; logging it would drown everything else.
+          autoLogging: { ignore: (req) => req.url === '/api/v1/health' },
         },
       }),
     }),

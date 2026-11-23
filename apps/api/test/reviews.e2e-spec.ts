@@ -282,6 +282,26 @@ describe('weekly reviews, day by day (e2e)', () => {
     expect((await undo(manual.id)).body.details.reason).toBe('NOT_AUTOMATIC');
   });
 
+  it('an edit undone by hand on a later day still blocks undo', async () => {
+    const habit = await twoGoodWeeks();
+    clock.set('2026-11-09T08:00:00Z');
+    const change = ((await client.get('/reviews/latest')).body.review as ReviewDto).changes[0]!;
+    clock.set('2026-11-10T08:00:00Z');
+    await client.patch(`/habits/${habit.id}`, { targetValue: 25 });
+    clock.set('2026-11-11T08:00:00Z');
+    await client.patch(`/habits/${habit.id}`, { targetValue: 22 });
+
+    // Back at the level-up's value, but undoing it would leave 20 under the edits' 22.
+    expect((await reviewOf('2026-11-02')).changes[0]).toMatchObject({
+      canUndo: false,
+      undoBlockedReason: 'CHANGED_SINCE',
+    });
+    const badge = allHabits((await client.get('/today')).body as TodayResponse)[0]!.change;
+    expect(badge).toMatchObject({ canUndo: false, undoBlockedReason: 'CHANGED_SINCE' });
+    expect((await undo(change.id)).body.details.reason).toBe('CHANGED_SINCE');
+    expect((await client.get(`/habits/${habit.id}`)).body.targetValue).toBe(22);
+  });
+
   it('after an undone level-up, the next review holds (cooldown)', async () => {
     const habit = await twoGoodWeeks();
     clock.set('2026-11-09T08:00:00Z');
@@ -352,6 +372,18 @@ describe('weekly reviews, day by day (e2e)', () => {
     await client.get('/today');
     expect(await reviewWeeks()).toEqual(['2026-10-26', '2026-11-23']);
     expect((await reviewOf('2026-11-23')).inactive).toBe(true);
+  });
+
+  it('logs of a habit archived since still make the week active', async () => {
+    const core = await createCore(client);
+    await createHabit(client, core.id, { name: 'Stays' });
+    const archived = await createHabit(client, core.id, { name: 'Archived' });
+    await logDays(archived.id, '2026-10-26', 3, 20);
+    await client.post(`/habits/${archived.id}/archive`);
+
+    clock.set('2026-11-02T08:00:00Z');
+    expect(((await client.get('/today')).body as TodayResponse).welcomeBack).toBe(false);
+    expect((await reviewOf('2026-10-26')).inactive).toBe(false);
   });
 
   it('concurrent first visits create one review and change the target once', async () => {

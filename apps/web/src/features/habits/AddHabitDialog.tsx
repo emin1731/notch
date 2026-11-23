@@ -1,4 +1,5 @@
 import { Info, TriangleAlert } from 'lucide-react';
+import { useState } from 'react';
 import { Link } from 'react-router';
 import { EmptyState } from '@/components/EmptyState';
 import { Button } from '@/components/ui/button';
@@ -40,11 +41,17 @@ export function AddHabitDialog({
   coreId?: string;
 }) {
   const isMobile = useIsMobile();
+  // Settled on each open: a fresh form, and a drawer or a dialog for the screen it opened on, kept
+  // until it closes (a rotation mid-way would otherwise swap the tree and wipe the form). The
+  // form stays mounted while it animates out.
+  const [session, setSession] = useState({ key: 0, mobile: isMobile, open });
+  if (open !== session.open) {
+    setSession(open ? { key: session.key + 1, mobile: isMobile, open } : { ...session, open });
+  }
   const close = () => onOpenChange(false);
-  // Remounted on each open, so the form starts blank every time.
-  const body = open && <NewHabit coreId={coreId} onClose={close} />;
+  const body = <NewHabit key={session.key} coreId={coreId} onClose={close} />;
 
-  if (isMobile) {
+  if (session.mobile) {
     return (
       <Drawer open={open} onOpenChange={onOpenChange}>
         <DrawerContent className="data-[vaul-drawer-direction=bottom]:max-h-[calc(100dvh-2rem)] data-[vaul-drawer-direction=bottom]:rounded-t-3xl data-[vaul-drawer-direction=bottom]:border-t-0">
@@ -73,8 +80,12 @@ export function AddHabitDialog({
 function NewHabit({ coreId, onClose }: { coreId?: string; onClose: () => void }) {
   const today = useToday();
   const cores = useCores(false);
+  // A cached list can predate the core asked for (just created or unarchived): wait for the
+  // refetch rather than start the form on another core.
+  const waiting =
+    coreId !== undefined && cores.isFetching && !cores.data?.some((core) => core.id === coreId);
 
-  if (cores.isPending) {
+  if (cores.isPending || waiting) {
     return (
       <div className="flex flex-col gap-3 px-5 pb-6 sm:px-6" aria-busy="true" aria-label="Loading">
         <Skeleton className="h-10 w-full rounded-xl" />

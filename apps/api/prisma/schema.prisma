@@ -138,8 +138,8 @@ model Habit {
   @@index([coreId])
 }
 
-/// Every change to a habit's target, weekly frequency or weekdays. History is read with
-/// targetOn() / scheduleOn(). LEVEL_UP / DELOAD changes come from a weekly review.
+/// Every change to a habit's target, weekly frequency, weekdays or interval. History is read
+/// with targetOn() / scheduleOn(). LEVEL_UP / DELOAD changes come from a weekly review.
 model TargetChange {
   id             String           @id @default(uuid())
   habitId        String

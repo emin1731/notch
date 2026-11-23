@@ -1,4 +1,4 @@
-import { screen, waitFor, within } from '@testing-library/react';
+import { act, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { apiError, signedIn } from '@/test/auth';
@@ -6,6 +6,31 @@ import { renderApp } from '@/test/render';
 import { fakeCore, fakeHabit, mockStructureApi } from '@/test/structure-api';
 
 type User = ReturnType<typeof userEvent.setup>;
+
+/** A phone or a wider screen for `useIsMobile`, and a way to rotate between them. */
+function mockScreen({ mobile }: { mobile: boolean }) {
+  type Listener = (event: { matches: boolean }) => void;
+  const listeners = new Map<Listener, string>();
+  let phone = mobile;
+  const matches = (query: string) => phone && query === '(max-width: 639px)';
+  vi.spyOn(window, 'matchMedia').mockImplementation(
+    (query) =>
+      ({
+        get matches() {
+          return matches(query);
+        },
+        media: query,
+        addEventListener: (_type: string, listener: Listener) => listeners.set(listener, query),
+        removeEventListener: (_type: string, listener: Listener) => listeners.delete(listener),
+      }) as unknown as MediaQueryList,
+  );
+  return {
+    rotate: ({ mobile: next }: { mobile: boolean }) => {
+      phone = next;
+      act(() => listeners.forEach((query, listener) => listener({ matches: matches(query) })));
+    },
+  };
+}
 
 function setup() {
   const health = fakeCore({ name: 'Health' });
@@ -125,6 +150,73 @@ describe('habit form: creating', () => {
       coreId: health.id,
       name: 'Vitamins',
     });
+  });
+
+  it('selects the core it was opened for, even one the cached list doesn’t have yet', async () => {
+    const health = fakeCore({ name: 'Health' });
+    const career = fakeCore({
+      name: 'Career',
+      color: 'indigo',
+      icon: 'briefcase',
+      archivedAt: '2026-11-01T00:00:00.000Z',
+    });
+    mockStructureApi({ cores: [health, career] });
+    const user = userEvent.setup();
+    renderApp('/cores');
+
+    // The first dialog caches the active cores: Health only.
+    let dialog = await openNew(user);
+    await user.click(within(dialog).getByRole('button', { name: 'Cancel' }));
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+    await user.click(screen.getByRole('switch', { name: 'Show archived' }));
+    const card = await screen.findByRole('article', { name: 'Career' });
+    await user.click(within(card).getByRole('button', { name: 'Career actions' }));
+    await user.click(await screen.findByRole('menuitem', { name: 'Unarchive' }));
+
+    dialog = await openNew(user, 'Career');
+    expect(within(dialog).getByLabelText('Core')).toHaveValue(career.id);
+  });
+
+  it('keeps the form through the closing animation, and starts blank on the next open', async () => {
+    mockScreen({ mobile: true });
+    setup();
+    const user = userEvent.setup();
+    renderApp('/cores');
+
+    // jsdom never ends vaul's slide-out animation: the drawer stays mounted, closing.
+    let drawer = await openNew(user);
+    await user.type(within(drawer).getByLabelText('Name'), 'Vitamins');
+    await user.click(within(drawer).getByRole('button', { name: 'Cancel' }));
+    await waitFor(() => expect(drawer).toHaveAttribute('data-state', 'closed'));
+    expect(within(drawer).getByLabelText('Name')).toHaveValue('Vitamins');
+    // Then the animation ends, as a browser would say.
+    const end = new Event('animationend', { bubbles: true });
+    Object.defineProperty(end, 'animationName', { value: getComputedStyle(drawer).animationName });
+    act(() => void drawer.dispatchEvent(end));
+    await waitFor(() => expect(drawer).not.toBeInTheDocument());
+
+    drawer = await openNew(user);
+    expect(within(drawer).getByLabelText('Name')).toHaveValue('');
+  });
+
+  it('stays a dialog or a drawer until it closes, through a rotation', async () => {
+    const screenSize = mockScreen({ mobile: false });
+    setup();
+    const user = userEvent.setup();
+    renderApp('/cores');
+
+    const dialog = await openNew(user);
+    expect(dialog).not.toHaveAttribute('data-vaul-drawer-direction');
+    await user.type(within(dialog).getByLabelText('Name'), 'Vitamins');
+    screenSize.rotate({ mobile: true });
+
+    expect(screen.getByRole('dialog', { name: 'New habit' })).toBe(dialog);
+    expect(within(dialog).getByLabelText('Name')).toHaveValue('Vitamins');
+    await user.click(within(dialog).getByRole('button', { name: 'Cancel' }));
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+
+    // The next one opens for the new screen.
+    expect(await openNew(user)).toHaveAttribute('data-vaul-drawer-direction', 'bottom');
   });
 
   it('creates a daily habit every few days with the interval stepper', async () => {
@@ -342,7 +434,8 @@ describe('habit form: editing', () => {
     expect(screen.getByText(/This counts as a manual change/)).toBeInTheDocument();
     await submit(user, 'Save changes');
 
-    await waitFor(() => expect(router.state.location.pathname).toBe('/cores'));
+    // Opened straight from a link, it lands on the habit's page.
+    await waitFor(() => expect(router.state.location.pathname).toBe(`/habits/${run.id}`));
     expect(api.sent('PATCH', `/habits/${run.id}`)[0]?.body).toEqual({
       name: 'Run',
       daysOfWeek: [1, 2, 3, 5],
@@ -369,7 +462,7 @@ describe('habit form: editing', () => {
     expect(screen.getByText(/The new rhythm starts today/)).toBeInTheDocument();
     await submit(user, 'Save changes');
 
-    await waitFor(() => expect(router.state.location.pathname).toBe('/cores'));
+    await waitFor(() => expect(router.state.location.pathname).toBe(`/habits/${plants.id}`));
     expect(api.sent('PATCH', `/habits/${plants.id}`)[0]?.body).toEqual({ intervalDays: 3 });
   });
 
@@ -385,10 +478,150 @@ describe('habit form: editing', () => {
     expect(api.sent('PATCH', `/habits/${run.id}`)).toHaveLength(0);
   });
 
+  it('goes back where it was opened from', async () => {
+    const { api, run } = setup();
+    const user = userEvent.setup();
+    const { router } = renderApp('/cores');
+
+    await user.click(await screen.findByRole('button', { name: 'Morning run actions' }));
+    await user.click(await screen.findByRole('menuitem', { name: 'Edit' }));
+    await heading('Edit habit');
+    await user.click(screen.getByRole('button', { name: 'Cancel' }));
+    await waitFor(() => expect(router.state.location.pathname).toBe('/cores'));
+
+    await user.click(await screen.findByRole('button', { name: 'Morning run actions' }));
+    await user.click(await screen.findByRole('menuitem', { name: 'Edit' }));
+    await heading('Edit habit');
+    await user.clear(screen.getByLabelText('Name'));
+    await user.type(screen.getByLabelText('Name'), 'Run');
+    await submit(user, 'Save changes');
+    await waitFor(() => expect(router.state.location.pathname).toBe('/cores'));
+    expect(api.sent('PATCH', `/habits/${run.id}`)).toHaveLength(1);
+  });
+
   it('shows a not-found state for a habit that does not exist', async () => {
     setup();
     renderApp('/habits/00000000-0000-4000-8000-999999999999/edit');
 
     expect(await screen.findByText('Habit not found', {}, { timeout: 4000 })).toBeInTheDocument();
+  });
+});
+
+describe('habit form: the level settings never block a save unseen', () => {
+  beforeEach(() => signedIn());
+
+  /** A 20-page habit with a highest of 30 pages. */
+  function withLimit(adaptiveEnabled: boolean) {
+    const health = fakeCore({ name: 'Health' });
+    const read = fakeHabit({
+      coreId: health.id,
+      name: 'Read',
+      type: 'COUNT',
+      targetValue: 20,
+      initialTargetValue: 20,
+      unit: 'pages',
+      adaptiveEnabled,
+      maxTarget: 30,
+    });
+    const api = mockStructureApi({ cores: [health], habits: [read] });
+    return { api, read };
+  }
+  const setTarget = async (user: User, value: string, container: HTMLElement = document.body) => {
+    const target = within(container).getByLabelText('Target', { exact: true });
+    await user.clear(target);
+    await user.type(target, value);
+  };
+
+  it('opens "Advanced: limits" on an error inside it, and focuses the field', async () => {
+    const { api, read } = withLimit(true);
+    const user = userEvent.setup();
+    renderApp(`/habits/${read.id}/edit`);
+
+    await heading('Edit habit');
+    const limits = screen.getByText('Advanced: limits').closest('details')!;
+    expect(limits).not.toHaveAttribute('open');
+    await setTarget(user, '40');
+    await submit(user, 'Save changes');
+
+    await waitFor(() => expect(limits).toHaveAttribute('open'));
+    expect(screen.getByText('The current target is above this maximum')).toBeVisible();
+    await waitFor(() => expect(screen.getByLabelText('Highest (pages)')).toHaveFocus());
+    expect(api.sent('PATCH', `/habits/${read.id}`)).toHaveLength(0);
+  });
+
+  it('with Levels off, drops a stored limit the new target breaks', async () => {
+    const { api, read } = withLimit(false);
+    const user = userEvent.setup();
+    const { router } = renderApp(`/habits/${read.id}/edit`);
+
+    await heading('Edit habit');
+    await setTarget(user, '40');
+    await submit(user, 'Save changes');
+
+    await waitFor(() => expect(router.state.location.pathname).toBe(`/habits/${read.id}`));
+    expect(api.sent('PATCH', `/habits/${read.id}`)[0]?.body).toEqual({
+      targetValue: 40,
+      maxTarget: null,
+    });
+  });
+
+  it('turning Levels off while editing saves too', async () => {
+    const { api, read } = withLimit(true);
+    const user = userEvent.setup();
+    renderApp(`/habits/${read.id}/edit`);
+
+    await heading('Edit habit');
+    await user.click(screen.getByRole('switch', { name: 'Adjust the target as I go' }));
+    await setTarget(user, '40');
+    await submit(user, 'Save changes');
+
+    await waitFor(() => expect(api.sent('PATCH', `/habits/${read.id}`)).toHaveLength(1));
+    expect(api.sent('PATCH', `/habits/${read.id}`)[0]?.body).toEqual({
+      targetValue: 40,
+      adaptiveEnabled: false,
+      maxTarget: null,
+    });
+  });
+
+  it('a new habit with Levels switched back off sends no limits', async () => {
+    const { api } = setup();
+    const user = userEvent.setup();
+    renderApp('/cores');
+
+    const dialog = await openNew(user);
+    await user.type(within(dialog).getByLabelText('Name'), 'Read');
+    await user.click(radio('Count'));
+    await setTarget(user, '10', dialog);
+    const levels = within(dialog).getByRole('switch', { name: 'Adjust the target as I go' });
+    await user.click(levels);
+    await user.click(within(dialog).getByText('Advanced: limits'));
+    await user.type(within(dialog).getByLabelText('Highest (units)'), '15');
+    await user.click(levels);
+    await setTarget(user, '20', dialog);
+    await submit(user);
+
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+    expect(api.sent('POST', '/habits')[0]?.body).toMatchObject({
+      targetValue: 20,
+      adaptiveEnabled: false,
+      minTarget: null,
+      maxTarget: null,
+    });
+  });
+
+  it('puts an error on a hidden setting in the form’s alert', async () => {
+    const { api, run } = setup();
+    const user = userEvent.setup();
+    renderApp(`/habits/${run.id}/edit`);
+
+    await heading('Edit habit');
+    // A fixed step left empty, then Levels off: the step is hidden but still checked.
+    await user.click(radio('Percent'));
+    await user.click(radio('Fixed amount'));
+    await user.click(screen.getByRole('switch', { name: 'Adjust the target as I go' }));
+    await submit(user, 'Save changes');
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(/^Step: /);
+    expect(api.sent('PATCH', `/habits/${run.id}`)).toHaveLength(0);
   });
 });
