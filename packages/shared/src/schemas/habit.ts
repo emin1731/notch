@@ -60,7 +60,8 @@ export const createHabitSchema = z
     /** Defaults to 1 (every day) for a daily habit. */
     intervalDays: intervalDaysSchema.nullish(),
     timeOfDay: z.enum(TIMES_OF_DAY).default('ANYTIME'),
-    adaptiveEnabled: z.boolean().default(true),
+    /** Levels are opt-in. */
+    adaptiveEnabled: z.boolean().default(false),
     stepType: z.enum(STEP_TYPES).default('PERCENT'),
     stepValue: positiveInt.default(PROGRESSION_CONFIG.defaultStepPercent),
     minTarget: positiveInt.nullish(),

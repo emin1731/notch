@@ -1,7 +1,6 @@
 import type { CoreDto, HabitDto } from '@notch/shared';
 import { Archive, ArchiveRestore, MoreHorizontal, Pencil, Plus, Trash2 } from 'lucide-react';
 import { type ReactNode, useId } from 'react';
-import { Link } from 'react-router';
 import { CoreIcon } from '@/components/CoreIcon';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -20,6 +19,7 @@ export interface CoreCardActions {
   onArchive: () => void;
   onUnarchive: () => void;
   onDelete: () => void;
+  onAddHabit: () => void;
 }
 
 /** A core with its habits. */
@@ -102,11 +102,9 @@ export function CoreCard({
         )}
         {!archived && (
           <div className="mt-2 flex flex-wrap gap-2 px-2">
-            <Button asChild variant="secondary" size="sm">
-              <Link to={`/habits/new?coreId=${core.id}`}>
-                <Plus />
-                Add habit
-              </Link>
+            <Button variant="secondary" size="sm" onClick={actions.onAddHabit}>
+              <Plus />
+              Add habit
             </Button>
           </div>
         )}

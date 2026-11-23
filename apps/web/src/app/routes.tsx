@@ -59,11 +59,8 @@ export const routes: RouteObject[] = [
                   { path: '/', element: <Navigate to="/today" replace /> },
                   { path: '/today', lazy: page(() => import('@/features/today/TodayPage')) },
                   { path: '/cores', lazy: page(() => import('@/features/cores/CoresPage')) },
-                  {
-                    path: '/habits/new',
-                    handle: narrow,
-                    lazy: page(() => import('@/features/habits/HabitFormPage')),
-                  },
+                  // Creating a habit is a dialog now; old links land on Today.
+                  { path: '/habits/new', element: <Navigate to="/today" replace /> },
                   {
                     path: '/habits/:habitId',
                     handle: narrow,
@@ -72,7 +69,7 @@ export const routes: RouteObject[] = [
                   {
                     path: '/habits/:habitId/edit',
                     handle: narrow,
-                    lazy: page(() => import('@/features/habits/HabitFormPage')),
+                    lazy: page(() => import('@/features/habits/EditHabitPage')),
                   },
                   { path: '/review', lazy: page(() => import('@/features/review/ReviewPage')) },
                   {

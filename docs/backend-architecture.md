@@ -36,8 +36,8 @@ TypeScript and roughly what an HTTP API is, but not NestJS, Prisma or this codeb
 
 ## 1. The big picture
 
-Notch is a habit tracker with *adaptive difficulty*: every week it looks at how you did and raises
-("levels up") or lowers ("deloads") each habit's target. The backend is a single **JSON API**
+Notch is a habit tracker with *adaptive difficulty*: for each habit you switch it on for, every
+week it looks at how you did and raises ("levels up") or lowers ("deloads") the habit's target. The backend is a single **JSON API**
 server. It also hands out the web app's files, so the browser only ever talks to one address.
 
 ```
@@ -289,7 +289,7 @@ User ─┬─< Session                     (login sessions; see 7)
 | `User` | Username (lower-cased), argon2 password hash, display name, IANA timezone, onboarding timestamp. |
 | `Session` | One logged-in browser: the **hash** of its cookie token, expiry, last seen, user agent. |
 | `Core` | A life area ("Health", "Career") with a colour, icon and sort order. Can be archived. |
-| `Habit` | The thing you do. A type (`TOGGLE`, `COUNT`, `DURATION`), a schedule (`DAILY` every N days, `SPECIFIC_DAYS`, `TIMES_PER_WEEK`), a current target, and adaptive-difficulty settings. |
+| `Habit` | The thing you do. A type (`TOGGLE`, `COUNT`, `DURATION`), a schedule (`DAILY` every N days, `SPECIFIC_DAYS`, `TIMES_PER_WEEK`), a current target, and adaptive-difficulty settings (`adaptiveEnabled`, off by default). |
 | `HabitLog` | What you did on a given day. Stores `targetSnapshot`: the target *on that day*, so old progress stays correct after the target changes. |
 | `TargetChange` | History of every change to a habit's target, weekly count, weekdays or daily interval (`TargetField`: `TARGET_VALUE`, `TIMES_PER_WEEK`, `DAYS_OF_WEEK`, `INTERVAL_DAYS`): `MANUAL`, `LEVEL_UP` or `DELOAD`, with undo info. Only the user changes weekdays and intervals. |
 | `WeeklyReview` | The evaluation of one Monday–Sunday week, with a JSON summary per habit. |
@@ -704,8 +704,8 @@ changes. (Session expiry is the exception: it uses real time.)
 
 ### 10.3 Weekly reviews: a cron job without a cron
 
-Each week, every adaptive habit gets a verdict: `LEVEL_UP` (≥ 85 % completion two weeks in a row),
-`DELOAD` (below 50 %), or `HOLD`. The thresholds are in
+Each week, every habit gets a verdict: `LEVEL_UP` (≥ 85 % completion two weeks in a row),
+`DELOAD` (below 50 %), or `HOLD`. A habit with Levels off (the default) always holds. The thresholds are in
 [`progression/config.ts`](../packages/shared/src/progression/config.ts) and the decision itself is
 the pure function `decideForHabit()` in `shared`.
 

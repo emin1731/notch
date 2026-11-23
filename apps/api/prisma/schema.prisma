@@ -114,7 +114,7 @@ model Habit {
   initialTimesPerWeek Int?
   timeOfDay           TimeOfDay    @default(ANYTIME)
 
-  adaptiveEnabled Boolean  @default(true)
+  adaptiveEnabled Boolean  @default(false)
   stepType        StepType @default(PERCENT)
   stepValue       Int      @default(10) // percent, or units/seconds when ABSOLUTE
   minTarget       Int? // applies to the progressing field

@@ -23,7 +23,7 @@ describe('createHabitSchema', () => {
       timesPerWeek: null,
       intervalDays: 1,
       timeOfDay: 'ANYTIME',
-      adaptiveEnabled: true,
+      adaptiveEnabled: false,
       stepType: 'PERCENT',
       stepValue: 10,
       minTarget: null,

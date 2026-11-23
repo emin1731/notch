@@ -17,10 +17,10 @@ export const ONBOARDING_COPY = {
   },
   howItWorks: {
     title: 'How levels work',
-    body: 'Hit a habit consistently for two weeks and its target goes up a little. Have a rough week and it eases off. You can always undo.',
+    body: 'With Levels on, a habit’s target follows how your weeks go. They start off, and you choose which habits get them.',
     points: [
-      'Every Monday, notch looks back at your week.',
-      'Two strong weeks in a row: the target moves up a step.',
+      'Switch Levels on from a habit’s edit page, whenever you’re ready.',
+      'Every Monday, notch looks back. Two strong weeks in a row: the target moves up a step.',
       'A rough week: it eases off, so you can rebuild. This isn’t a step back.',
       'Every change shows on Today, with an Undo while you haven’t logged at the new target.',
     ],

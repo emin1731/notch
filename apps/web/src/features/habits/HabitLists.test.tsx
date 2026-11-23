@@ -41,7 +41,7 @@ describe('habits on a core card', () => {
   beforeEach(() => signedIn());
 
   it('lists the core’s habits, with when and how much', async () => {
-    const { health } = setup();
+    setup();
     renderApp('/cores');
 
     const habits = await within(await card()).findByRole('region', { name: 'Health habits' });
@@ -49,10 +49,7 @@ describe('habits on a core card', () => {
     expect(within(habits).getByText('Every day')).toBeInTheDocument();
     expect(within(habits).getByText('Weekdays · 8 glasses')).toBeInTheDocument();
     expect(within(habits).getByText('3× a week · 30 min')).toBeInTheDocument();
-    expect(within(await card()).getByRole('link', { name: 'Add habit' })).toHaveAttribute(
-      'href',
-      `/habits/new?coreId=${health.id}`,
-    );
+    expect(within(await card()).getByRole('button', { name: 'Add habit' })).toBeInTheDocument();
   });
 
   it('reorders habits from the keyboard', async () => {

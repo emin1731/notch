@@ -23,41 +23,44 @@ test('create one habit of each type, then edit a target', async ({ page }) => {
   await createCore(page, 'Health');
 
   const health = page.getByRole('article', { name: 'Health' });
+  // "Add habit" opens the form in a dialog over the Cores page; saving closes it.
+  const dialog = page.getByRole('dialog', { name: 'New habit' });
+  await page.goto('/cores');
   const addHabit = async (name: string) => {
-    await page.goto('/cores');
-    await health.getByRole('link', { name: 'Add habit' }).click();
-    await expect(page.getByRole('heading', { level: 1, name: 'New habit' })).toBeVisible();
-    await page.getByLabel('Name').fill(name);
+    await health.getByRole('button', { name: 'Add habit' }).click();
+    await dialog.getByLabel('Name').fill(name);
   };
-  const save = async (label = 'Add habit') => {
-    await page.getByRole('button', { name: label }).click();
+  const add = async () => {
+    await dialog.getByRole('button', { name: 'Add habit' }).click();
+    await expect(dialog).toBeHidden();
     await expect(page).toHaveURL('/cores');
   };
 
-  // Yes/no, three times a week, with its levels preview.
+  // Yes/no, three times a week, with Levels switched on and their preview.
   await addHabit('Vitamins');
-  await page.getByRole('radio', { name: 'Times a week' }).click();
+  await dialog.getByRole('radio', { name: 'Times a week' }).click();
+  await dialog.getByRole('switch', { name: 'Adjust the target as I go' }).click();
   await expect(
-    page.getByText("If you're consistent: 3× → 4× → 5× → 6× a week over the next 6 weeks."),
+    dialog.getByText("If you're consistent: 3× → 4× → 5× → 6× a week over the next 6 weeks."),
   ).toBeVisible();
-  await save();
+  await add();
 
   // Count, on some days, with a unit.
   await addHabit('Read');
-  await page.getByRole('radio', { name: 'Count' }).click();
-  await page.getByLabel('Target', { exact: true }).fill('20');
-  await page.getByLabel('Unit (optional)').fill('pages');
-  await page.getByRole('radio', { name: 'Weekly' }).click();
+  await dialog.getByRole('radio', { name: 'Count' }).click();
+  await dialog.getByLabel('Target', { exact: true }).fill('20');
+  await dialog.getByLabel('Unit (optional)').fill('pages');
+  await dialog.getByRole('radio', { name: 'Weekly' }).click();
   for (const day of ['Monday', 'Wednesday', 'Friday']) {
-    await page.getByRole('button', { name: day }).click();
+    await dialog.getByRole('button', { name: day }).click();
   }
-  await save();
+  await add();
 
   // Duration, every day.
   await addHabit('Meditate');
-  await page.getByRole('radio', { name: 'Duration' }).click();
-  await page.getByLabel('Target (minutes)').fill('30');
-  await save();
+  await dialog.getByRole('radio', { name: 'Duration' }).click();
+  await dialog.getByLabel('Target (minutes)').fill('30');
+  await add();
 
   await expect(health.getByRole('link', { name: /Vitamins\s*3× a week/ })).toBeVisible();
   await expect(health.getByRole('link', { name: /Read\s*Mon, Wed, Fri · 20 pages/ })).toBeVisible();
@@ -69,7 +72,8 @@ test('create one habit of each type, then edit a target', async ({ page }) => {
   await expect(page.getByRole('radio', { name: 'Count' })).toBeDisabled();
   await page.getByLabel('Target (minutes)').fill('45');
   await expect(page.getByText(/This counts as a manual change/)).toBeVisible();
-  await save('Save changes');
+  await page.getByRole('button', { name: 'Save changes' }).click();
+  await expect(page).toHaveURL('/cores');
   await expect(health.getByRole('link', { name: /Meditate\s*Every day · 45 min/ })).toBeVisible();
 
   expect(errors).toEqual([]);

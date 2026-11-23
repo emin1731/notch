@@ -1,10 +1,12 @@
 import type { LocalDate, TimeOfDay, TodayHabit } from '@notch/shared';
 import { CircleCheck, Plus, Sun, TriangleAlert } from 'lucide-react';
-import { Link, Navigate, useSearchParams } from 'react-router';
+import { useState } from 'react';
+import { Navigate, useSearchParams } from 'react-router';
 import { EmptyState } from '@/components/EmptyState';
 import { Button } from '@/components/ui/button';
 import { Section } from '@/components/Section';
 import { Skeleton } from '@/components/ui/skeleton';
+import { AddHabitDialog } from '@/features/habits/AddHabitDialog';
 import { useToday } from '@/lib/use-today';
 import { DateNavigator } from './DateNavigator';
 import { HabitCard } from './HabitCard';
@@ -46,6 +48,7 @@ function Day({
   onNavigate: (date: LocalDate) => void;
 }) {
   const { view, isError, refetch } = useTodayView(date);
+  const [adding, setAdding] = useState(false);
   const note = backfillNote(date, today);
   const isToday = date === today;
 
@@ -108,11 +111,9 @@ function Day({
                   : `Nothing was scheduled on ${weekdayName(date)}`
               }
               action={
-                <Button asChild variant="outline">
-                  <Link to="/habits/new">
-                    <Plus />
-                    Add a habit
-                  </Link>
+                <Button variant="outline" onClick={() => setAdding(true)}>
+                  <Plus />
+                  Add a habit
                 </Button>
               }
             >
@@ -137,15 +138,14 @@ function Day({
       {/* Room to scroll the last card clear of the floating button. */}
       <div className="h-16" aria-hidden="true" />
       <Button
-        asChild
         size="lg"
         className="fixed right-4 bottom-24 z-10 shadow-lg md:right-8 md:bottom-8"
+        onClick={() => setAdding(true)}
       >
-        <Link to="/habits/new">
-          <Plus />
-          Habit
-        </Link>
+        <Plus />
+        Habit
       </Button>
+      <AddHabitDialog open={adding} onOpenChange={setAdding} />
     </>
   );
 }

@@ -72,7 +72,7 @@ test('log every type, keep a running timer across a reload, and backfill yesterd
   // Backfill yesterday: the streak becomes two days.
   await expect(vitamins.getByLabel('1-day streak')).toBeVisible();
   await page.getByRole('button', { name: 'Previous day' }).click();
-  await expect(page.getByText('Backfilling')).toBeVisible();
+  await expect(page.getByText('Past day')).toBeVisible();
   await vitamins.getByRole('button', { name: 'Vitamins done' }).click();
   await expect(vitamins.getByRole('button', { name: 'Vitamins done' })).toHaveAttribute(
     'aria-pressed',

@@ -1,11 +1,11 @@
-import { ArrowDown, ArrowUp, CalendarCheck, Undo2 } from 'lucide-react';
+import { ArrowDown, ArrowUp, ToggleRight, Undo2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { ONBOARDING_COPY } from './copy';
 import { useOnboarding } from './onboarding-store';
 import { FailureAlert, StepFooter, StepHeader, type StepProps } from './StepParts';
 
 const copy = ONBOARDING_COPY.howItWorks;
-const ICONS = [CalendarCheck, ArrowUp, ArrowDown, Undo2];
+const ICONS = [ToggleRight, ArrowUp, ArrowDown, Undo2];
 
 /** Step 3: levels in plain words, then everything is created. */
 export function StepHowItWorks({

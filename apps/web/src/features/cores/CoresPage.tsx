@@ -11,6 +11,7 @@ import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Switch } from '@/components/ui/switch';
+import { AddHabitDialog } from '@/features/habits/AddHabitDialog';
 import { useHabits } from '@/features/habits/hooks';
 import { apiErrorMessage } from '@/lib/forms';
 import { CoreCard } from './CoreCard';
@@ -18,7 +19,10 @@ import { CoreDialog } from './CoreDialog';
 import { useArchiveCore, useCores, useCreateCore, useDeleteCore, useReorderCores } from './hooks';
 
 type Dialog =
-  { kind: 'core'; core?: CoreDto } | { kind: 'archive' | 'delete'; core: CoreDto } | null;
+  | { kind: 'core'; core?: CoreDto }
+  | { kind: 'habit'; coreId: string }
+  | { kind: 'archive' | 'delete'; core: CoreDto }
+  | null;
 
 export default function CoresPage() {
   const [showArchived, setShowArchived] = useState(false);
@@ -100,6 +104,7 @@ export default function CoresPage() {
                   `${core.name} is back. Unarchive its habits one by one.`,
                 ),
               onDelete: () => setDialog({ kind: 'delete', core }),
+              onAddHabit: () => setDialog({ kind: 'habit', coreId: core.id }),
             }}
           />
         )}
@@ -133,6 +138,11 @@ export default function CoresPage() {
         open={dialog?.kind === 'core'}
         onOpenChange={(open) => !open && setDialog(null)}
         core={dialog?.kind === 'core' ? dialog.core : undefined}
+      />
+      <AddHabitDialog
+        open={dialog?.kind === 'habit'}
+        onOpenChange={(open) => !open && setDialog(null)}
+        coreId={dialog?.kind === 'habit' ? dialog.coreId : undefined}
       />
       <ConfirmDialog
         open={dialog?.kind === 'archive'}

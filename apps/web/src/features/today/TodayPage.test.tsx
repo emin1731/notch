@@ -4,6 +4,7 @@ import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { apiError, signedIn, testUser } from '@/test/auth';
 import { renderApp } from '@/test/render';
+import { fakeCore, mockStructureApi } from '@/test/structure-api';
 import { mockTodayApi, todayHabit } from '@/test/today-api';
 import { useTimer } from './timer';
 import { weekdayName } from './today-model';
@@ -153,7 +154,7 @@ describe('Today', () => {
       await screen.findByRole('heading', { level: 1, name: weekdayName(yesterday) }),
     ).toBeInTheDocument();
     expect(router.state.location.search).toBe(`?date=${yesterday}`);
-    expect(screen.getByText('Backfilling')).toBeInTheDocument();
+    expect(screen.getByText('Past day')).toBeInTheDocument();
     expect(
       screen.getByText(new RegExp(`^Logging for ${weekdayName(yesterday)}\\.`)),
     ).toBeInTheDocument();
@@ -332,5 +333,34 @@ describe('Today: the timer', () => {
 
     expect(useTimer.getState().running).toBeNull();
     expect(api.writes()).toHaveLength(0);
+  });
+});
+
+describe('adding a habit from Today', () => {
+  beforeEach(() => signedIn());
+
+  it('opens the form over Today, and stays there after saving', async () => {
+    setup();
+    const structure = mockStructureApi({ cores: [fakeCore({ name: 'Health' })] });
+    const user = userEvent.setup();
+    const { router } = renderApp('/today');
+    await card('Vitamins');
+
+    await user.click(screen.getByRole('button', { name: 'Habit' }));
+    const dialog = await screen.findByRole('dialog', { name: 'New habit' });
+    await user.type(await within(dialog).findByLabelText('Name'), 'Stretch');
+    await user.click(within(dialog).getByRole('button', { name: 'Add habit' }));
+
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+    expect(structure.sent('POST', '/habits')[0]?.body).toMatchObject({ name: 'Stretch' });
+    expect(router.state.location.pathname).toBe('/today');
+  });
+
+  it('sends an old link to the new-habit page to Today', async () => {
+    setup();
+    const { router } = renderApp('/habits/new');
+
+    await card('Vitamins');
+    expect(router.state.location.pathname).toBe('/today');
   });
 });

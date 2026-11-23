@@ -214,10 +214,10 @@ describe('weekly reviews, day by day (e2e)', () => {
     );
   const undo = (id: string) => client.post(`/target-changes/${id}/undo`);
 
-  /** A daily 20-page habit hit every day of the weeks of 10-26 and 11-02. */
+  /** A daily 20-page habit with Levels on, hit every day of the weeks of 10-26 and 11-02. */
   const twoGoodWeeks = async () => {
     const core = await createCore(client);
-    const habit = await createHabit(client, core.id);
+    const habit = await createHabit(client, core.id, { adaptiveEnabled: true });
     await logDays(habit.id, '2026-10-26', 14, 20);
     return habit;
   };
@@ -297,9 +297,10 @@ describe('weekly reviews, day by day (e2e)', () => {
 
   it('a week with no logs at all is inactive: nothing changes, and Today says welcome back', async () => {
     const core = await createCore(client);
-    const read = await createHabit(client, core.id);
+    const read = await createHabit(client, core.id, { adaptiveEnabled: true });
     await createHabit(client, core.id, {
       name: 'Run',
+      adaptiveEnabled: true,
       type: 'TOGGLE',
       unit: undefined,
       targetValue: undefined,
@@ -405,7 +406,9 @@ describe('review timing across timezones (e2e)', () => {
   it('across the Berlin DST switch: the review and the undo deadline use local midnight', async () => {
     clock.set('2026-10-12T10:00:00Z');
     const { client } = await registerUser(app, 'berlin', { timezone: 'Europe/Berlin' });
-    const habit = await createHabit(client, (await createCore(client)).id);
+    const habit = await createHabit(client, (await createCore(client)).id, {
+      adaptiveEnabled: true,
+    });
     for (let offset = 0; offset < 14; offset += 1) {
       const date = addDays('2026-10-12', offset);
       clock.set(`${date}T10:00:00Z`);

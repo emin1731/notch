@@ -42,6 +42,7 @@ interface DemoHabit {
   /** DAILY only, defaults to 1. */
   intervalDays?: number;
   timeOfDay: TimeOfDay;
+  /** Levels. Off by default, as for a new habit. */
   adaptiveEnabled?: boolean;
   maxTarget?: number;
   /** A manual edit partway through: before `from` the old value applied. */
@@ -92,6 +93,7 @@ function demoHabits(today: LocalDate): DemoHabit[] {
       core: 'Mind',
       type: 'DURATION',
       target: 480,
+      adaptiveEnabled: true,
       maxTarget: 600,
       scheduleType: 'DAILY',
       timeOfDay: 'MORNING',
@@ -103,6 +105,7 @@ function demoHabits(today: LocalDate): DemoHabit[] {
       core: 'Health',
       type: 'TOGGLE',
       target: 1,
+      adaptiveEnabled: true,
       maxTarget: 3,
       scheduleType: 'TIMES_PER_WEEK',
       timesPerWeek: 3,
@@ -117,6 +120,7 @@ function demoHabits(today: LocalDate): DemoHabit[] {
       type: 'COUNT',
       unit: 'reps',
       target: 30,
+      adaptiveEnabled: true,
       maxTarget: 30,
       scheduleType: 'SPECIFIC_DAYS',
       daysOfWeek: [1, 3, 5],
@@ -130,6 +134,7 @@ function demoHabits(today: LocalDate): DemoHabit[] {
       core: 'Career',
       type: 'DURATION',
       target: 3000,
+      adaptiveEnabled: true,
       maxTarget: 3600,
       scheduleType: 'TIMES_PER_WEEK',
       timesPerWeek: 4,
@@ -324,7 +329,7 @@ async function createAccount(
           intervalDays: spec.scheduleType === 'DAILY' ? (spec.intervalDays ?? 1) : null,
           initialTimesPerWeek: spec.timesPerWeek ?? null,
           timeOfDay: spec.timeOfDay,
-          adaptiveEnabled: spec.adaptiveEnabled ?? true,
+          adaptiveEnabled: spec.adaptiveEnabled ?? false,
           minTarget: adaptiveApplicable(shape) ? defaultMinTarget(settings, initial) : null,
           maxTarget: spec.maxTarget ?? null,
           startDate: fromDateString(ctx.start),

@@ -251,7 +251,7 @@ describe('habit form: editing', () => {
 
 describe('habit form: levels preview', () => {
   it('matches projectLevels for a duration', () => {
-    const values = base({ type: 'DURATION', target: 10 });
+    const values = base({ type: 'DURATION', target: 10, adaptiveEnabled: true });
     const levels = projectLevels(
       {
         type: 'DURATION',
@@ -271,21 +271,32 @@ describe('habit form: levels preview', () => {
   });
 
   it('counts a weekly toggle in times a week, stopping at the maximum', () => {
-    expect(previewText(base({ scheduleType: 'TIMES_PER_WEEK', timesPerWeek: 6 }))).toBe(
+    expect(
+      previewText(base({ scheduleType: 'TIMES_PER_WEEK', timesPerWeek: 6, adaptiveEnabled: true })),
+    ).toBe(
       "If you're consistent: 6× → 7× a week over the next 2 weeks, then it stays at the maximum.",
     );
-    expect(previewText(base({ scheduleType: 'TIMES_PER_WEEK', timesPerWeek: 7 }))).toBe(
-      'Already at the maximum: it stays at 7× a week.',
-    );
+    expect(
+      previewText(base({ scheduleType: 'TIMES_PER_WEEK', timesPerWeek: 7, adaptiveEnabled: true })),
+    ).toBe('Already at the maximum: it stays at 7× a week.');
   });
 
   it('uses the unit for a count, and shows nothing without levels', () => {
     expect(
       previewText(
-        base({ type: 'COUNT', target: 10, unit: 'pages', stepType: 'ABSOLUTE', stepValue: 5 }),
+        base({
+          type: 'COUNT',
+          target: 10,
+          unit: 'pages',
+          stepType: 'ABSOLUTE',
+          stepValue: 5,
+          adaptiveEnabled: true,
+        }),
       ),
     ).toBe("If you're consistent: 10 → 15 → 20 → 25 pages over the next 6 weeks.");
-    expect(previewText(base())).toBeNull();
-    expect(previewText(base({ type: 'COUNT', target: 10, adaptiveEnabled: false }))).toBeNull();
+    expect(previewText(base({ adaptiveEnabled: true }))).toBeNull();
+    // Levels are off for a new habit.
+    expect(base().adaptiveEnabled).toBe(false);
+    expect(previewText(base({ type: 'COUNT', target: 10 }))).toBeNull();
   });
 });

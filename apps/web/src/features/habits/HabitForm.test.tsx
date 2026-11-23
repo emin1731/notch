@@ -1,6 +1,6 @@
-import { screen, waitFor } from '@testing-library/react';
+import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { apiError, signedIn } from '@/test/auth';
 import { renderApp } from '@/test/render';
 import { fakeCore, fakeHabit, mockStructureApi } from '@/test/structure-api';
@@ -18,6 +18,7 @@ function setup() {
     initialTargetValue: 1800,
     scheduleType: 'SPECIFIC_DAYS',
     daysOfWeek: [1, 3, 5],
+    adaptiveEnabled: true,
     stepType: 'ABSOLUTE',
     stepValue: 300,
     minTarget: 900,
@@ -32,24 +33,42 @@ const heading = async (name: string) => {
   await screen.findByRole('heading', { level: 1, name });
   await screen.findByLabelText('Name');
 };
+/** Opens "Add habit" from a core's card on the Cores page; resolves to the dialog, form loaded. */
+async function openNew(user: User, core = 'Health') {
+  const card = await screen.findByRole('article', { name: core });
+  await user.click(within(card).getByRole('button', { name: 'Add habit' }));
+  const dialog = await screen.findByRole('dialog', { name: 'New habit' });
+  await within(dialog).findByLabelText('Name');
+  return dialog;
+}
 const radio = (name: string) => screen.getByRole('radio', { name });
 const submit = (user: User, name = 'Add habit') => user.click(screen.getByRole('button', { name }));
 
 describe('habit form: creating', () => {
   beforeEach(() => signedIn());
 
-  it('creates a yes/no habit every day, with the core from the link and no levels', async () => {
+  it('opens from a core card with that core selected, and closes on save', async () => {
     const { api, career } = setup();
     const user = userEvent.setup();
-    const { router } = renderApp(`/habits/new?coreId=${career.id}`);
+    const { router } = renderApp('/cores');
 
-    await heading('New habit');
-    expect(screen.getByLabelText('Core')).toHaveValue(career.id);
-    expect(screen.getByText(/Levels work on how often you do a yes\/no habit/)).toBeInTheDocument();
-    await user.type(screen.getByLabelText('Name'), 'Vitamins');
+    const dialog = await openNew(user, 'Career');
+    expect(within(dialog).getByLabelText('Core')).toHaveValue(career.id);
+    expect(
+      within(dialog).getByText(/Levels work on how often you do a yes\/no habit/),
+    ).toBeInTheDocument();
+    await user.type(within(dialog).getByLabelText('Name'), 'Vitamins');
     await submit(user);
 
-    await waitFor(() => expect(router.state.location.pathname).toBe('/cores'));
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+    expect(await screen.findByText('Added Vitamins.')).toBeInTheDocument();
+    expect(router.state.location.pathname).toBe('/cores');
+    expect(
+      await within(screen.getByRole('article', { name: 'Career' })).findByRole('link', {
+        name: /^Vitamins/,
+      }),
+    ).toBeInTheDocument();
+    expect(api.sent('POST', '/habits')).toHaveLength(1);
     expect(api.sent('POST', '/habits')[0]?.body).toMatchObject({
       coreId: career.id,
       name: 'Vitamins',
@@ -59,24 +78,68 @@ describe('habit form: creating', () => {
       intervalDays: 1,
       daysOfWeek: [],
       timesPerWeek: null,
+      adaptiveEnabled: false,
       minTarget: null,
       maxTarget: null,
+    });
+  });
+
+  it('closes on Cancel without saving anything', async () => {
+    const { api } = setup();
+    const user = userEvent.setup();
+    renderApp('/cores');
+
+    const dialog = await openNew(user);
+    await user.type(within(dialog).getByLabelText('Name'), 'Vitamins');
+    await user.click(within(dialog).getByRole('button', { name: 'Cancel' }));
+
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+    expect(api.sent('POST', '/habits')).toHaveLength(0);
+    // It starts blank next time.
+    expect(within(await openNew(user)).getByLabelText('Name')).toHaveValue('');
+  });
+
+  it('is a drawer on a phone', async () => {
+    const { api, health } = setup();
+    vi.spyOn(window, 'matchMedia').mockImplementation(
+      (query) =>
+        ({
+          matches: query === '(max-width: 639px)',
+          media: query,
+          addEventListener: () => {},
+          removeEventListener: () => {},
+        }) as unknown as MediaQueryList,
+    );
+    const user = userEvent.setup();
+    renderApp('/cores');
+
+    const drawer = await openNew(user);
+    expect(drawer).toHaveAttribute('data-vaul-drawer-direction', 'bottom');
+    await user.type(within(drawer).getByLabelText('Name'), 'Vitamins');
+    await submit(user);
+
+    // Closed; jsdom never ends vaul's slide-out animation, so it stays mounted here.
+    await waitFor(() => expect(drawer).toHaveAttribute('data-state', 'closed'));
+    expect(await screen.findByText('Added Vitamins.')).toBeInTheDocument();
+    expect(api.sent('POST', '/habits')[0]?.body).toMatchObject({
+      coreId: health.id,
+      name: 'Vitamins',
     });
   });
 
   it('creates a daily habit every few days with the interval stepper', async () => {
     const { api } = setup();
     const user = userEvent.setup();
-    renderApp('/habits/new');
+    renderApp('/cores');
 
-    await heading('New habit');
+    const dialog = await openNew(user);
     expect(radio('Daily')).toBeChecked();
-    expect(screen.getByText('Every day')).toBeInTheDocument();
+    expect(within(dialog).getByText('Every day')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Fewer days between' })).toBeDisabled();
     await user.type(screen.getByLabelText('Name'), 'Water plants');
     await user.click(screen.getByRole('button', { name: 'More days between' }));
     await user.click(screen.getByRole('button', { name: 'More days between' }));
-    expect(screen.getByText('Every 3 days')).toBeInTheDocument();
+    expect(within(dialog).getByText('Every 3 days')).toBeInTheDocument();
     await submit(user);
 
     await waitFor(() => expect(api.sent('POST', '/habits')).toHaveLength(1));
@@ -92,9 +155,9 @@ describe('habit form: creating', () => {
   it('creates a count habit on some days', async () => {
     const { api, health } = setup();
     const user = userEvent.setup();
-    const { router } = renderApp(`/habits/new?coreId=${health.id}`);
+    renderApp('/cores');
 
-    await heading('New habit');
+    await openNew(user);
     await user.type(screen.getByLabelText('Name'), 'Stretch');
     await user.click(radio('Count'));
     const target = screen.getByLabelText('Target');
@@ -107,7 +170,7 @@ describe('habit form: creating', () => {
     }
     await submit(user);
 
-    await waitFor(() => expect(router.state.location.pathname).toBe('/cores'));
+    await waitFor(() => expect(api.sent('POST', '/habits')).toHaveLength(1));
     expect(api.sent('POST', '/habits')[0]?.body).toMatchObject({
       coreId: health.id,
       type: 'COUNT',
@@ -121,9 +184,9 @@ describe('habit form: creating', () => {
   it('creates a duration habit times a week, in seconds, with a fixed step and limits', async () => {
     const { api } = setup();
     const user = userEvent.setup();
-    renderApp('/habits/new');
+    renderApp('/cores');
 
-    await heading('New habit');
+    await openNew(user);
     await user.type(screen.getByLabelText('Name'), 'Meditate');
     await user.click(radio('Duration'));
     const target = screen.getByLabelText('Target (minutes)');
@@ -133,6 +196,9 @@ describe('habit form: creating', () => {
     await user.click(radio('Times a week'));
     await user.click(screen.getByRole('button', { name: 'More times a week' }));
     expect(screen.getByText('4× a week')).toBeInTheDocument();
+    // Levels are off for a new habit; their settings show once they're on.
+    expect(screen.queryByText('Step')).not.toBeInTheDocument();
+    await user.click(screen.getByRole('switch', { name: 'Adjust the target as I go' }));
     await user.click(radio('Fixed amount'));
     await user.type(screen.getByLabelText('Step (minutes)'), '15');
     await user.click(screen.getByText('Advanced: limits'));
@@ -148,6 +214,7 @@ describe('habit form: creating', () => {
       scheduleType: 'TIMES_PER_WEEK',
       timesPerWeek: 4,
       timeOfDay: 'EVENING',
+      adaptiveEnabled: true,
       stepType: 'ABSOLUTE',
       stepValue: 900,
       minTarget: 1800,
@@ -158,10 +225,14 @@ describe('habit form: creating', () => {
   it('previews the levels with the shared step math, live', async () => {
     setup();
     const user = userEvent.setup();
-    renderApp('/habits/new');
+    renderApp('/cores');
 
-    await heading('New habit');
+    await openNew(user);
     await user.click(radio('Duration'));
+    const levels = screen.getByRole('switch', { name: 'Adjust the target as I go' });
+    expect(levels).not.toBeChecked();
+    expect(screen.queryByText(/If you're consistent/)).not.toBeInTheDocument();
+    await user.click(levels);
     expect(
       screen.getByText("If you're consistent: 10 → 11 → 12 → 13 min over the next 6 weeks."),
     ).toBeInTheDocument();
@@ -184,9 +255,9 @@ describe('habit form: creating', () => {
   it('resets the fields that no longer apply when the type or schedule changes', async () => {
     setup();
     const user = userEvent.setup();
-    renderApp('/habits/new');
+    renderApp('/cores');
 
-    await heading('New habit');
+    await openNew(user);
     await user.click(radio('Count'));
     await user.type(screen.getByLabelText('Unit (optional)'), 'pages');
     await user.click(radio('Duration'));
@@ -209,9 +280,9 @@ describe('habit form: creating', () => {
   it('shows every problem at once, in the shared schema’s words', async () => {
     const { api } = setup();
     const user = userEvent.setup();
-    renderApp('/habits/new');
+    renderApp('/cores');
 
-    await heading('New habit');
+    await openNew(user);
     await user.click(radio('Duration'));
     const target = screen.getByLabelText('Target (minutes)');
     await user.clear(target);
@@ -236,9 +307,9 @@ describe('habit form: creating', () => {
       }),
     );
     const user = userEvent.setup();
-    renderApp('/habits/new');
+    renderApp('/cores');
 
-    await heading('New habit');
+    await openNew(user);
     await user.type(screen.getByLabelText('Name'), 'Vitamins');
     await submit(user);
 

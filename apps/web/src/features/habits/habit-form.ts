@@ -70,7 +70,8 @@ export function defaultValues({
     timesPerWeek: DEFAULT_TIMES_PER_WEEK,
     intervalDays: 1,
     timeOfDay: 'ANYTIME',
-    adaptiveEnabled: true,
+    // Levels are opt-in, as in the shared schema.
+    adaptiveEnabled: false,
     stepType: 'PERCENT',
     stepValue: PROGRESSION_CONFIG.defaultStepPercent,
     minTarget: null,

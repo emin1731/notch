@@ -23,7 +23,7 @@ window.matchMedia ??= ((query: string) => ({
   dispatchEvent: () => false,
 })) as typeof window.matchMedia;
 
-// jsdom has no layout APIs; Radix (switch, checkbox, dialogs) and dnd-kit expect them.
+// jsdom has no layout APIs; Radix (switch, checkbox, dialogs), vaul (drawers) and dnd-kit expect them.
 globalThis.ResizeObserver ??= class {
   observe() {}
   unobserve() {}
@@ -31,6 +31,7 @@ globalThis.ResizeObserver ??= class {
 };
 Element.prototype.scrollIntoView ??= () => {};
 Element.prototype.hasPointerCapture ??= () => false;
+Element.prototype.setPointerCapture ??= () => {};
 Element.prototype.releasePointerCapture ??= () => {};
 
 beforeAll(() => server.listen({ onUnhandledFrame: 'error' }));

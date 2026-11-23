@@ -33,7 +33,7 @@ const DRAFT_CORE_ID = '00000000-0000-4000-8000-000000000000';
 
 /**
  * The habit form's essentials (name, core, type, target, schedule) for onboarding. Validation is
- * the full form's, so what it adds the API accepts; levels keep their defaults.
+ * the full form's, so what it adds the API accepts; levels stay off (they're opt-in).
  */
 export function CompactHabitForm({
   cores,

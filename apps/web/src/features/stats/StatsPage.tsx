@@ -1,11 +1,13 @@
 import { type ScheduleType, STATS_RANGES, type StatsOverviewDto } from '@notch/shared';
 import { ChartColumn, Flame, TriangleAlert } from 'lucide-react';
+import { useState } from 'react';
 import { Link } from 'react-router';
 import { CoreIcon } from '@/components/CoreIcon';
 import { EmptyState } from '@/components/EmptyState';
 import { PageHeader } from '@/components/PageHeader';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
+import { AddHabitDialog } from '@/features/habits/AddHabitDialog';
 import { useHabits } from '@/features/habits/hooks';
 import { dateRangeText, percent, streakText, streakUnit } from '@/lib/stats-format';
 import { CompletionChart } from './CompletionChart';
@@ -18,22 +20,7 @@ export default function StatsPage() {
   const habits = useHabits(true);
 
   if (habits.data?.length === 0) {
-    return (
-      <>
-        <PageHeader title="Stats" />
-        <EmptyState
-          icon={ChartColumn}
-          title="No stats yet"
-          action={
-            <Button asChild>
-              <Link to="/habits/new">Create a habit</Link>
-            </Button>
-          }
-        >
-          Stats fill in once you have a habit or two to log.
-        </EmptyState>
-      </>
-    );
+    return <NoStats />;
   }
 
   return (
@@ -67,6 +54,24 @@ export default function StatsPage() {
           />
         )}
       </div>
+    </>
+  );
+}
+
+/** No habits, so nothing to show: a way to make the first one. */
+function NoStats() {
+  const [adding, setAdding] = useState(false);
+  return (
+    <>
+      <PageHeader title="Stats" />
+      <EmptyState
+        icon={ChartColumn}
+        title="No stats yet"
+        action={<Button onClick={() => setAdding(true)}>Create a habit</Button>}
+      >
+        Stats fill in once you have a habit or two to log.
+      </EmptyState>
+      <AddHabitDialog open={adding} onOpenChange={setAdding} />
     </>
   );
 }

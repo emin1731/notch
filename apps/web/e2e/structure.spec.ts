@@ -25,9 +25,12 @@ test('build cores, give one a habit, archive it and bring it back', async ({ pag
   await coreDialog.getByRole('button', { name: 'Create core' }).click();
   await expect(page.getByRole('article', { name: 'Reading' })).toBeVisible();
 
-  await health.getByRole('link', { name: 'Add habit' }).click();
-  await page.getByLabel('Name', { exact: true }).fill('Stretch');
-  await page.getByRole('button', { name: 'Add habit' }).click();
+  await health.getByRole('button', { name: 'Add habit' }).click();
+  const dialog = page.getByRole('dialog', { name: 'New habit' });
+  await expect(dialog.getByLabel('Core').locator('option:checked')).toHaveText('Health');
+  await dialog.getByLabel('Name', { exact: true }).fill('Stretch');
+  await dialog.getByRole('button', { name: 'Add habit' }).click();
+  await expect(dialog).toBeHidden();
   await expect(page).toHaveURL('/cores');
   await expect(health.getByRole('link', { name: /^Stretch/ })).toBeVisible();
 

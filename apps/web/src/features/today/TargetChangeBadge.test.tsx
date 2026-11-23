@@ -180,7 +180,7 @@ describe('review banners on Today', () => {
 
     await screen.findByRole('link', { name: /See review/ });
     await user.click(screen.getByRole('button', { name: 'Previous day' }));
-    await screen.findByText('Backfilling');
+    await screen.findByText('Past day');
     expect(screen.queryByRole('link', { name: /See review/ })).not.toBeInTheDocument();
   });
 });

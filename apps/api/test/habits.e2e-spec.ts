@@ -70,6 +70,7 @@ describe('habits (e2e)', () => {
         timesPerWeek: combo.timesPerWeek ?? null,
         initialTimesPerWeek: combo.timesPerWeek ?? null,
         intervalDays: combo.scheduleType === 'DAILY' ? 1 : null,
+        adaptiveEnabled: false, // Levels stay off until asked for
         adaptiveApplicable: adaptive,
         startDate: today,
         archivedAt: null,
@@ -82,6 +83,7 @@ describe('habits (e2e)', () => {
 
     it('keeps an explicit minTarget and the level settings', async () => {
       const habit = await createHabit(client, core.id, {
+        adaptiveEnabled: true,
         minTarget: 15,
         maxTarget: 40,
         stepType: 'ABSOLUTE',
@@ -89,6 +91,7 @@ describe('habits (e2e)', () => {
         timeOfDay: 'EVENING',
       });
       expect(habit).toMatchObject({
+        adaptiveEnabled: true,
         minTarget: 15,
         maxTarget: 40,
         stepType: 'ABSOLUTE',

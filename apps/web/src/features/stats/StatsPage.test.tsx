@@ -153,16 +153,21 @@ describe('stats page', () => {
 });
 
 describe('stats page without habits', () => {
-  it('points to creating one', async () => {
+  it('offers to create one, in the dialog', async () => {
     signedIn();
     mockStructureApi();
     mockStatsApi();
+    const user = userEvent.setup();
     renderApp('/stats');
 
     expect(await screen.findByRole('heading', { name: 'No stats yet' })).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Create a habit' })).toHaveAttribute(
+    await user.click(screen.getByRole('button', { name: 'Create a habit' }));
+    const dialog = await screen.findByRole('dialog', { name: 'New habit' });
+    // No cores yet: a habit needs one first.
+    expect(await within(dialog).findByText('Add a core first')).toBeInTheDocument();
+    expect(within(dialog).getByRole('link', { name: 'Go to Cores' })).toHaveAttribute(
       'href',
-      '/habits/new',
+      '/cores',
     );
   });
 });

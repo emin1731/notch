@@ -38,7 +38,7 @@
 | Habits | Three types (toggle, count, duration); three schedules (daily or every N days, specific days, X times per week); time-of-day grouping; archive/delete; reorder |
 | Logging | One-click toggle, +/− counter, duration timer or manual minutes; partial progress; backfill up to 7 days |
 | Today screen | Habits grouped by time of day, progress per habit, daily completion %, weekly quota for times-per-week habits, streaks, "target changed" badges |
-| Adaptive difficulty | Weekly evaluation; automatic level-up / deload / hold; undo; change history |
+| Adaptive difficulty | Opt-in per habit ("Levels"); weekly evaluation; automatic level-up / deload / hold; undo; change history |
 | Weekly review | Summary of the past week and of all applied changes, with undo |
 | Stats | Overall and per-core completion, per-habit heatmap, streaks, target-over-time chart |
 | Tone | "Firm but friendly" copy throughout |
@@ -128,6 +128,8 @@ For stats over arbitrary ranges, the same logic applies per day (`DAILY`, `SPECI
 - **Current streak** is computed on read, from the habit's full log history. **Longest streak** is stored on the habit and recomputed (in the same transaction) whenever a log for that habit changes.
 
 ### 2.7 Adaptive difficulty
+
+Adaptive difficulty ("Levels" in the UI) is **opt-in per habit**. A new habit starts with `adaptiveEnabled = false`, and the user switches it on in the habit form. A habit with Levels off is still in the weekly review with its rate, but it always holds (`NOT_ADAPTIVE`). The step and bounds below only apply once Levels is on.
 
 #### What progresses
 
@@ -431,7 +433,7 @@ model Habit {
   intervalDays        Int?                     // DAILY only: every N days, 1..30 (1 = every day)
   timeOfDay           TimeOfDay    @default(ANYTIME)
 
-  adaptiveEnabled     Boolean      @default(true)
+  adaptiveEnabled     Boolean      @default(false)
   stepType            StepType     @default(PERCENT)
   stepValue           Int          @default(10) // percent, or units/seconds when ABSOLUTE
   minTarget           Int?                     // applies to the progressing field
@@ -646,7 +648,7 @@ A wrong `currentPassword` or `password` returns **403** `INVALID_CREDENTIALS`, n
   timesPerWeek?: number;
   intervalDays?: number;              // DAILY only, 1–30; defaults to 1
   timeOfDay?: 'MORNING' | 'AFTERNOON' | 'EVENING' | 'ANYTIME';
-  adaptiveEnabled?: boolean;
+  adaptiveEnabled?: boolean;          // defaults to false (Levels off)
   stepType?: 'PERCENT' | 'ABSOLUTE';
   stepValue?: number;
   minTarget?: number | null;
@@ -903,9 +905,8 @@ A scheduled job is only needed once something has to happen without the user ope
 | `/` → `/today` | Today | auth + onboarded |
 | `/today?date=` | Today for a past date (backfill) | auth + onboarded |
 | `/cores` | Cores and their habits | auth + onboarded |
-| `/habits/new?coreId=` | Create habit | auth + onboarded |
 | `/habits/:habitId` | Habit detail and stats | auth + onboarded |
-| `/habits/:habitId/edit` | Edit habit | auth + onboarded |
+| `/habits/:habitId/edit` | Edit habit (the only habit form page; new habits are created in a dialog) | auth + onboarded |
 | `/review` | Latest weekly review | auth + onboarded |
 | `/review/:weekStart` | Past review | auth + onboarded |
 | `/stats` | Stats overview | auth + onboarded |
@@ -917,6 +918,7 @@ A scheduled job is only needed once something has to happen without the user ope
 - **Narrow screens:** a bottom tab bar. It's a web app, but people will open it on phones.
 - **`RequireAuth`:** while auth is `loading` it renders nothing, so the login screen doesn't flash. When `anonymous` it redirects to `/login` with `state.from`, and after logging in the user returns to the page they asked for. The guest-only guard on `/login` and `/register` does that redirect as soon as `['me']` holds a user, and the link between the two pages carries `state.from` along.
 - **`RequireOnboarded`:** redirects to `/onboarding` while `onboardedAt` is null.
+- **`/habits/new`** doesn't exist as a page: it redirects to `/today`. A new habit is created in the habit dialog, see [7.5](#75-pages-in-detail).
 
 ### 7.2 API client and data fetching
 
@@ -968,14 +970,14 @@ Three steps with a progress indicator. State is held locally and submitted at th
 
 1. **Your cores:** preset chips (Health, Career, Mind, Relationships, Finance, Learning) plus "Add your own". At least one is required. Each core can have its color and icon edited.
 2. **First habits:** suggested templates per selected core (e.g. Health: "Walk 20 min", "Drink 8 glasses"; Mind: "Meditate 5 min"). Users can also create a habit from scratch with a compact version of the habit form. The UI gently recommends 2–3 habits and soft-warns above 5 ("Starting small makes it stick. You can add more anytime.").
-3. **How it works:** one screen explaining levels in plain words: "Hit a habit consistently for two weeks and its target goes up a little. Have a rough week and it eases off. You can always undo."
+3. **How it works:** one screen explaining Levels in plain words, as something you can switch on per habit: "With Levels on, a habit's target follows how your weeks go. They start off, and you choose which habits get them." Then four points: switch Levels on from a habit's edit page; two strong weeks in a row move the target up a step; a rough week eases it off; every change shows on Today, with an Undo.
 
 **Submit:** `POST /cores/batch`, then the habits, then `POST /me/onboarding/complete`, then navigate to `/today`. If a step fails, the user stays on it and the data already created is reused on retry. Track created ids in state so nothing is duplicated. The draft and those ids are kept in sessionStorage (per user), so a reload mid-way resumes too. An account that already has cores can skip onboarding ("I'm already set up").
 
 #### Today (`/today`)
 
 - **Header:**
-  - The date, with ‹ › arrows to navigate back up to 6 days. Past dates show a "Backfilling" pill.
+  - The date, with ‹ › arrows to navigate back up to 6 days. Past dates show a "Past day" pill and a "Back to today" button.
   - A circular **day progress** ring showing `dayProgress`.
   - A one-line message based on progress (see section 14).
 - **Review banner** (when `pendingReview`): "Your week is in. 2 targets went up, 1 eased off. See review →".
@@ -988,22 +990,24 @@ Three steps with a progress indicator. State is held locally and submitted at th
   - **Always shown:** a core color stripe, the 🔥 streak count, and the target-change badge when `change` is present ("↑ 10 → 12 min", "↓ 4× → 3× a week"). Clicking the badge opens a popover with the reason sentence, "Target moved from 60 to 55 min." (plus "This isn't a step back." for a deload), and an Undo button if `canUndo`, or else why not (`UNDO_BLOCK_REASON_TEXT[undoBlockedReason]`). Undo's toast: "Back to 60 min. We'll check again next week."
   - **Kebab menu:** Edit, View stats, Archive.
 - **"This week" section** for `TIMES_PER_WEEK` habits: shows "2 / 3 this week" dots. Habits whose quota is met collapse into a "Done for the week ✓" row but can still be logged.
-- **Empty state:** "Nothing scheduled today. Enjoy it, or add a habit."
-- **Floating "+ Habit" button.**
+- **Empty state:** "Nothing scheduled today. Enjoy it, or add a habit." Adding a habit opens the habit dialog.
+- **Floating "+ Habit" button:** opens the habit dialog over Today.
 
 #### Cores (`/cores`)
 
 - Core cards, reorderable with dnd-kit. Each card shows:
   - an icon, name and color
   - its habits, as compact rows
-  - actions: add habit, edit core, archive
+  - actions: add habit (opens the habit dialog with this core preselected), edit core, archive
 - A "Show archived" toggle at the bottom shows archived cores, each with Unarchive.
 - An "Add core" button; with no cores yet, the presets are one-click starts.
 - The icon picker offers a curated, searchable set of lucide icons for life areas (`lib/core-icons.ts`), not all of lucide.
 
-#### Habit form (`/habits/new`, `/habits/:id/edit`)
+#### Habit form (dialog for new, `/habits/:id/edit` for editing)
 
-Sections, all in one page:
+**New habits** are created in a modal dialog over the current page, opened from Today's "+ Habit" button, a core card's "Add habit" or an empty state. From a core card, that core is preselected. On phones (below the `sm` breakpoint) it's a drawer from the bottom (shadcn's `Drawer`, built on vaul) instead, which can also be swiped down to close. The body scrolls while its title and actions stay visible. Saving closes it with a toast, and the user stays on the page. **Editing** is a page, `/habits/:id/edit`.
+
+Both have the same sections:
 
 1. **Basics:** name, core (select).
 2. **Type:** segmented control for Toggle / Count / Duration. It's disabled when editing, with a hint: "To change the type, create a new habit." The schedule type is locked the same way (its interval, days or weekly count stay editable), and the start date can't change.
@@ -1014,7 +1018,7 @@ Sections, all in one page:
 4. **Repeat:** a segmented control for **Daily | Weekly | Times a week** (`DAILY`, `SPECIFIC_DAYS`, `TIMES_PER_WEEK`). Daily shows an "Every N days" stepper (1–30, 1 by default), Weekly the weekday chips, and Times a week its stepper (1–7).
 5. **Time of day:** Morning / Afternoon / Evening / Anytime.
 6. **Levels (adaptive difficulty):**
-   - A switch.
+   - A switch, off by default for a new habit. The settings below only matter once it's on.
    - Step: "+10%" (default) or a custom absolute value.
    - Min and max target (advanced, collapsed by default).
    - A preview line computed with shared logic: "If you're consistent: 10 → 11 → 12 → 13 min over the next 6 weeks."
@@ -1066,7 +1070,7 @@ Sections:
 
 ### 7.6 Shared UI components
 
-`HabitCard` (with `ToggleControl`, `CounterControl`, `DurationControl`), `ProgressRing`, `ProgressBar`, `StreakBadge`, `TargetChangeBadge` (+ popover), `CoreChip`, `CorePicker`, `IconPicker`, `ColorPicker`, `WeekdayPicker`, `DurationInput`, `SortableList`, `ConfirmDialog`, `EmptyState`, `Heatmap`, `TargetHistoryChart`, `PageHeader`, `DateNavigator`.
+`HabitCard` (with `ToggleControl`, `CounterControl`, `DurationControl`), `AddHabitDialog`, `ProgressRing`, `ProgressBar`, `StreakBadge`, `TargetChangeBadge` (+ popover), `CoreChip`, `CorePicker`, `IconPicker`, `ColorPicker`, `WeekdayPicker`, `DurationInput`, `SortableList`, `ConfirmDialog`, `EmptyState`, `Heatmap`, `TargetHistoryChart`, `PageHeader`, `DateNavigator`.
 
 **Design language.** A light grey page with borderless white cards (`rounded-3xl`) on it; grey fills (inputs, selects, icon tiles) inside the cards; pill-shaped buttons (`surface` white on the page, `default` black, `secondary` grey inside cards). Section titles sit on the page above their card (`Section`); dashboard cards carry a small muted label instead (`Panel`). Lists use the shadcn `Item` rows: an icon in a grey rounded tile, a title and a muted line, a value or chevron on the right, separators inset past the tile. Everything is monochrome (black progress bars, chart bars and rings); a core's color appears only where it identifies the core: its icon tile, the heatmap and the pickers. Navigation is a top bar (the sections as a pill group, then Settings and the account in one pill), with a floating pill tab bar on phones; detail pages get a "← Back" pill. Dark mode is the same design on a near-black page.
 
@@ -1288,7 +1292,7 @@ Each phase ends in a working, demo-able state. Shared-package logic for a phase 
 - [ ] Prisma: `Habit`, `TargetChange` (manual changes only for now)
 - [ ] Shared: habit schemas with cross-field refinements, `isScheduledOn`, `occurrencesInWeek`, step math, `projectLevels` preview, `adaptiveApplicable()`
 - [ ] API: habits CRUD, order, archive; manual target edits write a `MANUAL` TargetChange
-- [ ] Web: habit form with all sections, level preview and toggle-schedule hint; habits shown on core cards
+- [ ] Web: habit form (a dialog for new habits, a page for editing) with all sections, level preview and toggle-schedule hint; habits shown on core cards
 - [ ] Tests: schema refinements, schedule helpers, step math, manual change recording
 
 **Done when:** a user can create every combination of type × schedule, with level settings, and see habits in the structure.

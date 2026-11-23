@@ -24,8 +24,8 @@ export function DateNavigator({
 }) {
   const backfilling = date !== today;
   return (
-    <div className="flex flex-wrap items-center gap-2">
-      <div className="flex items-center gap-1 rounded-full bg-card p-1">
+    <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
+      <div className="flex items-center gap-0.5 rounded-full bg-card p-1 sm:gap-1">
         <Button
           variant="ghost"
           size="icon-sm"
@@ -35,7 +35,10 @@ export function DateNavigator({
         >
           <ChevronLeft />
         </Button>
-        <span className="min-w-28 text-center text-sm font-medium tabular-nums" aria-live="polite">
+        <span
+          className="min-w-20 text-center text-sm font-medium tabular-nums sm:min-w-28"
+          aria-live="polite"
+        >
           {formatDay(date)}
         </span>
         <Button
@@ -50,9 +53,17 @@ export function DateNavigator({
       </div>
       {backfilling && (
         <>
-          <Badge variant="secondary">Backfilling</Badge>
-          <Button variant="surface" size="sm" onClick={() => onChange(today)}>
-            Back to today
+          {/* As tall and as white as the date pill and the button, so the row reads as one. */}
+          <Badge className="h-10 bg-card px-3 text-sm text-card-foreground sm:px-4">Past day</Badge>
+          {/* "Today" on a phone, so the row fits on one line. */}
+          <Button
+            variant="surface"
+            className="px-3 sm:px-4"
+            aria-label="Back to today"
+            onClick={() => onChange(today)}
+          >
+            <span className="sm:hidden">Today</span>
+            <span className="hidden sm:inline">Back to today</span>
           </Button>
         </>
       )}
