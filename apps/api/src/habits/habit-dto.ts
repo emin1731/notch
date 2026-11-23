@@ -10,7 +10,6 @@ export function toHabitDto(habit: Habit): HabitDto {
   return {
     id: habit.id,
     coreId: habit.coreId,
-    goalId: habit.goalId,
     name: habit.name,
     type: habit.type,
     unit: habit.unit,

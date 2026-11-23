@@ -6,27 +6,24 @@ import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { SortableList } from '@/components/SortableList';
 import { apiErrorMessage } from '@/lib/forms';
 import { HabitRow } from './HabitRow';
-import { useArchiveHabit, useDeleteHabit, useReorderHabits, useUpdateHabit } from './hooks';
+import { useArchiveHabit, useDeleteHabit, useReorderHabits } from './hooks';
 
 /**
- * Habits with their actions (edit, archive, delete with a confirmation, and unlink on a goal).
+ * Habits with their actions (edit, archive, delete with a confirmation).
  * `reorderable` lists them in a SortableList saved with `PUT /habits/order`.
  */
 export function HabitList({
   habits,
   includeArchived,
   reorderable,
-  unlinkable,
 }: {
   habits: readonly HabitDto[];
   /** Which habits list the page shows, so a reorder updates the right one. */
   includeArchived: boolean;
   reorderable?: boolean;
-  unlinkable?: boolean;
 }) {
   const navigate = useNavigate();
   const archive = useArchiveHabit();
-  const update = useUpdateHabit();
   const remove = useDeleteHabit();
   const reorder = useReorderHabits(includeArchived);
   const [deleting, setDeleting] = useState<HabitDto | null>(null);
@@ -51,17 +48,6 @@ export function HabitList({
         onUnarchive: () =>
           void run(archive.mutateAsync({ id: habit.id, archive: false }), `${habit.name} is back.`),
         onDelete: () => setDeleting(habit),
-        onUnlink: unlinkable
-          ? () =>
-              void run(
-                update.mutateAsync({
-                  id: habit.id,
-                  input: { goalId: null },
-                  previousGoalId: habit.goalId,
-                }),
-                `${habit.name} is no longer linked to this goal.`,
-              )
-          : undefined,
       }}
     />
   );

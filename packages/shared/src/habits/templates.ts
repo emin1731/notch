@@ -2,8 +2,8 @@ import type { z } from 'zod';
 import type { CORE_PRESETS } from '../constants.js';
 import type { createHabitSchema } from '../schemas/habit.js';
 
-/** A habit to start from: everything but the core (and goal) it goes in. */
-export type HabitTemplate = Omit<z.input<typeof createHabitSchema>, 'coreId' | 'goalId'>;
+/** A habit to start from: everything but the core it goes in. */
+export type HabitTemplate = Omit<z.input<typeof createHabitSchema>, 'coreId'>;
 
 export type CorePresetName = (typeof CORE_PRESETS)[number]['name'];
 

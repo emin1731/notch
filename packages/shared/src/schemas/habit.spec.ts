@@ -19,7 +19,6 @@ const issues = (input: object) => {
 describe('createHabitSchema', () => {
   it('fills defaults', () => {
     expect(createHabitSchema.parse(base)).toMatchObject({
-      goalId: null,
       daysOfWeek: [],
       timesPerWeek: null,
       timeOfDay: 'ANYTIME',

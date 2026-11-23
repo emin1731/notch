@@ -60,10 +60,7 @@ export class TodayService {
 
     const habits = await this.prisma.habit.findMany({
       where: { userId: user.id, archivedAt: null, startDate: { lte: fromDateString(date) } },
-      include: {
-        core: { select: { id: true, name: true, color: true, icon: true } },
-        goal: { select: { id: true, title: true } },
-      },
+      include: { core: { select: { id: true, name: true, color: true, icon: true } } },
       orderBy: [{ sortOrder: 'asc' }, { createdAt: 'asc' }],
     });
     const habitIds = habits.map((habit) => habit.id);
@@ -98,7 +95,6 @@ export class TodayService {
         scheduleType: habit.scheduleType,
         timeOfDay: habit.timeOfDay,
         core: { ...habit.core, color: habit.core.color as CoreColor },
-        goal: habit.goal,
         target: targetOn(date, habit.targetValue, history.changes),
         log: log ? { value: log.value, targetSnapshot: log.targetSnapshot } : null,
         progress: log ? computeProgress(log.value, log.targetSnapshot) : 0,

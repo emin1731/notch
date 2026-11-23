@@ -22,8 +22,8 @@ import {
 } from '@notch/shared';
 import type { AuthUser } from '../auth/request-auth.js';
 import { Clock } from '../clock/clock.js';
-import { coreArchived, goalCoreMismatch, validationFailed } from '../common/errors/conflicts.js';
-import { goalNotFound, habitNotFound } from '../common/not-found.js';
+import { coreArchived, validationFailed } from '../common/errors/conflicts.js';
+import { habitNotFound } from '../common/not-found.js';
 import { applyOrder } from '../common/ordering.js';
 import { CoresService } from '../cores/cores.service.js';
 import type { Habit, Prisma } from '../generated/prisma/client.js';
@@ -56,7 +56,6 @@ export class HabitsService {
       where: {
         userId,
         ...(query.coreId && { coreId: query.coreId }),
-        ...(query.goalId && { goalId: query.goalId }),
         ...(!query.includeArchived && { archivedAt: null }),
       },
       orderBy: ORDER,
@@ -85,8 +84,8 @@ export class HabitsService {
     }
 
     const habit = await this.prisma.$transaction(async (tx) => {
-      await this.assertPlacement(tx, user.id, input.coreId, input.goalId);
-      const { goalId: _goalId, coreId: _coreId, startDate: _startDate, ...fields } = input;
+      await this.assertCore(tx, user.id, input.coreId);
+      const { coreId: _coreId, startDate: _startDate, ...fields } = input;
       const { _max } = await tx.habit.aggregate({
         where: { userId: user.id },
         _max: { sortOrder: true },
@@ -96,7 +95,6 @@ export class HabitsService {
           ...fields,
           userId: user.id,
           coreId: input.coreId,
-          goalId: input.goalId,
           minTarget: input.minTarget ?? defaultMinTargetFor(input),
           initialTargetValue: input.targetValue,
           initialTimesPerWeek: input.timesPerWeek,
@@ -123,10 +121,8 @@ export class HabitsService {
       if (issues.length > 0) {
         throw validationFailed(issues);
       }
-      if (input.coreId !== undefined || input.goalId !== undefined) {
-        await this.assertPlacement(tx, user.id, merged.coreId, merged.goalId, {
-          coreChanged: merged.coreId !== habit.coreId,
-        });
+      if (input.coreId !== undefined && input.coreId !== habit.coreId) {
+        await this.assertCore(tx, user.id, input.coreId);
       }
 
       const changes: [TargetField, number, number][] = [
@@ -231,30 +227,11 @@ export class HabitsService {
     };
   }
 
-  /**
-   * The core must be the user's and active (it's only checked when it changes on update); a
-   * linked goal must be the user's and in that same core.
-   */
-  private async assertPlacement(
-    db: Db,
-    userId: string,
-    coreId: string,
-    goalId: string | null,
-    { coreChanged = true }: { coreChanged?: boolean } = {},
-  ): Promise<void> {
+  /** A new or changed core must be the user's and active. */
+  private async assertCore(db: Db, userId: string, coreId: string): Promise<void> {
     const core = await this.cores.findOwned(userId, coreId, db);
-    if (coreChanged && core.archivedAt) {
+    if (core.archivedAt) {
       throw coreArchived();
-    }
-    if (goalId === null) {
-      return;
-    }
-    const goal = await db.goal.findFirst({ where: { id: goalId, userId } });
-    if (!goal) {
-      throw goalNotFound();
-    }
-    if (goal.coreId !== coreId) {
-      throw goalCoreMismatch("The goal belongs to another core than the habit's");
     }
   }
 

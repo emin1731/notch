@@ -42,7 +42,6 @@ const shapeRefinement = (habit: Parameters<typeof habitShapeIssues>[0], ctx: z.R
 export const createHabitSchema = z
   .object({
     coreId: uuidSchema,
-    goalId: uuidSchema.nullish(),
     name: habitNameSchema,
     type: z.enum(HABIT_TYPES),
     unit: habitUnitSchema.nullish(),
@@ -61,7 +60,6 @@ export const createHabitSchema = z
   })
   .transform((input) => ({
     ...input,
-    goalId: input.goalId ?? null,
     unit: input.unit ?? null,
     targetValue: input.targetValue ?? (input.type === 'TOGGLE' ? 1 : 0),
     daysOfWeek: input.daysOfWeek ?? [],
@@ -85,7 +83,6 @@ export type CreateHabitInput = z.output<typeof createHabitSchema>;
 export const updateHabitSchema = z
   .strictObject({
     coreId: uuidSchema.optional(),
-    goalId: uuidSchema.nullable().optional(),
     name: habitNameSchema.optional(),
     unit: habitUnitSchema.nullable().optional(),
     targetValue: positiveInt.optional(),
@@ -105,7 +102,6 @@ export type UpdateHabitInput = z.output<typeof updateHabitSchema>;
 
 export const listHabitsQuerySchema = z.object({
   coreId: uuidSchema.optional(),
-  goalId: uuidSchema.optional(),
   includeArchived: queryBooleanSchema,
 });
 export type ListHabitsQuery = z.output<typeof listHabitsQuerySchema>;

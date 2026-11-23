@@ -16,18 +16,10 @@ export function useHabit(id: string) {
   return useQuery({ queryKey: queryKeys.habit(id), queryFn: () => habitsApi.get(id) });
 }
 
-/**
- * A habit change refreshes the lists it shows in, and the goals it left or joined.
- * `previousGoalId` is the goal it was linked to before (for an unlink or a move).
- */
-function afterChange(client: QueryClient, habit: HabitDetailDto, previousGoalId?: string | null) {
+/** A habit change refreshes the lists it shows in. */
+function afterChange(client: QueryClient, habit: HabitDetailDto) {
   client.setQueryData(queryKeys.habit(habit.id), habit);
-  return Promise.all([
-    invalidate.habitChange(client, { habitId: habit.id, goalId: habit.goalId ?? undefined }),
-    previousGoalId && previousGoalId !== habit.goalId
-      ? client.invalidateQueries({ queryKey: queryKeys.goal(previousGoalId) })
-      : undefined,
-  ]);
+  return invalidate.habitChange(client, { habitId: habit.id });
 }
 
 export function useCreateHabit() {
@@ -41,15 +33,9 @@ export function useCreateHabit() {
 export function useUpdateHabit() {
   const client = useQueryClient();
   return useMutation({
-    mutationFn: ({
-      id,
-      input,
-    }: {
-      id: string;
-      input: UpdateHabitInput;
-      previousGoalId?: string | null;
-    }) => habitsApi.update(id, input),
-    onSuccess: (habit, { previousGoalId }) => afterChange(client, habit, previousGoalId),
+    mutationFn: ({ id, input }: { id: string; input: UpdateHabitInput }) =>
+      habitsApi.update(id, input),
+    onSuccess: (habit) => afterChange(client, habit),
   });
 }
 
@@ -68,7 +54,7 @@ export function useDeleteHabit() {
     mutationFn: (habit: HabitDto) => habitsApi.delete(habit.id),
     onSuccess: (_, habit) => {
       client.removeQueries({ queryKey: queryKeys.habit(habit.id) });
-      return invalidate.habitChange(client, { goalId: habit.goalId ?? undefined });
+      return invalidate.habitChange(client);
     },
   });
 }

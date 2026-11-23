@@ -26,8 +26,6 @@ import { formatMinutes } from '@/lib/habit-format';
 export interface HabitFormValues {
   name: string;
   coreId: string;
-  /** '' for no goal. */
-  goalId: string;
   type: HabitType;
   unit: string;
   /** Count units, or minutes for a duration. Unused for a toggle. */
@@ -54,17 +52,14 @@ const MINUTE = 60;
 
 export function defaultValues({
   coreId = '',
-  goalId = '',
   today,
 }: {
   coreId?: string;
-  goalId?: string;
   today: LocalDate;
 }): HabitFormValues {
   return {
     name: '',
     coreId,
-    goalId,
     type: 'TOGGLE',
     unit: '',
     target: null,
@@ -97,7 +92,6 @@ export function valuesFromHabit(habit: HabitDto): HabitFormValues {
   return {
     name: habit.name,
     coreId: habit.coreId,
-    goalId: habit.goalId ?? '',
     type: habit.type,
     unit: habit.unit ?? '',
     target: habit.type === 'TOGGLE' ? null : habit.targetValue / target,
@@ -121,7 +115,6 @@ export function toHabitInput(values: HabitFormValues): z.input<typeof createHabi
   const adaptive = adaptiveApplicable(values);
   return {
     coreId: values.coreId,
-    goalId: values.goalId || null,
     name: values.name,
     type: values.type,
     unit: values.type === 'COUNT' ? values.unit.trim() || null : null,
@@ -163,7 +156,6 @@ const FIELD_BY_PATH: Record<string, HabitFormField> = {
   unit: 'unit',
   name: 'name',
   coreId: 'coreId',
-  goalId: 'goalId',
   type: 'type',
   scheduleType: 'scheduleType',
   daysOfWeek: 'daysOfWeek',
@@ -295,7 +287,6 @@ export function changedFields(habit: HabitDto, values: HabitFormValues): UpdateH
   const next = parsed.data;
   const changes: UpdateHabitInput = {};
   if (next.coreId !== habit.coreId) changes.coreId = next.coreId;
-  if (next.goalId !== habit.goalId) changes.goalId = next.goalId;
   if (next.name !== habit.name) changes.name = next.name;
   if (next.unit !== habit.unit) changes.unit = next.unit;
   if (next.targetValue !== habit.targetValue) changes.targetValue = next.targetValue;

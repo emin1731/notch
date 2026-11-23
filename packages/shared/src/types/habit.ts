@@ -11,7 +11,6 @@ import type {
 export interface HabitDto {
   id: string;
   coreId: string;
-  goalId: string | null;
   name: string;
   type: HabitType;
   unit: string | null;
@@ -55,12 +54,4 @@ export interface HabitDetailDto extends HabitDto {
   currentStreak: number;
   /** The 10 most recent target changes, newest first. */
   recentChanges: TargetChangeDto[];
-}
-
-/** A habit as listed in its goal's detail. */
-export interface LinkedHabitDto {
-  id: string;
-  name: string;
-  type: HabitType;
-  archivedAt: string | null;
 }

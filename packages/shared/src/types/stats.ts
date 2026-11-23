@@ -3,7 +3,6 @@ import type { LocalDate } from '../dates/local-date.js';
 import type { TargetField } from '../enums.js';
 import type { HeatmapDay } from '../stats/series.js';
 import type { StatsRange } from '../stats/range.js';
-import type { GoalDto } from './structure.js';
 
 export interface StatsOverviewDto {
   range: StatsRange;
@@ -16,12 +15,6 @@ export interface StatsOverviewDto {
   cores: { coreId: string; name: string; color: CoreColor; icon: string; rate: number | null }[];
   /** The 5 best current streaks among active habits (above 0). */
   topStreaks: { habitId: string; name: string; currentStreak: number }[];
-  goals: {
-    active: number;
-    completedInRange: number;
-    /** Active goals, then goals completed in the range. */
-    items: GoalDto[];
-  };
   /** Automatic changes that took effect in the range (undone ones aren't counted). */
   changes: { levelUps: number; deloads: number };
 }

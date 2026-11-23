@@ -22,7 +22,6 @@ import type { AuthUser } from '../auth/request-auth.js';
 import { Clock } from '../clock/clock.js';
 import { habitNotFound } from '../common/not-found.js';
 import type { Habit, HabitLog, TargetChange } from '../generated/prisma/client.js';
-import { toGoalDto } from '../goals/goal-dto.js';
 import { historyOf } from '../habits/habit-history.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 
@@ -47,16 +46,11 @@ export class StatsService {
       orderBy: [{ sortOrder: 'asc' }, { createdAt: 'asc' }],
     });
     const habitIds = habits.map((habit) => habit.id);
-    const [logs, changes, goals] = await Promise.all([
+    const [logs, changes] = await Promise.all([
       this.prisma.habitLog.findMany({
         where: { habitId: { in: habitIds }, date: { lte: fromDateString(dates.to) } },
       }),
       this.prisma.targetChange.findMany({ where: { habitId: { in: habitIds } } }),
-      this.prisma.goal.findMany({
-        where: { userId: user.id },
-        include: { milestones: { select: { completedAt: true } } },
-        orderBy: [{ sortOrder: 'asc' }, { createdAt: 'asc' }],
-      }),
     ]);
 
     const counted = habits.flatMap((habit) => {
@@ -104,16 +98,6 @@ export class StatsService {
       .toSorted((a, b) => b.currentStreak - a.currentStreak || a.name.localeCompare(b.name))
       .slice(0, 5);
 
-    const inRange = (instant: Date | null) => {
-      const date = instant && todayIn(user.timezone, instant);
-      return date !== null && date >= dates.from && date <= dates.to;
-    };
-    const activeGoals = goals.filter(
-      (goal) => goal.archivedAt === null && goal.status === 'ACTIVE',
-    );
-    const completedGoals = goals.filter(
-      (goal) => goal.status === 'COMPLETED' && inRange(goal.completedAt),
-    );
     const automatic = changes.filter(
       (change) =>
         change.undoneAt === null &&
@@ -128,11 +112,6 @@ export class StatsService {
       daily: dailySeries(counted, dates),
       cores: coreRows,
       topStreaks,
-      goals: {
-        active: activeGoals.length,
-        completedInRange: completedGoals.length,
-        items: [...activeGoals, ...completedGoals].map((goal) => toGoalDto(goal, goal.milestones)),
-      },
       changes: {
         levelUps: automatic.filter((change) => change.kind === 'LEVEL_UP').length,
         deloads: automatic.filter((change) => change.kind === 'DELOAD').length,

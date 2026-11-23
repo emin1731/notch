@@ -27,7 +27,6 @@ export interface TodayHabit {
   scheduleType: ScheduleType;
   timeOfDay: TimeOfDay;
   core: { id: string; name: string; color: CoreColor; icon: string };
-  goal: { id: string; title: string } | null;
   /** The target in effect on the date. */
   target: number;
   log: { value: number; targetSnapshot: number } | null;

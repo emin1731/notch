@@ -40,7 +40,6 @@ interface DemoHabit {
   daysOfWeek?: number[];
   timesPerWeek?: number;
   timeOfDay: TimeOfDay;
-  linkGoal?: boolean;
   adaptiveEnabled?: boolean;
   maxTarget?: number;
   /** A manual edit partway through: before `from` the old value applied. */
@@ -105,7 +104,6 @@ function demoHabits(today: LocalDate): DemoHabit[] {
       scheduleType: 'TIMES_PER_WEEK',
       timesPerWeek: 3,
       timeOfDay: 'ANYTIME',
-      linkGoal: true,
       // Mon/Wed/Fri in past weeks; Mon/Tue so far this week.
       value: (date) =>
         (thisWeek(date) ? [1, 2] : [1, 3, 5]).includes(isoWeekday(date)) ? 1 : undefined,
@@ -192,7 +190,6 @@ export async function seedDemo(
   const { userId, habitIds } = await createAccount(prisma, specs, {
     username,
     start,
-    today,
     timezone,
     passwordHash,
   });
@@ -256,7 +253,6 @@ async function createAccount(
   ctx: {
     username: string;
     start: LocalDate;
-    today: LocalDate;
     timezone: string;
     passwordHash: string;
   },
@@ -284,22 +280,6 @@ async function createAccount(
       });
       cores.set(name!, core.id);
     }
-    const goal = await tx.goal.create({
-      data: {
-        userId: user.id,
-        coreId: cores.get('Health')!,
-        title: 'Run a half marathon',
-        deadline: fromDateString(addDays(ctx.today, 120)),
-        milestones: {
-          create: ['5 km', '10 km', '15 km', 'Half marathon'].map((title, sortOrder) => ({
-            title,
-            sortOrder,
-            completedAt:
-              sortOrder < 2 ? fromDateString(addDays(ctx.today, sortOrder * 14 - 30)) : null,
-          })),
-        },
-      },
-    });
 
     const habitIds: Record<string, string> = {};
     for (const [sortOrder, spec] of specs.entries()) {
@@ -319,7 +299,6 @@ async function createAccount(
         data: {
           userId: user.id,
           coreId: cores.get(spec.core)!,
-          goalId: spec.linkGoal ? goal.id : null,
           name: spec.name,
           type: spec.type,
           unit: spec.unit ?? null,

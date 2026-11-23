@@ -9,7 +9,6 @@ import {
   Pencil,
   Timer,
   Trash2,
-  Unlink,
 } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { Link } from 'react-router';
@@ -36,8 +35,6 @@ export interface HabitRowActions {
   onArchive: () => void;
   onUnarchive: () => void;
   onDelete: () => void;
-  /** Only on a goal's page. */
-  onUnlink?: () => void;
 }
 
 /** A habit in a list: what it is and when, linking to its page, with its actions. */
@@ -79,12 +76,6 @@ export function HabitRow({
             <Pencil />
             Edit
           </DropdownMenuItem>
-          {actions.onUnlink && (
-            <DropdownMenuItem onSelect={actions.onUnlink}>
-              <Unlink />
-              Unlink from goal
-            </DropdownMenuItem>
-          )}
           {archived ? (
             <DropdownMenuItem onSelect={actions.onUnarchive}>
               <ArchiveRestore />

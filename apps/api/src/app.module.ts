@@ -7,7 +7,6 @@ import { ClockModule } from './clock/clock.js';
 import { AllExceptionsFilter } from './common/filters/all-exceptions.filter.js';
 import { ConfigModule } from './config/config.module.js';
 import { CoresModule } from './cores/cores.module.js';
-import { GoalsModule } from './goals/goals.module.js';
 import { HabitsModule } from './habits/habits.module.js';
 import type { Env } from './config/env.schema.js';
 import { HealthModule } from './health/health.module.js';
@@ -44,7 +43,6 @@ import { UsersModule } from './users/users.module.js';
     AuthModule,
     UsersModule,
     CoresModule,
-    GoalsModule,
     HabitsModule,
     LogsModule,
     ReviewsModule,

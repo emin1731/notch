@@ -24,7 +24,6 @@ export const CORE_PRESETS = [
 ] as const satisfies readonly { name: string; color: CoreColor; icon: string }[];
 
 export const LIMITS = {
-  milestonesPerGoal: 50,
   orderIds: 200,
   batchCores: 20,
 } as const;

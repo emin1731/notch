@@ -2,7 +2,6 @@ import {
   adaptiveApplicable,
   type CoreDto,
   createHabitSchema,
-  type GoalDto,
   type HabitDto,
   type HabitType,
   PROGRESSION_CONFIG,
@@ -31,7 +30,6 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Switch } from '@/components/ui/switch';
 import { WeekdayPicker } from '@/components/WeekdayPicker';
 import { useCores } from '@/features/cores/hooks';
-import { useGoals } from '@/features/goals/hooks';
 import { isApiError } from '@/lib/api-client';
 import { applyServerError } from '@/lib/forms';
 import { useToday } from '@/lib/use-today';
@@ -64,7 +62,6 @@ const TIMES_OF_DAY = [
 const FIELDS: HabitFormField[] = [
   'name',
   'coreId',
-  'goalId',
   'type',
   'unit',
   'target',
@@ -88,13 +85,12 @@ function NewHabit() {
   const [params] = useSearchParams();
   const today = useToday();
   const cores = useCores(false);
-  const goals = useGoals(false);
 
-  if (cores.isPending || goals.isPending) {
+  if (cores.isPending) {
     return <FormSkeleton title="New habit" />;
   }
-  if (cores.isError || goals.isError) {
-    return <LoadError onRetry={() => void Promise.all([cores.refetch(), goals.refetch()])} />;
+  if (cores.isError) {
+    return <LoadError onRetry={() => void cores.refetch()} />;
   }
   if (cores.data.length === 0) {
     return (
@@ -105,7 +101,7 @@ function NewHabit() {
           title="Add a core first"
           action={
             <Button asChild>
-              <Link to="/cores">Go to Cores & Goals</Link>
+              <Link to="/cores">Go to Cores</Link>
             </Button>
           }
         >
@@ -116,29 +112,17 @@ function NewHabit() {
   }
 
   const coreId = params.get('coreId');
-  const goalId = params.get('goalId') ?? '';
   const initialCore = cores.data.find((core) => core.id === coreId) ?? cores.data[0]!;
   return (
-    <HabitForm
-      cores={cores.data}
-      goals={goals.data}
-      initial={defaultValues({
-        coreId: initialCore.id,
-        goalId: goals.data.some((goal) => goal.id === goalId && goal.coreId === initialCore.id)
-          ? goalId
-          : '',
-        today,
-      })}
-    />
+    <HabitForm cores={cores.data} initial={defaultValues({ coreId: initialCore.id, today })} />
   );
 }
 
 function EditHabit({ id }: { id: string }) {
   const habit = useHabit(id);
   const cores = useCores(true);
-  const goals = useGoals(false);
 
-  if (habit.isPending || cores.isPending || goals.isPending) {
+  if (habit.isPending || cores.isPending) {
     return <FormSkeleton title="Edit habit" />;
   }
   if (habit.isError) {
@@ -149,7 +133,7 @@ function EditHabit({ id }: { id: string }) {
           title="Habit not found"
           action={
             <Button asChild variant="outline">
-              <Link to="/cores">Back to Cores & Goals</Link>
+              <Link to="/cores">Back to Cores</Link>
             </Button>
           }
         >
@@ -159,8 +143,8 @@ function EditHabit({ id }: { id: string }) {
     }
     return <LoadError onRetry={() => void habit.refetch()} />;
   }
-  if (cores.isError || goals.isError) {
-    return <LoadError onRetry={() => void Promise.all([cores.refetch(), goals.refetch()])} />;
+  if (cores.isError) {
+    return <LoadError onRetry={() => void cores.refetch()} />;
   }
   // Active cores, plus the habit's own even if it's archived.
   const choosable = cores.data.filter((core) => !core.archivedAt || core.id === habit.data.coreId);
@@ -169,7 +153,6 @@ function EditHabit({ id }: { id: string }) {
       key={habit.data.id}
       habit={habit.data}
       cores={choosable}
-      goals={goals.data}
       initial={valuesFromHabit(habit.data)}
     />
   );
@@ -178,13 +161,11 @@ function EditHabit({ id }: { id: string }) {
 function HabitForm({
   habit,
   cores,
-  goals,
   initial,
 }: {
   /** Editing this habit; creating without it. */
   habit?: HabitDto;
   cores: readonly CoreDto[];
-  goals: readonly GoalDto[];
   initial: HabitFormValues;
 }) {
   const editing = habit !== undefined;
@@ -213,7 +194,6 @@ function HabitForm({
     }
     form.clearErrors();
   };
-  const backTo = (goalId: string) => (goalId ? `/goals/${goalId}` : '/cores');
 
   const onSubmit = form.handleSubmit(async (submitted) => {
     setFormError(null);
@@ -221,14 +201,14 @@ function HabitForm({
       if (habit) {
         const changes = changedFields(habit, submitted);
         if (changes && Object.keys(changes).length > 0) {
-          await update.mutateAsync({ id: habit.id, input: changes, previousGoalId: habit.goalId });
+          await update.mutateAsync({ id: habit.id, input: changes });
           toast.success(`Saved ${submitted.name.trim()}.`);
         }
       } else {
         await create.mutateAsync(createHabitSchema.parse(toHabitInput(submitted)));
         toast.success(`Added ${submitted.name.trim()}.`);
       }
-      void navigate(backTo(submitted.goalId));
+      void navigate('/cores');
     } catch (error) {
       setFormError(
         applyServerError(form, error, { fields: FIELDS, fieldForPath: formFieldForPath }),
@@ -236,7 +216,6 @@ function HabitForm({
     }
   });
 
-  const coreGoals = goals.filter((goal) => goal.coreId === values.coreId && !goal.archivedAt);
   const applicable = adaptiveApplicable(values);
   const frequency = progressingField(values) === 'TIMES_PER_WEEK';
   const preview = previewText(values);
@@ -268,22 +247,6 @@ function HabitForm({
           name="coreId"
           label="Core"
           options={cores.map((core) => ({ value: core.id, label: core.name }))}
-          onValueChange={(coreId) => {
-            const goal = goals.find((candidate) => candidate.id === form.getValues('goalId'));
-            if (goal && goal.coreId !== coreId) {
-              form.setValue('goalId', '');
-            }
-          }}
-        />
-        <SelectField
-          control={form.control}
-          name="goalId"
-          label="Goal (optional)"
-          description="Linking a habit to a goal shows it on the goal's page."
-          options={[
-            { value: '', label: 'No goal' },
-            ...coreGoals.map((goal) => ({ value: goal.id, label: goal.title })),
-          ]}
         />
       </Section>
 
@@ -512,7 +475,7 @@ function HabitForm({
 
       <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
         <Button asChild variant="surface" size="lg">
-          <Link to={backTo(initial.goalId)}>Cancel</Link>
+          <Link to="/cores">Cancel</Link>
         </Button>
         <Button type="submit" size="lg" disabled={form.formState.isSubmitting}>
           {form.formState.isSubmitting ? 'Saving…' : editing ? 'Save changes' : 'Add habit'}

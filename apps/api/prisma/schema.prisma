@@ -11,11 +11,6 @@ datasource db {
   provider = "postgresql"
 }
 
-enum GoalStatus {
-  ACTIVE
-  COMPLETED
-}
-
 enum HabitType {
   TOGGLE
   COUNT
@@ -64,7 +59,6 @@ model User {
 
   sessions Session[]
   cores    Core[]
-  goals    Goal[]
   habits   Habit[]
   logs     HabitLog[]
   reviews  WeeklyReview[]
@@ -96,48 +90,9 @@ model Core {
   updatedAt  DateTime  @updatedAt @db.Timestamptz(3)
 
   user   User    @relation(fields: [userId], references: [id], onDelete: Cascade)
-  goals  Goal[]
   habits Habit[]
 
   @@index([userId, archivedAt])
-}
-
-model Goal {
-  id          String     @id @default(uuid())
-  userId      String
-  coreId      String
-  title       String
-  description String?
-  deadline    DateTime?  @db.Date
-  status      GoalStatus @default(ACTIVE)
-  completedAt DateTime?  @db.Timestamptz(3)
-  archivedAt  DateTime?  @db.Timestamptz(3)
-  sortOrder   Int        @default(0)
-  createdAt   DateTime   @default(now()) @db.Timestamptz(3)
-  updatedAt   DateTime   @updatedAt @db.Timestamptz(3)
-
-  user       User        @relation(fields: [userId], references: [id], onDelete: Cascade)
-  // NoAction, not Restrict: checked at the end of the statement, so deleting the user cascades
-  // through Core and Goal in either order. Deleting a non-empty core is blocked in the service.
-  core       Core        @relation(fields: [coreId], references: [id], onDelete: NoAction)
-  milestones Milestone[]
-  habits     Habit[]
-
-  @@index([userId, coreId])
-}
-
-model Milestone {
-  id          String    @id @default(uuid())
-  goalId      String
-  title       String
-  sortOrder   Int
-  completedAt DateTime? @db.Timestamptz(3)
-  createdAt   DateTime  @default(now()) @db.Timestamptz(3)
-  updatedAt   DateTime  @updatedAt @db.Timestamptz(3)
-
-  goal Goal @relation(fields: [goalId], references: [id], onDelete: Cascade)
-
-  @@index([goalId, sortOrder])
 }
 
 // CHECK constraints (target ≥ 1, timesPerWeek 1–7) live in the migration SQL: Prisma can't express
@@ -146,7 +101,6 @@ model Habit {
   id                  String       @id @default(uuid())
   userId              String
   coreId              String
-  goalId              String?
   name                String
   type                HabitType
   unit                String? // COUNT only
@@ -172,14 +126,14 @@ model Habit {
   updatedAt     DateTime  @updatedAt @db.Timestamptz(3)
 
   user          User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  // NoAction, not Restrict: checked at the end of the statement, so deleting the user cascades
+  // through Core and Habit in either order. Deleting a non-empty core is blocked in the service.
   core          Core           @relation(fields: [coreId], references: [id], onDelete: NoAction)
-  goal          Goal?          @relation(fields: [goalId], references: [id], onDelete: SetNull)
   logs          HabitLog[]
   targetChanges TargetChange[]
 
   @@index([userId, archivedAt])
   @@index([coreId])
-  @@index([goalId])
 }
 
 /// Every change to a habit's target, weekly frequency or weekdays. History is read with
