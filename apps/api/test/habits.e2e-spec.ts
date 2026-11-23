@@ -13,7 +13,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { PrismaService } from '../src/prisma/prisma.service.js';
 import { createTestApp } from './create-test-app.js';
 import { registerUser, resetDb } from './helpers/auth.js';
-import { createCore, createGoal, createHabit } from './helpers/structure.js';
+import { createCore, createHabit } from './helpers/structure.js';
 import type { TestClient } from './helpers/test-client.js';
 
 const TZ = 'Asia/Baku'; // registerUser's timezone
@@ -128,7 +128,7 @@ describe('habits (e2e)', () => {
       expect(paths).toEqual(expect.arrayContaining(['targetValue', 'daysOfWeek']));
     });
 
-    it('needs an owned, active core and a goal in that core', async () => {
+    it('needs an owned, active core', async () => {
       const unknownCore = await client.post('/habits', {
         coreId: crypto.randomUUID(),
         name: 'X',
@@ -138,26 +138,6 @@ describe('habits (e2e)', () => {
       expect(unknownCore.body.code).toBe('CORE_NOT_FOUND');
 
       const other = await createCore(client, { name: 'Career' });
-      const otherGoal = await createGoal(client, other.id);
-      const mismatch = await client.post('/habits', {
-        coreId: core.id,
-        goalId: otherGoal.id,
-        name: 'X',
-        type: 'TOGGLE',
-        scheduleType: 'DAILY',
-      });
-      expect(mismatch.status).toBe(409);
-      expect(mismatch.body.code).toBe('GOAL_CORE_MISMATCH');
-
-      const unknownGoal = await client.post('/habits', {
-        coreId: core.id,
-        goalId: crypto.randomUUID(),
-        name: 'X',
-        type: 'TOGGLE',
-        scheduleType: 'DAILY',
-      });
-      expect(unknownGoal.body.code).toBe('GOAL_NOT_FOUND');
-
       await client.post(`/cores/${other.id}/archive`);
       const archived = await client.post('/habits', {
         coreId: other.id,
@@ -171,9 +151,8 @@ describe('habits (e2e)', () => {
   });
 
   it('lists in order with filters', async () => {
-    const goal = await createGoal(client, core.id);
     const other = await createCore(client, { name: 'Career' });
-    await createHabit(client, core.id, { name: 'A', goalId: goal.id });
+    await createHabit(client, core.id, { name: 'A' });
     await createHabit(client, other.id, { name: 'B' });
     const c = await createHabit(client, core.id, { name: 'C' });
     await client.post(`/habits/${c.id}/archive`);
@@ -182,7 +161,6 @@ describe('habits (e2e)', () => {
       ((await client.get(`/habits${query}`)).body as { name: string }[]).map((habit) => habit.name);
     expect(await names('')).toEqual(['A', 'B']);
     expect(await names(`?coreId=${core.id}`)).toEqual(['A']);
-    expect(await names(`?goalId=${goal.id}`)).toEqual(['A']);
     expect(await names('?includeArchived=true')).toEqual(['A', 'B', 'C']);
   });
 
@@ -323,22 +301,16 @@ describe('habits (e2e)', () => {
       expect(await history(daily.id)).toEqual([]);
     });
 
-    it('moves between cores only with a matching goal', async () => {
-      const goal = await createGoal(client, core.id);
-      const habit = await createHabit(client, core.id, { goalId: goal.id });
+    it('moves between cores', async () => {
+      const habit = await createHabit(client, core.id);
       const other = await createCore(client, { name: 'Career' });
 
-      const blocked = await client.patch(`/habits/${habit.id}`, { coreId: other.id });
-      expect(blocked.status).toBe(409);
-      expect(blocked.body.code).toBe('GOAL_CORE_MISMATCH');
-
-      const moved = await client.patch(`/habits/${habit.id}`, { coreId: other.id, goalId: null });
-      expect(moved.body).toMatchObject({ coreId: other.id, goalId: null });
-
-      const otherGoal = await createGoal(client, other.id);
-      expect(
-        (await client.patch(`/habits/${habit.id}`, { goalId: otherGoal.id })).body.goalId,
-      ).toBe(otherGoal.id);
+      const moved = await client.patch(`/habits/${habit.id}`, { coreId: other.id });
+      expect(moved.status).toBe(200);
+      expect(moved.body.coreId).toBe(other.id);
+      expect((await client.get('/cores')).body.map((row: CoreDto) => row.counts.habits)).toEqual([
+        0, 1,
+      ]);
     });
 
     it('can still edit a habit in an archived core, but not move one into it', async () => {
@@ -387,11 +359,11 @@ describe('habits (e2e)', () => {
     });
   });
 
-  describe('with cores and goals', () => {
+  describe('with cores', () => {
     it('counts active habits per core, and blocks deleting a core with any habit', async () => {
       const habit = await createHabit(client, core.id);
       await createHabit(client, core.id);
-      expect((await client.get('/cores')).body[0].counts).toEqual({ goals: 0, habits: 2 });
+      expect((await client.get('/cores')).body[0].counts).toEqual({ habits: 2 });
 
       await client.post(`/habits/${habit.id}/archive`);
       expect((await client.get('/cores')).body[0].counts.habits).toBe(1);
@@ -400,40 +372,6 @@ describe('habits (e2e)', () => {
       const res = await client.delete(`/cores/${core.id}`);
       expect(res.status).toBe(409);
       expect(res.body.code).toBe('CORE_NOT_EMPTY');
-    });
-
-    it('a goal lists its habits, and deleting it unlinks them', async () => {
-      const goal = await createGoal(client, core.id);
-      const habit = await createHabit(client, core.id, { goalId: goal.id });
-      expect((await client.get(`/goals/${goal.id}`)).body.habits).toEqual([
-        { id: habit.id, name: 'Read', type: 'COUNT', archivedAt: null },
-      ]);
-
-      await client.delete(`/goals/${goal.id}`);
-      expect((await client.get(`/habits/${habit.id}`)).body).toMatchObject({
-        goalId: null,
-        archivedAt: null,
-      });
-    });
-
-    it('moving a goal with linked habits needs moveHabits, then moves them too', async () => {
-      const goal = await createGoal(client, core.id);
-      const habit = await createHabit(client, core.id, { goalId: goal.id });
-      const other = await createCore(client, { name: 'Career' });
-
-      const blocked = await client.patch(`/goals/${goal.id}`, { coreId: other.id });
-      expect(blocked.status).toBe(409);
-      expect(blocked.body).toMatchObject({
-        code: 'GOAL_CORE_MISMATCH',
-        details: { linkedHabits: 1 },
-      });
-
-      const moved = await client.patch(`/goals/${goal.id}`, { coreId: other.id, moveHabits: true });
-      expect(moved.body.coreId).toBe(other.id);
-      expect((await client.get(`/habits/${habit.id}`)).body).toMatchObject({
-        coreId: other.id,
-        goalId: goal.id,
-      });
     });
   });
 

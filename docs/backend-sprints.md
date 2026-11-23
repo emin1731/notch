@@ -6,6 +6,8 @@ working, tested API you can call. The web app comes after.
 This document replaces the backend parts of [section 13 of the plan](habit-tracker-implementation-plan.md#13-delivery-phases).
 The plan is still the source of truth for behaviour; this is the order of work.
 
+> **Update, 2026-11-22:** goals and milestones were removed from the product after these sprints. Every habit still belongs to one core, and that's the whole structure now. The parts below about goals and milestones (most of S2, and mentions in other sprints) are kept as a record of what was built; the [plan](habit-tracker-implementation-plan.md) describes the product as it is.
+
 **Ground rules for every sprint**
 
 - Shared domain logic is written **before** the API code that uses it, test-first, with `now` passed in.

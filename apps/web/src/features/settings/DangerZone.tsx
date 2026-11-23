@@ -42,9 +42,7 @@ export function DangerZone() {
       <div className="flex flex-col gap-4 border-t pt-5 sm:flex-row sm:items-center sm:justify-between">
         <div className="text-sm">
           <div className="text-[0.9375rem] font-medium">Delete account</div>
-          <div className="text-muted-foreground">
-            Your cores, goals, habits and logs, gone for good.
-          </div>
+          <div className="text-muted-foreground">Your cores, habits and logs, gone for good.</div>
         </div>
         <Button variant="destructive" onClick={() => setDeleting(true)}>
           <Trash2 />
@@ -100,8 +98,8 @@ function DeleteAccountForm({ onCancel }: { onCancel: () => void }) {
       <DialogHeader>
         <DialogTitle>Delete your account?</DialogTitle>
         <DialogDescription>
-          This deletes your cores, goals, habits, logs and reviews, and can&apos;t be undone. Enter
-          your password to confirm.
+          This deletes your cores, habits, logs and reviews, and can&apos;t be undone. Enter your
+          password to confirm.
         </DialogDescription>
       </DialogHeader>
       <FieldGroup>

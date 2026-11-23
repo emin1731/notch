@@ -63,14 +63,7 @@ export function CompactHabitForm({
   };
 
   const submit = form.handleSubmit((values) => {
-    const {
-      coreId: _core,
-      goalId: _goal,
-      ...input
-    } = toHabitInput({
-      ...values,
-      coreId: DRAFT_CORE_ID,
-    });
+    const { coreId: _core, ...input } = toHabitInput({ ...values, coreId: DRAFT_CORE_ID });
     onAdd({ coreKey: values.coreId, input });
   });
 

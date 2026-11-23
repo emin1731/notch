@@ -35,7 +35,6 @@ const errorsOf = async (values: HabitFormValues, editing = false) => {
 const habit = (fields: Partial<HabitDto> = {}): HabitDto => ({
   id: '00000000-0000-4000-8000-0000000000aa',
   coreId,
-  goalId: null,
   name: 'Run',
   type: 'DURATION',
   unit: null,
@@ -107,7 +106,6 @@ describe('habit form: conversion', () => {
       stepValue: 5,
       minTarget: 15,
       maxTarget: 60,
-      goalId: '',
     });
     expect(changedFields(saved, values)).toEqual({});
   });

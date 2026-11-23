@@ -67,7 +67,7 @@ describe('register page', () => {
     await heading('Create your account');
     await fillIn(user, { name: 'Emin' });
 
-    expect(await heading('Cores & Goals')).toBeInTheDocument();
+    expect(await heading('Cores')).toBeInTheDocument();
     expect(router.state.location.pathname).toBe('/cores');
   });
 

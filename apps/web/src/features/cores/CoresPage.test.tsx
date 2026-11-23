@@ -1,14 +1,12 @@
-import { addDays, todayIn } from '@notch/shared';
 import { screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { HttpResponse } from 'msw';
 import { beforeEach, describe, expect, it } from 'vitest';
-import { apiError, signedIn, testUser } from '@/test/auth';
+import { apiError, signedIn } from '@/test/auth';
 import { renderApp } from '@/test/render';
 import { mockSortableLayout } from '@/test/sortable';
-import { fakeCore, fakeGoal, mockStructureApi } from '@/test/structure-api';
+import { fakeCore, fakeHabit, mockStructureApi } from '@/test/structure-api';
 
-const today = todayIn(testUser.timezone, new Date());
 const card = (name: string) => screen.findByRole('article', { name });
 const cardNames = () =>
   screen.getAllByRole('article').map((article) => within(article).getByRole('heading').textContent);
@@ -16,38 +14,27 @@ const cardNames = () =>
 function setup() {
   const health = fakeCore({ name: 'Health', color: 'emerald', icon: 'heart-pulse' });
   const career = fakeCore({ name: 'Career', color: 'indigo', icon: 'briefcase' });
-  const marathon = fakeGoal({
-    coreId: health.id,
-    title: 'Run a half marathon',
-    deadline: addDays(today, 12),
-    milestones: [['Run 5 km', true], 'Run 10 km', 'Run 21 km'],
-  });
-  const sleep = fakeGoal({
-    coreId: health.id,
-    title: 'Sleep 8 hours',
-    milestones: [['Buy blinds', true]],
-  });
-  const api = mockStructureApi({ cores: [health, career], goals: [marathon, sleep] });
-  return { api, health, career, marathon, sleep };
+  const run = fakeHabit({ coreId: health.id, name: 'Morning run' });
+  const sleep = fakeHabit({ coreId: health.id, name: 'Sleep by 11' });
+  const api = mockStructureApi({ cores: [health, career], habits: [run, sleep] });
+  return { api, health, career, run, sleep };
 }
 
-describe('Cores & Goals page', () => {
+describe('Cores page', () => {
   beforeEach(() => signedIn());
 
-  it('shows each core with its active goals, progress and deadline, and folds away completed ones', async () => {
-    setup();
+  it('shows each core with its habits', async () => {
+    const { run } = setup();
     renderApp('/cores');
 
     const health = await card('Health');
     expect(cardNames()).toEqual(['Health', 'Career']);
-    const marathon = within(health).getByRole('link', { name: /Run a half marathon/ });
-    expect(marathon).toHaveAttribute('href', expect.stringMatching(/^\/goals\//));
-    expect(within(marathon).getByText('12 days left')).toBeInTheDocument();
-    expect(
-      within(health).getByRole('progressbar', { name: 'Run a half marathon progress' }),
-    ).toHaveAttribute('aria-valuetext', '1 / 3 milestones');
-    expect(within(health).getByText('Completed (1)')).toBeInTheDocument();
-    expect(within(await card('Career')).getByText('No goals or habits yet.')).toBeInTheDocument();
+    expect(await within(health).findByRole('link', { name: /Morning run/ })).toHaveAttribute(
+      'href',
+      `/habits/${run.id}`,
+    );
+    expect(within(health).getByRole('link', { name: /Sleep by 11/ })).toBeInTheDocument();
+    expect(within(await card('Career')).getByText('No habits yet.')).toBeInTheDocument();
   });
 
   it('creates a core in one click from the empty state', async () => {
@@ -115,7 +102,7 @@ describe('Cores & Goals page', () => {
     });
   });
 
-  it('explains why a core with goals cannot be deleted', async () => {
+  it('explains why a core with habits cannot be deleted', async () => {
     setup();
     const user = userEvent.setup();
     renderApp('/cores');
@@ -126,7 +113,7 @@ describe('Cores & Goals page', () => {
     await user.click(within(dialog).getByRole('button', { name: 'Delete core' }));
 
     expect(await within(dialog).findByRole('alert')).toHaveTextContent(
-      'This core still has goals or habits, archived ones included.',
+      'This core still has habits, archived ones included.',
     );
     // Behind the open dialog, so hidden from the accessibility tree.
     expect(screen.getByRole('article', { name: 'Health', hidden: true })).toBeInTheDocument();
@@ -147,7 +134,7 @@ describe('Cores & Goals page', () => {
     expect(api.sent('DELETE', `/cores/${career.id}`)).toHaveLength(1);
   });
 
-  it('archives a core with its goals, and shows them again with "Show archived"', async () => {
+  it('archives a core with its habits, and shows them again with "Show archived"', async () => {
     setup();
     const user = userEvent.setup();
     renderApp('/cores');
@@ -155,7 +142,7 @@ describe('Cores & Goals page', () => {
     await user.click(within(await card('Health')).getByRole('button', { name: 'Health actions' }));
     await user.click(await screen.findByRole('menuitem', { name: 'Archive' }));
     const dialog = await screen.findByRole('alertdialog', { name: 'Archive Health?' });
-    expect(dialog).toHaveTextContent('Its goals and habits are archived with it');
+    expect(dialog).toHaveTextContent('Its habits are archived with it');
     await user.click(within(dialog).getByRole('button', { name: 'Archive' }));
     await waitFor(() =>
       expect(screen.queryByRole('article', { name: 'Health' })).not.toBeInTheDocument(),
@@ -163,18 +150,21 @@ describe('Cores & Goals page', () => {
 
     await user.click(screen.getByRole('switch', { name: 'Show archived' }));
     const archived = await card('Health');
-    expect(within(archived).getByText('Archived')).toBeInTheDocument();
-    expect(within(archived).getByText('Archived (2)')).toBeInTheDocument();
-    // An archived core takes no new goals.
-    expect(within(archived).queryByRole('button', { name: 'Add goal' })).not.toBeInTheDocument();
+    // The core's badge, and one on each of its habits.
+    await waitFor(() => expect(within(archived).getAllByText('Archived')).toHaveLength(3));
+    // An archived core takes no new habits.
+    expect(within(archived).queryByRole('link', { name: 'Add habit' })).not.toBeInTheDocument();
 
     await user.click(within(archived).getByRole('button', { name: 'Health actions' }));
     await user.click(await screen.findByRole('menuitem', { name: 'Unarchive' }));
-    expect(await screen.findByText(/Health is back/)).toBeInTheDocument();
+    expect(
+      await screen.findByText('Health is back. Unarchive its habits one by one.'),
+    ).toBeInTheDocument();
+    // Its habits stay archived.
     await waitFor(() =>
       expect(
-        within(screen.getByRole('article', { name: 'Health' })).queryByText('Archived'),
-      ).not.toBeInTheDocument(),
+        within(screen.getByRole('article', { name: 'Health' })).getAllByText('Archived'),
+      ).toHaveLength(2),
     );
   });
 
@@ -211,34 +201,6 @@ describe('Cores & Goals page', () => {
 
     expect(await screen.findByText(/Couldn't save the new order/)).toBeInTheDocument();
     await waitFor(() => expect(cardNames()).toEqual(['Health', 'Career']));
-  });
-
-  it('adds a goal with inline milestones from a core card', async () => {
-    const { api, career } = setup();
-    const user = userEvent.setup();
-    renderApp('/cores');
-
-    await user.click(within(await card('Career')).getByRole('button', { name: 'Add goal' }));
-    const dialog = await screen.findByRole('dialog', { name: 'New goal' });
-    expect(within(dialog).getByLabelText('Core')).toHaveValue(career.id);
-    await user.type(within(dialog).getByLabelText('Title'), 'Get promoted');
-    const milestone = within(dialog).getByLabelText('Milestones (optional)');
-    await user.type(milestone, 'Lead a project{Enter}');
-    await user.type(milestone, 'Mentor someone{Enter}');
-    await user.click(
-      within(dialog).getByRole('button', { name: 'Remove milestone Lead a project' }),
-    );
-    await user.type(milestone, 'Ship the launch{Enter}');
-    await user.click(within(dialog).getByRole('button', { name: 'Create goal' }));
-
-    expect(
-      await within(await card('Career')).findByRole('link', { name: /Get promoted/ }),
-    ).toBeInTheDocument();
-    expect(api.sent('POST', '/goals')[0]?.body).toEqual({
-      coreId: career.id,
-      title: 'Get promoted',
-      milestones: ['Mentor someone', 'Ship the launch'],
-    });
   });
 
   it('shows an error with a way to retry when the cores cannot load', async () => {

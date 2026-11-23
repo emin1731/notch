@@ -109,7 +109,7 @@ A **module** groups related code. Each feature folder (`cores/`, `habits/`, `aut
 @Module({
   controllers: [CoresController],   // handles HTTP routes
   providers: [CoresService],        // business logic, injectable elsewhere
-  exports: [CoresService],          // other modules (habits, goals) may use it
+  exports: [CoresService],          // other modules (habits) may use it
 })
 export class CoresModule {}
 ```
@@ -274,9 +274,7 @@ no CORS, and cookies "just work" ([7.1](#71-the-model-in-one-paragraph)).
 ```
 User ─┬─< Session                     (login sessions; see 7)
       │
-      ├─< Core ─┬─< Goal ──< Milestone
-      │         │     │
-      │         └─< Habit >─┘ (optional link to a goal in the same core)
+      ├─< Core ───< Habit
       │               │
       │               ├─< HabitLog        one row per habit per local date
       │               └─< TargetChange    every change to a target/schedule
@@ -291,8 +289,6 @@ User ─┬─< Session                     (login sessions; see 7)
 | `User` | Username (lower-cased), argon2 password hash, display name, IANA timezone, onboarding timestamp. |
 | `Session` | One logged-in browser: the **hash** of its cookie token, expiry, last seen, user agent. |
 | `Core` | A life area ("Health", "Career") with a colour, icon and sort order. Can be archived. |
-| `Goal` | An outcome inside a core, with an optional deadline and `ACTIVE`/`COMPLETED` status. |
-| `Milestone` | Ordered checkpoints of a goal, ticked by hand. |
 | `Habit` | The thing you do. A type (`TOGGLE`, `COUNT`, `DURATION`), a schedule (`DAILY`, `SPECIFIC_DAYS`, `TIMES_PER_WEEK`), a current target, and adaptive-difficulty settings. |
 | `HabitLog` | What you did on a given day. Stores `targetSnapshot`: the target *on that day*, so old progress stays correct after the target changes. |
 | `TargetChange` | History of every change to a habit's target, weekly count or weekdays: `MANUAL`, `LEVEL_UP` or `DELOAD`, with undo info. |
@@ -301,12 +297,12 @@ User ─┬─< Session                     (login sessions; see 7)
 ### 6.3 Conventions worth knowing
 
 - **Every row is owned by a user**, either directly (`userId` column) or through its parent
-  (a milestone through its goal). Every query includes the owner, see [7.9](#79-authorization-you-only-ever-see-your-own-data).
+  (a target change through its habit). Every query includes the owner, see [7.9](#79-authorization-you-only-ever-see-your-own-data).
 - **Two kinds of time.** Instants (`createdAt`, `expiresAt`) are `timestamptz`. Calendar dates
   that belong to the user's local day (`HabitLog.date`, `Habit.startDate`, `weekStart`) are plain
   `date` columns, because "Tuesday" in Baku isn't the same instant as "Tuesday" in New York.
   See [10](#10-time-timezones-and-the-weekly-review).
-- **Deleting a user deletes everything** through `onDelete: Cascade`. A core with goals or habits
+- **Deleting a user deletes everything** through `onDelete: Cascade`. A core with habits
   can't be deleted (the service returns `409 CORE_NOT_EMPTY`); you archive it instead.
 - **Constraints Prisma can't express** (target ≥ 1, `timesPerWeek` between 1 and 7, log value ≥ 0)
   are `CHECK` constraints added by hand in the migration SQL. The database is the last line of
@@ -622,8 +618,8 @@ in [`common/pipes/`](../apps/api/src/common/pipes/):
 - `@IdParam('id', habitNotFound)` checks that a URL id is a UUID, and turns anything else into the
   given 404.
 
-Some rules span several fields or need the database (e.g. "the goal must belong to the habit's
-core"). Those are checked in the service and reported in the same shape as a zod error via
+Some rules span several fields or need the database (e.g. "a habit's start date is at most
+6 days back", which depends on the user's today). Those are checked in the service and reported in the same shape as a zod error via
 `validationFailed([...])` in [`conflicts.ts`](../apps/api/src/common/errors/conflicts.ts).
 
 ### 8.2 One error format everywhere
@@ -635,7 +631,7 @@ Every non-2xx response has the same body, defined in
 {
   "statusCode": 409,
   "code": "CORE_NOT_EMPTY",
-  "message": "Move or delete its goals and habits first",
+  "message": "Move or delete its habits first",
   "details": { }
 }
 ```
@@ -653,8 +649,8 @@ Every non-2xx response has the same body, defined in
 | 400 | `VALIDATION_FAILED`, `BACKFILL_OUT_OF_RANGE` |
 | 401 | `UNAUTHENTICATED`, `INVALID_CREDENTIALS` (login) |
 | 403 | `CSRF_INVALID`, `INVALID_INVITE_CODE`, `REGISTRATION_CLOSED`, `INVALID_CREDENTIALS` (re-entered password) |
-| 404 | `CORE_NOT_FOUND`, `GOAL_NOT_FOUND`, `HABIT_NOT_FOUND`, … |
-| 409 | `USERNAME_TAKEN`, `CORE_ARCHIVED`, `CORE_NOT_EMPTY`, `HABIT_ARCHIVED`, `UNDO_NOT_ALLOWED`, `GOAL_CORE_MISMATCH` |
+| 404 | `CORE_NOT_FOUND`, `HABIT_NOT_FOUND`, … |
+| 409 | `USERNAME_TAKEN`, `CORE_ARCHIVED`, `CORE_NOT_EMPTY`, `HABIT_ARCHIVED`, `UNDO_NOT_ALLOWED` |
 | 429 | `TOO_MANY_REQUESTS` |
 | 503 | `SERVICE_UNAVAILABLE` (health check can't reach the database) |
 
@@ -668,9 +664,7 @@ All routes are under `/api/v1` and need a session unless marked *public*.
 |---|---|---|
 | `auth` | `GET /auth/csrf` *(public)*, `POST /auth/register` *(public)*, `POST /auth/login` *(public)*, `GET /auth/me`, `POST /auth/logout` *(public)*, `POST /auth/logout-all` | Sessions, CSRF, credentials ([7](#7-authentication-and-security)). |
 | `users` | `PATCH /me`, `POST /me/password`, `POST /me/onboarding/complete`, `DELETE /me` | Profile (name, timezone), password, onboarding flag, account deletion. |
-| `cores` | `GET/POST /cores`, `POST /cores/batch`, `PUT /cores/order`, `PATCH/DELETE /cores/:id`, `POST /cores/:id/archive`, `…/unarchive` | Life areas. Archiving a core archives its active goals and habits with the same timestamp. |
-| `goals` | `GET/POST /goals`, `GET/PATCH/DELETE /goals/:id`, `POST /goals/:id/complete`, `…/reopen`, `…/archive`, `…/unarchive`, `POST /goals/:goalId/milestones`, `PUT /goals/:goalId/milestones/order` | Goals and creating/ordering their milestones. |
-| `milestones` | `PATCH/DELETE /milestones/:id`, `POST /milestones/:id/toggle` | Editing and ticking milestones. |
+| `cores` | `GET/POST /cores`, `POST /cores/batch`, `PUT /cores/order`, `PATCH/DELETE /cores/:id`, `POST /cores/:id/archive`, `…/unarchive` | Life areas. Archiving a core archives its active habits with the same timestamp. |
 | `habits` | `GET/POST /habits`, `PUT /habits/order`, `GET/PATCH/DELETE /habits/:id`, `GET /habits/:id/target-history`, `POST /habits/:id/archive`, `…/unarchive` | Habits. Editing a target by hand records a `MANUAL` `TargetChange`. |
 | `logs` | `GET /habits/:id/logs`, `PUT /habits/:id/logs/:date`, `POST /habits/:id/logs/:date/increment`, `DELETE /habits/:id/logs/:date` | Recording what you did. Only today and the 6 days before can be logged. A value of 0 deletes the log. `increment` is an atomic SQL upsert, so two quick taps on "+1" never lose a count. |
 | `today` | `GET /today?date=` | The Today screen in one call: habits due on that date grouped by time of day, progress, streaks, weekly quotas, "target changed" badges, and whether a review is waiting. Three queries, then everything is computed in memory. |
@@ -754,7 +748,7 @@ HTTP. It contains:
 
 | Folder | What's in it |
 |---|---|
-| `schemas/` | zod schemas for every request (auth, user, core, goal, habit, log, review, stats). |
+| `schemas/` | zod schemas for every request (auth, user, core, habit, log, review, stats). |
 | `types/` | Response shapes (DTOs) the API returns and the web app consumes. |
 | `errors.ts` | The list of error codes and the error body type. |
 | `dates/`, `timezone.ts` | `LocalDate`, `todayIn`, week math, timezone validation. |
@@ -762,7 +756,6 @@ HTTP. It contains:
 | `progress/` | Progress per log, weekly completion rates, streaks, habit history. |
 | `progression/` | Adaptive difficulty: eligibility, cooldowns, step sizes, the decision, undo rules. |
 | `stats/` | Ranges, daily series, heatmaps, target-over-time. |
-| `goals/` | Goal progress from milestones. |
 
 **Why put domain logic here instead of in services?**
 
@@ -880,7 +873,7 @@ malformed.
 
 | Term | Meaning |
 |---|---|
-| **Core** | A life area (Health, Career…) that groups goals and habits. |
+| **Core** | A life area (Health, Career…) that groups habits. |
 | **Deload** | Lowering a habit's target after a bad week. |
 | **DI (dependency injection)** | Nest creates services and passes them into constructors, instead of code calling `new`. |
 | **DTO** | "Data transfer object": the JSON shape the API sends, as opposed to the database row. |

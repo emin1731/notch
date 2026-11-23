@@ -7,13 +7,12 @@ import { API, signedIn, testUser } from '@/test/auth';
 import { renderApp } from '@/test/render';
 import { server } from '@/test/server';
 import { habitStats, heatmapDays, mockStatsApi, targetChange } from '@/test/stats-api';
-import { fakeCore, fakeGoal, fakeHabit, mockStructureApi } from '@/test/structure-api';
+import { fakeCore, fakeHabit, mockStructureApi } from '@/test/structure-api';
 
 const today = todayIn(testUser.timezone, new Date());
 const daysAgo = (n: number) => addDays(today, -n);
 
 const career = fakeCore({ name: 'Career', color: 'indigo', icon: 'briefcase' });
-const book = fakeGoal({ coreId: career.id, title: 'Ship the book' });
 
 /** A 30-day window with a known pattern: a few days 10 and 9 days ago, the rest empty. */
 function days(overrides: Record<string, Partial<HeatmapDay>> = {}): HeatmapDay[] {
@@ -29,7 +28,7 @@ function setup(
   heatmap: HeatmapDay[],
   extra: Parameters<typeof habitStats>[0] = { habitId: habit.id },
 ) {
-  mockStructureApi({ cores: [career], goals: [book], habits: [habit] });
+  mockStructureApi({ cores: [career], habits: [habit] });
   const api = mockStatsApi({
     habits: {
       [habit.id]: (range) =>
@@ -65,7 +64,6 @@ function setup(
 
 const deepWork = fakeHabit({
   coreId: career.id,
-  goalId: book.id,
   name: 'Deep work',
   type: 'DURATION',
   targetValue: 3300,
@@ -83,10 +81,6 @@ describe('habit page', () => {
 
     expect(await screen.findByRole('heading', { level: 1, name: 'Deep work' })).toBeInTheDocument();
     expect(await screen.findByText('Career')).toBeInTheDocument();
-    expect(await screen.findByRole('link', { name: 'Goal: Ship the book' })).toHaveAttribute(
-      'href',
-      `/goals/${book.id}`,
-    );
     expect(screen.getByText('Target').nextSibling).toHaveTextContent('55 min');
     expect(screen.getByText('Schedule').nextSibling).toHaveTextContent('Every day');
     expect(screen.getByText('Current streak').nextSibling).toHaveTextContent('0 days');

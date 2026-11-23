@@ -22,12 +22,6 @@ const draft: OnboardingDraft = {
     },
     { key: 'custom:1', preset: null, name: 'Music', color: 'sky', icon: 'target' },
   ],
-  goal: {
-    coreKey: 'preset:Health',
-    title: 'Run a half marathon',
-    deadline: null,
-    milestones: ['5 km', '10 km', 'Race day'],
-  },
   habits: [
     {
       key: 'h1',
@@ -71,7 +65,6 @@ function fakeApi(failures: Partial<Record<SubmitPhase, number>> = {}) {
         cores,
         cores.map(() => ({ id: `core-${++next}` })),
       ),
-    createGoal: (input) => call('goal', input, { id: `goal-${++next}` }),
     createHabit: (input) => call('habits', input, { id: `habit-${++next}` }),
     complete: () => call('complete', null, user),
   };
@@ -80,32 +73,25 @@ function fakeApi(failures: Partial<Record<SubmitPhase, number>> = {}) {
 }
 
 describe('onboarding submission', () => {
-  it('creates the cores, the goal and the habits in order, then completes', async () => {
+  it('creates the cores and the habits in order, then completes', async () => {
     const { api, calls } = fakeApi();
     const saves: Created[] = [];
     expect(await submitOnboarding(draft, NOTHING_CREATED, api, (c) => saves.push(c))).toBe(user);
 
-    expect(calls.map((c) => c.phase)).toEqual(['cores', 'goal', 'habits', 'habits', 'complete']);
+    expect(calls.map((c) => c.phase)).toEqual(['cores', 'habits', 'habits', 'complete']);
     expect(calls[0]!.input).toEqual([
       { name: 'Health', color: 'emerald', icon: 'heart-pulse' },
       { name: 'Music', color: 'sky', icon: 'target' },
     ]);
-    expect(calls[1]!.input).toEqual({
-      coreId: 'core-1',
-      title: 'Run a half marathon',
-      deadline: null,
-      milestones: ['5 km', '10 km', 'Race day'],
-    });
-    expect(calls[2]!.input).toMatchObject({ name: 'Walk', coreId: 'core-1' });
-    expect(calls[3]!.input).toMatchObject({ name: 'Practice guitar', coreId: 'core-2' });
+    expect(calls[1]!.input).toMatchObject({ name: 'Walk', coreId: 'core-1' });
+    expect(calls[2]!.input).toMatchObject({ name: 'Practice guitar', coreId: 'core-2' });
     expect(saves.at(-1)).toEqual({
       cores: { 'preset:Health': 'core-1', 'custom:1': 'core-2' },
-      goalId: 'goal-3',
-      habits: { h1: 'habit-4', h2: 'habit-5' },
+      habits: { h1: 'habit-3', h2: 'habit-4' },
     });
   });
 
-  it.each(['cores', 'goal', 'habits', 'complete'] as const)(
+  it.each(['cores', 'habits', 'complete'] as const)(
     'stops at a failed %s, and a retry creates nothing twice',
     async (phase) => {
       const { api, count } = fakeApi({ [phase]: 1 });
@@ -121,7 +107,6 @@ describe('onboarding submission', () => {
       await expect(submitOnboarding(draft, created, api, save)).resolves.toBe(user);
       // One successful call each; only the failed one was made twice.
       expect(count('cores')).toBe(phase === 'cores' ? 2 : 1);
-      expect(count('goal')).toBe(phase === 'goal' ? 2 : 1);
       expect(count('habits')).toBe(phase === 'habits' ? 3 : 2);
       expect(count('complete')).toBe(phase === 'complete' ? 2 : 1);
     },
@@ -131,7 +116,6 @@ describe('onboarding submission', () => {
     const { api, calls } = fakeApi();
     const kept: Created = {
       cores: { 'preset:Health': 'core-a', 'custom:1': 'core-b' },
-      goalId: 'goal-a',
       habits: { h1: 'habit-a' },
     };
     await submitOnboarding(draft, kept, api, () => {});
@@ -139,11 +123,10 @@ describe('onboarding submission', () => {
     expect(calls[0]!.input).toMatchObject({ name: 'Practice guitar', coreId: 'core-b' });
   });
 
-  it('creates a core added after the others were saved, and skips a missing goal', async () => {
+  it('creates a core added after the others were saved', async () => {
     const { api, calls } = fakeApi();
     const more: OnboardingDraft = {
       ...draft,
-      goal: null,
       habits: [],
       cores: [
         ...draft.cores,

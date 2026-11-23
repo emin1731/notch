@@ -55,7 +55,7 @@ export function HabitCard({ habit, date }: { habit: TodayHabit; date: LocalDate 
             {habit.name}
           </h3>
           <p className="flex min-w-0 items-center gap-2 text-sm text-muted-foreground">
-            <span className="truncate">{habit.goal?.title ?? habit.core.name}</span>
+            <span className="truncate">{habit.core.name}</span>
             {habit.week && <WeekDots hits={habit.week.hits} quota={habit.week.quota} />}
           </p>
         </div>
@@ -94,8 +94,7 @@ export function HabitCard({ habit, date }: { habit: TodayHabit; date: LocalDate 
                 archive.mutate(
                   { id: habit.id, archive: true },
                   {
-                    onSuccess: () =>
-                      toast.success(`${habit.name} is archived. Find it in Cores & Goals.`),
+                    onSuccess: () => toast.success(`${habit.name} is archived. Find it in Cores.`),
                     onError: (error) => toast.error(apiErrorMessage(error)),
                   },
                 )

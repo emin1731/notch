@@ -1,18 +1,13 @@
 /** Onboarding's words (plan 7.5 and section 14). */
 export const ONBOARDING_COPY = {
-  steps: ['Your cores', 'A goal', 'First habits', 'How it works'],
+  steps: ['Your cores', 'First habits', 'How it works'],
   cores: {
     title: 'What do you want to grow in?',
     intro:
-      'Cores are the areas of your life you want to work on. Pick a few, or make your own. Goals and habits live in them.',
+      'Cores are the areas of your life you want to work on. Pick a few, or make your own. Your habits live in them.',
     needOne: 'Pick at least one core to continue.',
     alreadySetUp: (count: number) =>
       `You already have ${count} ${count === 1 ? 'core' : 'cores'}. Skip the setup and go to Today.`,
-  },
-  goal: {
-    title: 'Something to aim for',
-    intro:
-      'A goal is something you want to achieve, like running a half marathon. Break it into milestones to see your progress. Optional.',
   },
   habits: {
     title: 'Your first habits',
@@ -32,9 +27,8 @@ export const ONBOARDING_COPY = {
   },
   failed: {
     cores: 'Couldn’t save your cores.',
-    goal: 'Couldn’t save your goal.',
     habits: 'Couldn’t save your habits.',
     complete: 'Couldn’t finish the setup.',
   },
-  saved: 'Saved. You can change it later in Cores & Goals.',
+  saved: 'Saved. You can change it later in Cores.',
 } as const;

@@ -1,14 +1,12 @@
 import { type ScheduleType, STATS_RANGES, type StatsOverviewDto } from '@notch/shared';
-import { ChartColumn, CircleCheck, Flag, Flame, TriangleAlert } from 'lucide-react';
+import { ChartColumn, Flame, TriangleAlert } from 'lucide-react';
 import { Link } from 'react-router';
 import { CoreIcon } from '@/components/CoreIcon';
 import { EmptyState } from '@/components/EmptyState';
 import { PageHeader } from '@/components/PageHeader';
-import { ProgressBar } from '@/components/ProgressBar';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useHabits } from '@/features/habits/hooks';
-import { formatLocalDate } from '@/lib/deadline';
 import { dateRangeText, percent, streakText, streakUnit } from '@/lib/stats-format';
 import { CompletionChart } from './CompletionChart';
 import { useRangeParam, useStatsOverview } from './hooks';
@@ -125,30 +123,7 @@ function Overview({
         </Panel>
       </div>
 
-      <dl aria-label="Key numbers" className="grid gap-4 sm:grid-cols-3 sm:gap-6">
-        <Kpi
-          label="Best streak"
-          value={best ? String(best.currentStreak) : '—'}
-          detail={
-            best
-              ? `${streakUnit(best.currentStreak, scheduleOf(best.habitId) ?? 'DAILY')} · ${best.name}`
-              : 'No streak going yet'
-          }
-        />
-        <Kpi
-          label="Goals completed"
-          value={String(data.goals.completedInRange)}
-          detail={`${data.goals.active} active`}
-        />
-        <Kpi
-          label="Target changes"
-          value={`↑${data.changes.levelUps} ↓${data.changes.deloads}`}
-          valueLabel={`${data.changes.levelUps} up, ${data.changes.deloads} eased off`}
-          detail={`${data.changes.levelUps} up · ${data.changes.deloads} eased off`}
-        />
-      </dl>
-
-      <div className="grid items-start gap-4 sm:gap-6 lg:grid-cols-2">
+      <div className="grid items-start gap-4 sm:gap-6 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
         <Panel title="Streak leaderboard">
           {data.topStreaks.length === 0 ? (
             <p className="text-sm text-muted-foreground">
@@ -179,81 +154,26 @@ function Overview({
           )}
         </Panel>
 
-        <Goals goals={data.goals.items} />
+        {/* Under "By core", so both rows share the chart's columns. */}
+        <dl aria-label="Key numbers" className="grid gap-4 sm:grid-cols-2 sm:gap-6 lg:grid-cols-1">
+          <Kpi
+            label="Best streak"
+            value={best ? String(best.currentStreak) : '—'}
+            detail={
+              best
+                ? `${streakUnit(best.currentStreak, scheduleOf(best.habitId) ?? 'DAILY')} · ${best.name}`
+                : 'No streak going yet'
+            }
+          />
+          <Kpi
+            label="Target changes"
+            value={`↑${data.changes.levelUps} ↓${data.changes.deloads}`}
+            valueLabel={`${data.changes.levelUps} up, ${data.changes.deloads} eased off`}
+            detail={`${data.changes.levelUps} up · ${data.changes.deloads} eased off`}
+          />
+        </dl>
       </div>
     </div>
-  );
-}
-
-function Goals({ goals }: { goals: StatsOverviewDto['goals']['items'] }) {
-  const active = goals.filter((goal) => goal.status === 'ACTIVE');
-  const completed = goals.filter((goal) => goal.status === 'COMPLETED');
-  return (
-    <Panel title="Goals">
-      {goals.length === 0 ? (
-        <p className="text-sm text-muted-foreground">
-          No active goals, and none completed in this range.
-        </p>
-      ) : (
-        <div className="flex flex-col gap-4">
-          {active.length > 0 && (
-            <ul className="-mx-3 flex flex-col" aria-label="Active goals">
-              {active.map((goal) => (
-                <li key={goal.id}>
-                  <Link
-                    to={`/goals/${goal.id}`}
-                    className="flex items-center gap-4 rounded-2xl px-3 py-2.5 transition-colors hover:bg-muted/70 focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none"
-                  >
-                    <span className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-muted">
-                      <Flag className="size-5" aria-hidden="true" />
-                    </span>
-                    <span className="flex min-w-0 flex-1 flex-col gap-1.5">
-                      <span className="truncate text-[0.9375rem] font-medium">{goal.title}</span>
-                      {goal.milestoneCounts.total > 0 ? (
-                        <ProgressBar
-                          done={goal.milestoneCounts.done}
-                          total={goal.milestoneCounts.total}
-                          label={goal.title}
-                        />
-                      ) : (
-                        <span className="text-sm text-muted-foreground">No milestones</span>
-                      )}
-                    </span>
-                  </Link>
-                </li>
-              ))}
-            </ul>
-          )}
-          {completed.length > 0 && (
-            <div className="flex flex-col gap-1">
-              <h3 className="text-sm text-muted-foreground">Completed in this range</h3>
-              <ul className="-mx-3 flex flex-col" aria-label="Completed goals">
-                {completed.map((goal) => (
-                  <li key={goal.id}>
-                    <Link
-                      to={`/goals/${goal.id}`}
-                      className="flex items-center gap-4 rounded-2xl px-3 py-2.5 transition-colors hover:bg-muted/70 focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none"
-                    >
-                      <span className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-muted">
-                        <CircleCheck className="size-5" aria-hidden="true" />
-                      </span>
-                      <span className="min-w-0 flex-1 truncate text-[0.9375rem] font-medium">
-                        {goal.title}
-                      </span>
-                      {goal.completedAt && (
-                        <span className="shrink-0 text-sm text-muted-foreground">
-                          {formatLocalDate(goal.completedAt.slice(0, 10))}
-                        </span>
-                      )}
-                    </Link>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
-        </div>
-      )}
-    </Panel>
   );
 }
 

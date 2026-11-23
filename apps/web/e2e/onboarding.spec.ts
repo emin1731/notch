@@ -1,9 +1,7 @@
 import { expect, test } from '@playwright/test';
 import { E2E_INVITE_CODE, E2E_PASSWORD, uniqueUsername } from './support/users';
 
-test('register → onboarding (2 cores, a goal with 3 milestones, 3 habits) → Today', async ({
-  page,
-}) => {
+test('register → onboarding (2 cores, 3 habits) → Today', async ({ page }) => {
   const errors: string[] = [];
   page.on('console', (message) => {
     if (message.type() === 'error' && !/status of 401/.test(message.text())) {
@@ -24,15 +22,6 @@ test('register → onboarding (2 cores, a goal with 3 milestones, 3 habits) → 
   await page.getByRole('button', { name: 'Add your own' }).click();
   await page.getByRole('dialog').getByLabel('Name').fill('Music');
   await page.getByRole('button', { name: 'Add core' }).click();
-  await page.getByRole('button', { name: 'Next' }).click();
-
-  // A goal with three milestones.
-  await page.getByLabel('Goal', { exact: true }).fill('Run a half marathon');
-  const milestone = page.getByLabel('Milestones (optional)');
-  for (const title of ['Run 5 km', 'Run 10 km', 'Race day']) {
-    await milestone.fill(title);
-    await milestone.press('Enter');
-  }
   await page.getByRole('button', { name: 'Next' }).click();
 
   // Two suggestions and one habit of your own.
@@ -60,11 +49,15 @@ test('register → onboarding (2 cores, a goal with 3 milestones, 3 habits) → 
   // Plan: sign-up to a populated Today in under two minutes (here, without a human's pauses).
   expect(Date.now() - started).toBeLessThan(120_000);
 
-  // Onboarding is done for good; the goal and its milestones are there.
+  // Onboarding is done for good; each habit is in its core.
   await page.goto('/onboarding');
   await expect(page).toHaveURL('/today');
   await page.goto('/cores');
-  await page.getByRole('link', { name: 'Run a half marathon' }).click();
-  await expect(page.getByText('0 / 3 milestones')).toBeVisible();
+  const healthCore = page.getByRole('article', { name: 'Health' });
+  await expect(healthCore.getByRole('link', { name: /^Walk/ })).toBeVisible();
+  await expect(healthCore.getByRole('link', { name: /^Drink water/ })).toBeVisible();
+  await expect(
+    page.getByRole('article', { name: 'Music' }).getByRole('link', { name: /^Practice guitar/ }),
+  ).toBeVisible();
   expect(errors).toEqual([]);
 });

@@ -3,7 +3,7 @@ import type { CoreDto } from '@notch/shared';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { createTestApp } from './create-test-app.js';
 import { registerUser, resetDb } from './helpers/auth.js';
-import { createCore, createGoal } from './helpers/structure.js';
+import { createCore, createHabit } from './helpers/structure.js';
 import type { TestClient } from './helpers/test-client.js';
 
 const names = (cores: CoreDto[]) => cores.map((core) => core.name);
@@ -34,7 +34,7 @@ describe('cores (e2e)', () => {
       icon: 'heart-pulse',
       sortOrder: 0,
       archivedAt: null,
-      counts: { goals: 0, habits: 0 },
+      counts: { habits: 0 },
     });
     const career = await createCore(client, { name: 'Career', color: 'indigo', icon: 'briefcase' });
     expect(career.sortOrder).toBe(1);
@@ -110,43 +110,43 @@ describe('cores (e2e)', () => {
   });
 
   describe('archive', () => {
-    it('archives the core and its active goals, and hides them by default', async () => {
+    it('archives the core and its active habits, and hides them by default', async () => {
       const core = await createCore(client);
-      const active = await createGoal(client, core.id, { title: 'Active' });
-      const earlier = await createGoal(client, core.id, { title: 'Archived earlier' });
-      const earlierArchive = await client.post(`/goals/${earlier.id}/archive`);
+      const active = await createHabit(client, core.id, { name: 'Active' });
+      const earlier = await createHabit(client, core.id, { name: 'Archived earlier' });
+      const earlierArchive = await client.post(`/habits/${earlier.id}/archive`);
 
       const res = await client.post(`/cores/${core.id}/archive`);
       expect(res.status).toBe(200);
       expect(res.body.archivedAt).toEqual(expect.any(String));
 
-      const goals = (await client.get('/goals?includeArchived=true')).body;
-      const byId = new Map(goals.map((goal: { id: string }) => [goal.id, goal]));
+      const habits = (await client.get('/habits?includeArchived=true')).body;
+      const byId = new Map(habits.map((habit: { id: string }) => [habit.id, habit]));
       expect(byId.get(active.id)).toMatchObject({ archivedAt: res.body.archivedAt });
       expect(byId.get(earlier.id)).toMatchObject({ archivedAt: earlierArchive.body.archivedAt });
 
       expect((await client.get('/cores')).body).toEqual([]);
       expect(names((await client.get('/cores?includeArchived=true')).body)).toEqual(['Health']);
-      expect((await client.get('/goals')).body).toEqual([]);
+      expect((await client.get('/habits')).body).toEqual([]);
     });
 
     it('unarchive restores the core only', async () => {
       const core = await createCore(client);
-      const goal = await createGoal(client, core.id);
+      const habit = await createHabit(client, core.id);
       await client.post(`/cores/${core.id}/archive`);
 
       const res = await client.post(`/cores/${core.id}/unarchive`);
       expect(res.status).toBe(200);
       expect(res.body.archivedAt).toBeNull();
-      expect((await client.get(`/goals/${goal.id}`)).body.archivedAt).toEqual(expect.any(String));
+      expect((await client.get(`/habits/${habit.id}`)).body.archivedAt).toEqual(expect.any(String));
     });
 
-    it('counts only non-archived goals', async () => {
+    it('counts only non-archived habits', async () => {
       const core = await createCore(client);
-      await createGoal(client, core.id);
-      const archived = await createGoal(client, core.id);
-      await client.post(`/goals/${archived.id}/archive`);
-      expect((await client.get('/cores')).body[0].counts).toEqual({ goals: 1, habits: 0 });
+      await createHabit(client, core.id);
+      const archived = await createHabit(client, core.id);
+      await client.post(`/habits/${archived.id}/archive`);
+      expect((await client.get('/cores')).body[0].counts).toEqual({ habits: 1 });
     });
   });
 
@@ -157,16 +157,16 @@ describe('cores (e2e)', () => {
       expect((await client.get('/cores?includeArchived=true')).body).toEqual([]);
     });
 
-    it('refuses while it has goals, archived ones included', async () => {
+    it('refuses while it has habits, archived ones included', async () => {
       const core = await createCore(client);
-      const goal = await createGoal(client, core.id);
-      await client.post(`/goals/${goal.id}/archive`);
+      const habit = await createHabit(client, core.id);
+      await client.post(`/habits/${habit.id}/archive`);
 
       const res = await client.delete(`/cores/${core.id}`);
       expect(res.status).toBe(409);
       expect(res.body.code).toBe('CORE_NOT_EMPTY');
 
-      await client.delete(`/goals/${goal.id}`);
+      await client.delete(`/habits/${habit.id}`);
       expect((await client.delete(`/cores/${core.id}`)).status).toBe(204);
     });
   });

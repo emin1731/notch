@@ -2,7 +2,7 @@ import type { CoreColor } from '@notch/shared';
 import { cn } from '@/lib/utils';
 import { CoreIcon } from './CoreIcon';
 
-/** A core's icon and name, e.g. above a goal's title. */
+/** A core's icon and name, e.g. above a habit's name. */
 export function CoreChip({
   name,
   icon,

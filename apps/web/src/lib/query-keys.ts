@@ -17,11 +17,6 @@ export const queryKeys = {
   habit: (id: string) => ['habit', id] as const,
   /** Under `habit(id)`, so whatever refreshes the habit refreshes its history too. */
   habitTargetHistory: (id: string) => ['habit', id, 'target-history'] as const,
-  goals: {
-    all: ['goals'] as const,
-    list: (filters: object = {}) => ['goals', filters] as const,
-  },
-  goal: (id: string) => ['goal', id] as const,
   cores: {
     all: ['cores'] as const,
     list: (includeArchived: boolean) => ['cores', { includeArchived }] as const,
@@ -48,8 +43,8 @@ const invalidateAll = (client: QueryClient, keys: (QueryKey | undefined)[]) =>
   ).then(() => undefined);
 
 /**
- * What each mutation makes stale (the invalidation map in plan 7.2). Stats name habits, cores and
- * goals and count their targets, so every structure change refreshes them too.
+ * What each mutation makes stale (the invalidation map in plan 7.2). Stats name habits and cores and
+ * count their targets, so every structure change refreshes them too.
  */
 export const invalidate = {
   /**
@@ -58,36 +53,20 @@ export const invalidate = {
    */
   logWrite: (client: QueryClient, { habitId }: { date: string; habitId: string }) =>
     invalidateAll(client, [queryKeys.today.all, queryKeys.habit(habitId), queryKeys.stats.all]),
-  habitChange: (client: QueryClient, { habitId, goalId }: { habitId?: string; goalId?: string }) =>
+  habitChange: (client: QueryClient, { habitId }: { habitId?: string } = {}) =>
     invalidateAll(client, [
       queryKeys.habits.all,
       queryKeys.today.all,
       queryKeys.cores.all,
       queryKeys.stats.all,
       habitId ? queryKeys.habit(habitId) : undefined,
-      goalId ? queryKeys.goal(goalId) : undefined,
-    ]),
-  milestoneToggle: (client: QueryClient, { goalId }: { goalId: string }) =>
-    invalidateAll(client, [
-      queryKeys.goal(goalId),
-      queryKeys.goals.all,
-      queryKeys.cores.all,
-      queryKeys.stats.all,
-    ]),
-  goalChange: (client: QueryClient, { goalId }: { goalId?: string } = {}) =>
-    invalidateAll(client, [
-      queryKeys.goals.all,
-      queryKeys.cores.all,
-      queryKeys.stats.all,
-      goalId ? queryKeys.goal(goalId) : undefined,
     ]),
   coreChange: (client: QueryClient) =>
     invalidateAll(client, [queryKeys.cores.all, queryKeys.today.all, queryKeys.stats.all]),
-  /** Archiving or unarchiving a core: it cascades to its goals and habits. */
+  /** Archiving or unarchiving a core: it cascades to its habits. */
   coreArchive: (client: QueryClient) =>
     invalidateAll(client, [
       queryKeys.cores.all,
-      queryKeys.goals.all,
       queryKeys.habits.all,
       queryKeys.today.all,
       queryKeys.stats.all,

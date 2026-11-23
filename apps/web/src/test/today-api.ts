@@ -21,7 +21,6 @@ export function todayHabit(fields: Partial<TodayHabit> & Pick<TodayHabit, 'name'
     scheduleType: 'DAILY',
     timeOfDay: 'ANYTIME',
     core: { id: 'core-1', name: 'Health', color: 'emerald', icon: 'heart-pulse' },
-    goal: null,
     target: 1,
     log: null,
     progress: 0,

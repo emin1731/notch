@@ -11,7 +11,6 @@ export function SelectField<T extends FieldValues>({
   description,
   options,
   disabled,
-  onValueChange,
 }: {
   control: Control<T>;
   name: Path<T>;
@@ -19,8 +18,6 @@ export function SelectField<T extends FieldValues>({
   description?: ReactNode;
   options: readonly { value: string; label: string }[];
   disabled?: boolean;
-  /** Runs after the field changes, e.g. to clear a dependent field. */
-  onValueChange?: (value: string) => void;
 }) {
   const id = useId();
   return (
@@ -37,10 +34,7 @@ export function SelectField<T extends FieldValues>({
             value={field.value as string}
             disabled={disabled}
             onBlur={field.onBlur}
-            onChange={(event) => {
-              field.onChange(event.target.value);
-              onValueChange?.(event.target.value);
-            }}
+            onChange={(event) => field.onChange(event.target.value)}
             aria-invalid={fieldState.invalid || undefined}
             aria-describedby={
               fieldState.error ? `${id}-error` : description ? `${id}-description` : undefined

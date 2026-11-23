@@ -20,7 +20,7 @@ import { FailureAlert, StepFooter, StepHeader, type StepProps } from './StepPart
 
 const copy = ONBOARDING_COPY.habits;
 
-/** Step 3: suggestions for each picked preset, plus habits of your own. */
+/** Step 2: suggestions for each picked preset, plus habits of your own. */
 export function StepHabits(props: StepProps) {
   const { cores, habits, created, addHabit, removeHabit, setStep } = useOnboarding();
   const [adding, setAdding] = useState<string | null>(null);
@@ -143,8 +143,8 @@ export function StepHabits(props: StepProps) {
         </Alert>
       )}
 
-      <StepFooter onBack={() => setStep(1)}>
-        <Button onClick={() => setStep(3)}>{habits.length === 0 ? 'Skip for now' : 'Next'}</Button>
+      <StepFooter onBack={() => setStep(0)}>
+        <Button onClick={() => setStep(2)}>{habits.length === 0 ? 'Skip for now' : 'Next'}</Button>
       </StepFooter>
 
       <Dialog open={adding !== null} onOpenChange={(open) => !open && setAdding(null)}>

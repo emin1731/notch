@@ -80,7 +80,7 @@ export const CORE_ICONS: readonly CoreIconOption[] = [
   { name: 'laptop', label: 'Laptop', icon: Laptop, keywords: 'work computer' },
   { name: 'code', label: 'Code', icon: Code, keywords: 'programming software work' },
   { name: 'chart-line', label: 'Chart', icon: ChartLine, keywords: 'growth business progress' },
-  { name: 'target', label: 'Target', icon: Target, keywords: 'goal focus aim' },
+  { name: 'target', label: 'Target', icon: Target, keywords: 'focus aim ambition' },
   { name: 'trophy', label: 'Trophy', icon: Trophy, keywords: 'win achievement competition' },
   { name: 'wallet', label: 'Wallet', icon: Wallet, keywords: 'money finance budget' },
   { name: 'piggy-bank', label: 'Piggy bank', icon: PiggyBank, keywords: 'money savings finance' },

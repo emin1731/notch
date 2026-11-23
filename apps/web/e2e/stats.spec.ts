@@ -39,7 +39,6 @@ test('the stats page shows the API’s numbers at every range', async ({ page })
       `${percent(data.overallRate)}of what you planned`,
     );
     await expect(numbers).toContainText(`Best streak${data.topStreaks[0]?.currentStreak ?? '—'}`);
-    await expect(numbers).toContainText(`Goals completed${data.goals.completedInRange}`);
     await expect(
       numbers.getByLabel(`${data.changes.levelUps} up, ${data.changes.deloads} eased off`),
     ).toBeVisible();

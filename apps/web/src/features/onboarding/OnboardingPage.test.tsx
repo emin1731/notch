@@ -8,6 +8,7 @@ import { API, apiError, signedIn, testUser } from '@/test/auth';
 import { renderApp } from '@/test/render';
 import { server } from '@/test/server';
 import { fakeCore, mockStructureApi, nextId } from '@/test/structure-api';
+import { ONBOARDING_STORAGE_KEY, useOnboarding } from './onboarding-store';
 
 const newUser: UserDto = { ...testUser, onboardedAt: null };
 
@@ -38,10 +39,6 @@ function mockOnboardingApi() {
         cores.map((core) => ({ ...core, id: nextId() })),
         { status: 201 },
       );
-    }),
-    http.post(`${API}/goals`, async ({ request }) => {
-      const failed = await record('/goals', request);
-      return failed ?? HttpResponse.json({ id: nextId() }, { status: 201 });
     }),
     http.post(`${API}/habits`, async ({ request }) => {
       const failed = await record('/habits', request);
@@ -110,15 +107,7 @@ describe('onboarding', () => {
     ).toEqual(['Health', 'Music']);
     await user.click(screen.getByRole('button', { name: 'Next' }));
 
-    // Step 2: a goal with milestones.
-    await heading('Something to aim for');
-    await user.type(screen.getByLabelText('Goal'), 'Run a half marathon');
-    for (const milestone of ['Run 5 km', 'Race day']) {
-      await user.type(screen.getByLabelText('Milestones (optional)'), `${milestone}{Enter}`);
-    }
-    await user.click(screen.getByRole('button', { name: 'Next' }));
-
-    // Step 3: a suggestion, and a habit of your own.
+    // Step 2: a suggestion, and a habit of your own.
     await heading('Your first habits');
     const health = screen.getByRole('region', { name: 'Health' });
     await user.click(within(health).getByRole('button', { name: /^Walk/ }));
@@ -140,7 +129,7 @@ describe('onboarding', () => {
     expect(screen.getByText('2 habits picked.')).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Next' }));
 
-    // Step 4, then Start.
+    // Step 3, then Start.
     await heading('How levels work');
     await user.click(screen.getByRole('button', { name: 'Start' }));
 
@@ -148,7 +137,6 @@ describe('onboarding', () => {
     expect(router.state.location.pathname).toBe('/today');
     expect(api.calls.map((call) => call.path)).toEqual([
       '/cores/batch',
-      '/goals',
       '/habits',
       '/habits',
       '/me/onboarding/complete',
@@ -158,10 +146,6 @@ describe('onboarding', () => {
       // A core of your own starts in a color the others don't have.
       { name: 'Music', color: 'sky', icon: 'target' },
     ]);
-    expect(api.bodies('/goals')[0]).toMatchObject({
-      title: 'Run a half marathon',
-      milestones: ['Run 5 km', 'Race day'],
-    });
     expect(api.bodies('/habits')).toEqual([
       expect.objectContaining({ name: 'Walk', type: 'DURATION', targetValue: 1200 }),
       expect.objectContaining({ name: 'Scales', type: 'COUNT', targetValue: 3, unit: 'rounds' }),
@@ -182,14 +166,13 @@ describe('onboarding', () => {
     expect(screen.getByRole('button', { name: 'Next' })).toBeDisabled();
   });
 
-  it('skips the goal and the habits', async () => {
+  it('skips the habits', async () => {
     const api = mockOnboardingApi();
     const user = userEvent.setup();
     renderApp('/onboarding');
 
     await pickCores(user, 'Mind');
     await user.click(screen.getByRole('button', { name: 'Next' }));
-    await user.click(await screen.findByRole('button', { name: 'Skip for now' }));
     await heading('Your first habits');
     await user.click(screen.getByRole('button', { name: 'Skip for now' }));
     await user.click(await screen.findByRole('button', { name: 'Start' }));
@@ -204,7 +187,6 @@ describe('onboarding', () => {
 
     await pickCores(user, 'Health', 'Mind', 'Learning');
     await user.click(screen.getByRole('button', { name: 'Next' }));
-    await user.click(await screen.findByRole('button', { name: 'Skip for now' }));
     await heading('Your first habits');
     const suggestions = screen
       .getAllByRole('group')
@@ -227,7 +209,6 @@ describe('onboarding', () => {
 
     await pickCores(user, 'Mind');
     await user.click(screen.getByRole('button', { name: 'Next' }));
-    await user.click(await screen.findByRole('button', { name: 'Skip for now' }));
     await heading('Your first habits');
     await user.click(screen.getByRole('button', { name: /^Meditate/ }));
     await user.click(screen.getByRole('button', { name: /^Journal/ }));
@@ -261,15 +242,44 @@ describe('onboarding', () => {
     const first = renderApp('/onboarding');
     await pickCores(user, 'Finance');
     await user.click(screen.getByRole('button', { name: 'Next' }));
-    await heading('Something to aim for');
+    await heading('Your first habits');
     first.unmount();
 
     renderApp('/onboarding');
-    await heading('Something to aim for');
+    await heading('Your first habits');
     await user.click(screen.getByRole('button', { name: 'Back' }));
     expect(
       within(await screen.findByRole('list', { name: 'Your cores' })).getByText('Finance'),
     ).toBeInTheDocument();
+  });
+
+  it('picks up a draft saved when there was a goal step, without the goal', async () => {
+    sessionStorage.setItem(
+      ONBOARDING_STORAGE_KEY,
+      JSON.stringify({
+        version: 0,
+        state: {
+          userId: newUser.id,
+          step: 3,
+          cores: [
+            { key: 'preset:Mind', preset: 'Mind', name: 'Mind', color: 'violet', icon: 'brain' },
+          ],
+          goal: { coreKey: 'preset:Mind', title: 'Read 12 books', deadline: null, milestones: [] },
+          habits: [],
+          created: { cores: {}, goalId: null, habits: {} },
+        },
+      }),
+    );
+    await useOnboarding.persist.rehydrate();
+    const api = mockOnboardingApi();
+    const user = userEvent.setup();
+    renderApp('/onboarding');
+
+    await heading('How levels work');
+    expect(screen.getByText('Step 3 of 3')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Start' }));
+    await heading('Today');
+    expect(api.calls.map((call) => call.path)).toEqual(['/cores/batch', '/me/onboarding/complete']);
   });
 
   it('lets someone with cores already skip the setup', async () => {
@@ -299,7 +309,6 @@ describe('onboarding errors', () => {
 
     await pickCores(user, 'Mind');
     await user.click(screen.getByRole('button', { name: 'Next' }));
-    await user.click(await screen.findByRole('button', { name: 'Skip for now' }));
     await user.click(await screen.findByRole('button', { name: 'Skip for now' }));
     await user.click(await screen.findByRole('button', { name: 'Start' }));
 

@@ -2,6 +2,8 @@
 
 The web app (`apps/web`) split into sprints, after the backend ([backend-sprints.md](backend-sprints.md)). Each sprint ends with screens you can click through against the real API. Behaviour is specified in [section 7 of the plan](habit-tracker-implementation-plan.md#7-frontend-vite--react); this document is the order of work.
 
+> **Update, 2026-11-22:** goals and milestones were removed from the product after these sprints. Every habit still belongs to one core, and that's the whole structure now. The parts below about goals, milestones and the celebration are kept as a record of what was built; the [plan](habit-tracker-implementation-plan.md) describes the product as it is.
+
 **Ground rules for every sprint**
 
 - The web app builds on `@notch/shared`: the same zod schemas validate forms, and its response types are the API contract. Business rules (progress, streaks, step math, level preview) are never reimplemented in components; they're imported from the shared package.

@@ -105,10 +105,7 @@ describe('today (e2e)', () => {
       pendingReview: { id: expect.any(String), weekStart: '2026-11-09' },
       welcomeBack: false,
     });
-    expect(today.weeklyQuota[0]).toMatchObject({
-      core: { name: 'Health', color: 'emerald' },
-      goal: { title: 'Run a half marathon' },
-    });
+    expect(today.weeklyQuota[0]).toMatchObject({ core: { name: 'Health', color: 'emerald' } });
   });
 
   it('yesterday, as it was then', async () => {

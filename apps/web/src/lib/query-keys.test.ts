@@ -13,7 +13,7 @@ function withCachedStats() {
 }
 
 describe('invalidation', () => {
-  // Stats name habits, cores and goals and count their targets: any change to them shows there.
+  // Stats name habits and cores and count their targets: any change to them shows there.
   it.each([
     [
       'logWrite',
@@ -24,13 +24,8 @@ describe('invalidation', () => {
       'habitChange',
       (client: QueryClient) => invalidate.habitChange(client, { habitId: 'habit-1' }),
     ],
-    ['goalChange', (client: QueryClient) => invalidate.goalChange(client)],
     ['coreChange', (client: QueryClient) => invalidate.coreChange(client)],
     ['coreArchive', (client: QueryClient) => invalidate.coreArchive(client)],
-    [
-      'milestoneToggle',
-      (client: QueryClient) => invalidate.milestoneToggle(client, { goalId: 'goal-1' }),
-    ],
     ['undo', (client: QueryClient) => invalidate.undo(client, { habitId: 'habit-1' })],
   ])('%s makes every cached stat stale', async (_name, run) => {
     const { client, stale } = withCachedStats();

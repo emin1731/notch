@@ -36,15 +36,10 @@ const FORM_MESSAGES: Partial<Record<ApiErrorCode, string>> = {
   NETWORK_ERROR: "Couldn't reach the server. Check your connection and try again.",
   CORE_ARCHIVED: 'This core is archived. Unarchive it first.',
   CORE_NOT_EMPTY:
-    'This core still has goals or habits, archived ones included. Archive it instead, or delete those first.',
-  LIMIT_REACHED: 'A goal can have up to 50 milestones.',
-  GOAL_HAS_MILESTONES: 'This goal has milestones: it completes when they are all ticked.',
+    'This core still has habits, archived ones included. Archive it instead, or delete those first.',
   CORE_NOT_FOUND: 'That core no longer exists.',
-  GOAL_NOT_FOUND: 'That goal no longer exists.',
-  MILESTONE_NOT_FOUND: 'That milestone no longer exists.',
   HABIT_NOT_FOUND: 'That habit no longer exists.',
   HABIT_ARCHIVED: 'This habit is archived. Unarchive it first.',
-  GOAL_CORE_MISMATCH: 'That goal belongs to another core.',
 };
 
 export const FALLBACK_FORM_MESSAGE = 'Something went wrong. Try again in a moment.';

@@ -1,24 +1,22 @@
-import { todayIn } from '@notch/shared';
+import { addDays, todayIn } from '@notch/shared';
 import type { NestExpressApplication } from '@nestjs/platform-express';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { PrismaService } from '../src/prisma/prisma.service.js';
 import { API_PREFIX } from '../src/setup-app.js';
 import { createTestApp } from './create-test-app.js';
 import { PASSWORD, registerUser, resetDb } from './helpers/auth.js';
-import { createCore, createGoal, createHabit } from './helpers/structure.js';
+import { createCore, createHabit } from './helpers/structure.js';
 import type { TestClient } from './helpers/test-client.js';
 
 interface AliceIds {
   core: string;
-  goal: string;
-  milestone: string;
   habit: string;
   today: string;
   review: string;
   reviewWeek: string;
   change: string;
   bobCore: string;
-  bobGoal: string;
+  bobHabit: string;
 }
 
 type Method = 'get' | 'post' | 'put' | 'patch' | 'delete';
@@ -34,35 +32,6 @@ const ROUTES: [Method, (ids: AliceIds) => string, (ids: AliceIds) => object | un
     ['post', (ids) => `/cores/${ids.core}/archive`, () => undefined, 'CORE_NOT_FOUND'],
     ['post', (ids) => `/cores/${ids.core}/unarchive`, () => undefined, 'CORE_NOT_FOUND'],
     ['delete', (ids) => `/cores/${ids.core}`, () => undefined, 'CORE_NOT_FOUND'],
-    ['post', () => '/goals', (ids) => ({ coreId: ids.core, title: 'X' }), 'CORE_NOT_FOUND'],
-    ['patch', (ids) => `/goals/${ids.bobGoal}`, (ids) => ({ coreId: ids.core }), 'CORE_NOT_FOUND'],
-    ['get', (ids) => `/goals/${ids.goal}`, () => undefined, 'GOAL_NOT_FOUND'],
-    ['patch', (ids) => `/goals/${ids.goal}`, () => ({ title: 'Mine now' }), 'GOAL_NOT_FOUND'],
-    ['post', (ids) => `/goals/${ids.goal}/complete`, () => undefined, 'GOAL_NOT_FOUND'],
-    ['post', (ids) => `/goals/${ids.goal}/reopen`, () => undefined, 'GOAL_NOT_FOUND'],
-    ['post', (ids) => `/goals/${ids.goal}/archive`, () => undefined, 'GOAL_NOT_FOUND'],
-    ['post', (ids) => `/goals/${ids.goal}/unarchive`, () => undefined, 'GOAL_NOT_FOUND'],
-    ['delete', (ids) => `/goals/${ids.goal}`, () => undefined, 'GOAL_NOT_FOUND'],
-    ['post', (ids) => `/goals/${ids.goal}/milestones`, () => ({ title: 'X' }), 'GOAL_NOT_FOUND'],
-    [
-      'put',
-      (ids) => `/goals/${ids.goal}/milestones/order`,
-      (ids) => ({ ids: [ids.milestone] }),
-      'GOAL_NOT_FOUND',
-    ],
-    [
-      'patch',
-      (ids) => `/milestones/${ids.milestone}`,
-      () => ({ title: 'X' }),
-      'MILESTONE_NOT_FOUND',
-    ],
-    [
-      'post',
-      (ids) => `/milestones/${ids.milestone}/toggle`,
-      () => undefined,
-      'MILESTONE_NOT_FOUND',
-    ],
-    ['delete', (ids) => `/milestones/${ids.milestone}`, () => undefined, 'MILESTONE_NOT_FOUND'],
     [
       'post',
       () => '/habits',
@@ -70,16 +39,10 @@ const ROUTES: [Method, (ids: AliceIds) => string, (ids: AliceIds) => object | un
       'CORE_NOT_FOUND',
     ],
     [
-      'post',
-      () => '/habits',
-      (ids) => ({
-        coreId: ids.bobCore,
-        goalId: ids.goal,
-        name: 'X',
-        type: 'TOGGLE',
-        scheduleType: 'DAILY',
-      }),
-      'GOAL_NOT_FOUND',
+      'patch',
+      (ids) => `/habits/${ids.bobHabit}`,
+      (ids) => ({ coreId: ids.core }),
+      'CORE_NOT_FOUND',
     ],
     ['get', (ids) => `/habits/${ids.habit}`, () => undefined, 'HABIT_NOT_FOUND'],
     ['get', (ids) => `/habits/${ids.habit}/target-history`, () => undefined, 'HABIT_NOT_FOUND'],
@@ -177,24 +140,22 @@ describe('ownership (e2e)', () => {
     ({ client: bob } = await registerUser(app, 'bob'));
 
     const core = await createCore(alice);
-    const goal = await createGoal(alice, core.id, { milestones: ['one'] });
     const bobCore = await createCore(bob);
-    const bobGoal = await createGoal(bob, bobCore.id);
-    const habit = await createHabit(alice, core.id, { goalId: goal.id });
+    const today = todayIn('Asia/Baku', new Date());
+    // Starts later, so Bob's today and stats stay empty.
+    const bobHabit = await createHabit(bob, bobCore.id, { startDate: addDays(today, 30) });
+    const habit = await createHabit(alice, core.id);
     ids = {
       core: core.id,
-      goal: goal.id,
-      milestone: goal.milestones[0]!.id,
       habit: habit.id,
-      today: todayIn('Asia/Baku', new Date()),
+      today,
       ...(await aliceReview(app, habit.id)),
       bobCore: bobCore.id,
-      bobGoal: bobGoal.id,
+      bobHabit: bobHabit.id,
     };
 
     snapshot = async () => ({
       cores: (await alice.get('/cores?includeArchived=true')).body,
-      goal: (await alice.get(`/goals/${ids.goal}`)).body,
       habit: (await alice.get(`/habits/${ids.habit}`)).body,
       logs: (await alice.get(`/habits/${ids.habit}/logs`)).body,
       review: (await alice.get(`/reviews/${ids.reviewWeek}`)).body,
@@ -226,7 +187,6 @@ describe('ownership (e2e)', () => {
   });
 
   it("lists never include another user's records", async () => {
-    expect((await bob.get(`/goals?coreId=${ids.core}`)).body).toEqual([]);
     expect((await bob.get(`/habits?coreId=${ids.core}&includeArchived=true`)).body).toEqual([]);
     expect((await bob.get('/today')).body).toMatchObject({ groups: [], weeklyQuota: [] });
     const bobCores = (await bob.get('/cores?includeArchived=true')).body;
@@ -235,7 +195,7 @@ describe('ownership (e2e)', () => {
     expect((await bob.get('/reviews/latest')).body).toEqual({ review: null });
     const stats = (await bob.get('/stats/overview?range=365d')).body;
     expect(stats).toMatchObject({ overallRate: null, cores: [], topStreaks: [] });
-    expect(JSON.stringify(stats)).not.toContain(ids.goal);
+    expect(JSON.stringify(stats)).not.toContain(ids.habit);
   });
 
   it('deleting an account removes everything it owns, and nothing else', async () => {
@@ -246,12 +206,10 @@ describe('ownership (e2e)', () => {
     const res = await alice.delete('/me', { password: PASSWORD });
     expect(res.status).toBe(204);
     expect(await prisma.core.count({ where: { id: ids.core } })).toBe(0);
-    expect(await prisma.goal.count({ where: { id: ids.goal } })).toBe(0);
-    expect(await prisma.milestone.count()).toBe(0);
     expect(await prisma.habit.count({ where: { id: ids.habit } })).toBe(0);
     expect(await prisma.habitLog.count()).toBe(0);
     expect(await prisma.weeklyReview.count()).toBe(0);
     expect(await prisma.targetChange.count()).toBe(0);
-    expect(await prisma.goal.count({ where: { id: ids.bobGoal } })).toBe(1);
+    expect(await prisma.habit.count({ where: { id: ids.bobHabit } })).toBe(1);
   });
 });

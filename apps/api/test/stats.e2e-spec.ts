@@ -81,7 +81,7 @@ describe('stats (e2e)', () => {
     expect(stats.overallRate).toBeCloseTo(mean(Object.values(RATES_7D)));
   });
 
-  it('7d: per core, daily series, streaks, goals and changes', async () => {
+  it('7d: per core, daily series, streaks and changes', async () => {
     const stats = await overview('7d');
     expect(stats.cores.map((core) => [core.name, core.rate])).toEqual([
       ['Health', (6 / 7 + 1 + 1) / 3],
@@ -104,10 +104,6 @@ describe('stats (e2e)', () => {
       ['Journal', 16],
       ['Gym', 8],
       ['Cold shower', 5],
-    ]);
-    expect(stats.goals).toMatchObject({ active: 1, completedInRange: 0 });
-    expect(stats.goals.items.map((goal) => [goal.title, goal.progress])).toEqual([
-      ['Run a half marathon', 0.5],
     ]);
     expect(stats.changes).toEqual({ levelUps: 0, deloads: 1 }); // Deep work, Monday
   });

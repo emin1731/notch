@@ -28,7 +28,7 @@ export function CoreDialog({
         <DialogHeader>
           <DialogTitle>{core ? 'Edit core' : 'New core'}</DialogTitle>
           <DialogDescription>
-            A core is an area of your life, like health or career. Goals and habits live in it.
+            A core is an area of your life, like health or career. Your habits live in it.
           </DialogDescription>
         </DialogHeader>
         {/* Remounted on each open, so the form starts from the core (or blank) every time. */}

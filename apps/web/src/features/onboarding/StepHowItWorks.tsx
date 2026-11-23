@@ -7,7 +7,7 @@ import { FailureAlert, StepFooter, StepHeader, type StepProps } from './StepPart
 const copy = ONBOARDING_COPY.howItWorks;
 const ICONS = [CalendarCheck, ArrowUp, ArrowDown, Undo2];
 
-/** Step 4: levels in plain words, then everything is created. */
+/** Step 3: levels in plain words, then everything is created. */
 export function StepHowItWorks({
   submitting,
   onStart,
@@ -29,7 +29,7 @@ export function StepHowItWorks({
           );
         })}
       </ul>
-      <StepFooter onBack={submitting ? undefined : () => setStep(2)}>
+      <StepFooter onBack={submitting ? undefined : () => setStep(1)}>
         <Button disabled={submitting} onClick={onStart}>
           {submitting ? 'Setting up…' : 'Start'}
         </Button>

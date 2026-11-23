@@ -28,7 +28,6 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useCores } from '@/features/cores/hooks';
-import { useGoals } from '@/features/goals/hooks';
 import { Heatmap } from '@/features/stats/Heatmap';
 import { type DayContext, dayStatus } from '@/features/stats/heatmap-model';
 import { useHabitStats, useRangeParam, useSetLog, useTargetHistory } from '@/features/stats/hooks';
@@ -95,10 +94,8 @@ function HabitDetail({ habit }: { habit: HabitDetailDto }) {
   const stats = useHabitStats(habit.id, range);
   const history = useTargetHistory(habit.id);
   const cores = useCores(true);
-  const goals = useGoals(true);
   const today = useToday();
   const core = cores.data?.find((candidate) => candidate.id === habit.coreId);
-  const goal = goals.data?.find((candidate) => candidate.id === habit.goalId);
   const archived = habit.archivedAt !== null;
   const archive = useArchiveHabit();
   const weekly = habit.scheduleType === 'TIMES_PER_WEEK';
@@ -109,7 +106,7 @@ function HabitDetail({ habit }: { habit: HabitDetailDto }) {
 
   return (
     <>
-      <BackLink to="/cores">Cores & Goals</BackLink>
+      <BackLink to="/cores">Cores</BackLink>
       <header className="mb-8 flex flex-col gap-4">
         <div className="flex items-center justify-between gap-2">
           {core ? <CoreChip name={core.name} icon={core.icon} color={core.color} /> : <span />}
@@ -148,14 +145,6 @@ function HabitDetail({ habit }: { habit: HabitDetailDto }) {
           <h1 className="text-3xl font-bold tracking-tight">{habit.name}</h1>
           {archived && <Badge variant="secondary">Archived</Badge>}
         </div>
-        {goal && (
-          <Link
-            to={`/goals/${goal.id}`}
-            className="-mt-2 self-start rounded text-sm text-muted-foreground hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none"
-          >
-            Goal: {goal.title}
-          </Link>
-        )}
         <dl className="grid grid-cols-2 gap-x-4 gap-y-5 rounded-3xl bg-card p-5 sm:grid-cols-4 sm:p-6">
           <Fact label="Target">{formatTarget(habit) ?? 'Done or not'}</Fact>
           <Fact label="Schedule">{scheduleText(habit)}</Fact>

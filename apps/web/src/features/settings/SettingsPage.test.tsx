@@ -7,7 +7,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { API, apiError, signedIn, testUser } from '@/test/auth';
 import { renderApp } from '@/test/render';
 import { server } from '@/test/server';
-import { fakeCore, fakeGoal, fakeHabit, mockStructureApi } from '@/test/structure-api';
+import { fakeCore, fakeHabit, mockStructureApi } from '@/test/structure-api';
 
 const PASSWORD = 'correct horse battery';
 
@@ -133,7 +133,7 @@ describe('settings', () => {
   it('says when nothing is archived', async () => {
     renderApp('/settings');
     expect(
-      await screen.findByText('Nothing archived. Archived cores, goals and habits show up here.'),
+      await screen.findByText('Nothing archived. Archived cores and habits show up here.'),
     ).toBeInTheDocument();
   });
 
@@ -185,13 +185,13 @@ describe('settings', () => {
 });
 
 describe('settings: archived', () => {
-  it('unarchives each kind, a goal or habit only once its core is back', async () => {
+  it('unarchives each kind, a habit only once its core is back', async () => {
     signedIn();
     const health = fakeCore({ name: 'Health', archivedAt: '2026-11-10T09:00:00.000Z' });
     const mind = fakeCore({ name: 'Mind' });
-    const marathon = fakeGoal({
+    const run = fakeHabit({
       coreId: health.id,
-      title: 'Run a half marathon',
+      name: 'Morning run',
       archivedAt: '2026-11-10T09:00:00.000Z',
     });
     const journal = fakeHabit({
@@ -199,15 +199,14 @@ describe('settings: archived', () => {
       name: 'Journal',
       archivedAt: '2026-11-12T09:00:00.000Z',
     });
-    const api = mockStructureApi({ cores: [health, mind], goals: [marathon], habits: [journal] });
+    const api = mockStructureApi({ cores: [health, mind], habits: [run, journal] });
     const user = userEvent.setup();
     renderApp('/settings');
 
     const archived = await section('Archived');
-    const goalButton = await within(archived).findByRole('button', {
-      name: 'Unarchive Run a half marathon',
-    });
-    expect(goalButton).toBeDisabled();
+    expect(
+      await within(archived).findByRole('button', { name: 'Unarchive Morning run' }),
+    ).toBeDisabled();
     expect(archived).toHaveTextContent('In Health, which is archived: unarchive it first.');
 
     await user.click(within(archived).getByRole('button', { name: 'Unarchive Journal' }));
@@ -217,9 +216,7 @@ describe('settings: archived', () => {
 
     await user.click(within(archived).getByRole('button', { name: 'Unarchive Health' }));
     await waitFor(() =>
-      expect(
-        within(archived).getByRole('button', { name: 'Unarchive Run a half marathon' }),
-      ).toBeEnabled(),
+      expect(within(archived).getByRole('button', { name: 'Unarchive Morning run' })).toBeEnabled(),
     );
     expect(api.sent('POST', `/habits/${journal.id}/unarchive`)).toHaveLength(1);
     expect(api.sent('POST', `/cores/${health.id}/unarchive`)).toHaveLength(1);

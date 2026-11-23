@@ -1,8 +1,8 @@
 import { expect, test } from '@playwright/test';
 import { registerViaApi } from './support/users';
 
-test('build cores and a goal, tick every milestone, and celebrate', async ({ page }) => {
-  // Every console error fails the spec: that includes CSP violations (the confetti canvas).
+test('build cores, give one a habit, archive it and bring it back', async ({ page }) => {
+  // Every console error fails the spec, CSP violations included.
   const errors: string[] = [];
   page.on('console', (message) => {
     if (message.type() === 'error' && !/status of 401/.test(message.text())) {
@@ -25,34 +25,29 @@ test('build cores and a goal, tick every milestone, and celebrate', async ({ pag
   await coreDialog.getByRole('button', { name: 'Create core' }).click();
   await expect(page.getByRole('article', { name: 'Reading' })).toBeVisible();
 
-  await health.getByRole('button', { name: 'Add goal' }).click();
-  const goalDialog = page.getByRole('dialog', { name: 'New goal' });
-  await goalDialog.getByLabel('Title').fill('Run a half marathon');
-  const milestones = ['Run 5 km', 'Run 10 km', 'Run 21 km'];
-  for (const milestone of milestones) {
-    await goalDialog.getByLabel('Milestones (optional)').fill(milestone);
-    await goalDialog.getByLabel('Milestones (optional)').press('Enter');
-  }
-  await goalDialog.getByRole('button', { name: 'Create goal' }).click();
-  await expect(goalDialog).toBeHidden();
+  await health.getByRole('link', { name: 'Add habit' }).click();
+  await page.getByLabel('Name', { exact: true }).fill('Stretch');
+  await page.getByRole('button', { name: 'Add habit' }).click();
+  await expect(page).toHaveURL('/cores');
+  await expect(health.getByRole('link', { name: /^Stretch/ })).toBeVisible();
 
-  await health.getByRole('link', { name: /Run a half marathon/ }).click();
-  await expect(page.getByRole('heading', { level: 1, name: 'Run a half marathon' })).toBeVisible();
-  for (const milestone of milestones.slice(0, -1)) {
-    const box = page.getByRole('checkbox', { name: milestone });
-    await box.click();
-    await expect(box).toBeChecked();
-  }
-  // The last tick opens the celebration, which hides the page behind it (no checkbox to assert).
-  await page.getByRole('checkbox', { name: milestones.at(-1) }).click();
+  // Archiving the core takes its habit with it.
+  await health.getByRole('button', { name: 'Health actions' }).click();
+  await page.getByRole('menuitem', { name: 'Archive' }).click();
+  await page
+    .getByRole('alertdialog', { name: 'Archive Health?' })
+    .getByRole('button', { name: 'Archive' })
+    .click();
+  await expect(health).toBeHidden();
 
-  const celebration = page.getByRole('dialog', { name: 'Goal done: Run a half marathon' });
-  await expect(celebration).toBeVisible();
-  await celebration.getByRole('button', { name: 'Close' }).click();
-  await expect(celebration).toBeHidden();
-  await expect(page.getByText('Completed', { exact: true })).toBeVisible();
-
-  await page.goto('/cores');
-  await expect(health.getByText('Completed (1)')).toBeVisible();
+  // The core comes back first, then its habit.
+  await page.getByRole('switch', { name: 'Show archived' }).click();
+  await health.getByRole('button', { name: 'Health actions' }).click();
+  await page.getByRole('menuitem', { name: 'Unarchive' }).click();
+  await expect(page.getByText('Health is back. Unarchive its habits one by one.')).toBeVisible();
+  await health.getByRole('button', { name: 'Stretch actions' }).click();
+  await page.getByRole('menuitem', { name: 'Unarchive' }).click();
+  await expect(page.getByText('Stretch is back.')).toBeVisible();
+  await expect(health.getByText('Archived', { exact: true })).toHaveCount(0);
   expect(errors).toEqual([]);
 });

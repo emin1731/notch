@@ -1,20 +1,17 @@
-import { screen, waitFor, within } from '@testing-library/react';
+import { screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { apiError, signedIn } from '@/test/auth';
 import { renderApp } from '@/test/render';
-import { fakeCore, fakeGoal, fakeHabit, mockStructureApi } from '@/test/structure-api';
+import { fakeCore, fakeHabit, mockStructureApi } from '@/test/structure-api';
 
 type User = ReturnType<typeof userEvent.setup>;
 
 function setup() {
   const health = fakeCore({ name: 'Health' });
   const career = fakeCore({ name: 'Career', color: 'indigo', icon: 'briefcase' });
-  const marathon = fakeGoal({ coreId: health.id, title: 'Run a half marathon' });
-  const promotion = fakeGoal({ coreId: career.id, title: 'Get promoted' });
   const run = fakeHabit({
     coreId: health.id,
-    goalId: marathon.id,
     name: 'Morning run',
     type: 'DURATION',
     targetValue: 1800,
@@ -25,12 +22,8 @@ function setup() {
     stepValue: 300,
     minTarget: 900,
   });
-  const api = mockStructureApi({
-    cores: [health, career],
-    goals: [marathon, promotion],
-    habits: [run],
-  });
-  return { api, health, career, marathon, promotion, run };
+  const api = mockStructureApi({ cores: [health, career], habits: [run] });
+  return { api, health, career, run };
 }
 
 /** The page title shows on the loading skeleton too: wait for the form itself. */
@@ -58,7 +51,6 @@ describe('habit form: creating', () => {
     await waitFor(() => expect(router.state.location.pathname).toBe('/cores'));
     expect(api.sent('POST', '/habits')[0]?.body).toMatchObject({
       coreId: career.id,
-      goalId: null,
       name: 'Vitamins',
       type: 'TOGGLE',
       targetValue: 1,
@@ -70,13 +62,12 @@ describe('habit form: creating', () => {
     });
   });
 
-  it('creates a count habit on some days, linked to a goal, and goes to the goal', async () => {
-    const { api, health, marathon } = setup();
+  it('creates a count habit on some days', async () => {
+    const { api, health } = setup();
     const user = userEvent.setup();
-    const { router } = renderApp(`/habits/new?coreId=${health.id}&goalId=${marathon.id}`);
+    const { router } = renderApp(`/habits/new?coreId=${health.id}`);
 
     await heading('New habit');
-    expect(screen.getByLabelText('Goal (optional)')).toHaveValue(marathon.id);
     await user.type(screen.getByLabelText('Name'), 'Stretch');
     await user.click(radio('Count'));
     const target = screen.getByLabelText('Target');
@@ -89,9 +80,9 @@ describe('habit form: creating', () => {
     }
     await submit(user);
 
-    await waitFor(() => expect(router.state.location.pathname).toBe(`/goals/${marathon.id}`));
+    await waitFor(() => expect(router.state.location.pathname).toBe('/cores'));
     expect(api.sent('POST', '/habits')[0]?.body).toMatchObject({
-      goalId: marathon.id,
+      coreId: health.id,
       type: 'COUNT',
       targetValue: 12,
       unit: 'minutes',
@@ -227,34 +218,13 @@ describe('habit form: creating', () => {
     expect(await screen.findByText('Between 6 days ago and a year from now')).toBeInTheDocument();
     expect(screen.getByLabelText('Start date')).toHaveAttribute('aria-invalid', 'true');
   });
-
-  it('only offers the chosen core’s goals, and drops a goal from another core', async () => {
-    const { health, career, marathon } = setup();
-    const user = userEvent.setup();
-    renderApp(`/habits/new?coreId=${health.id}&goalId=${marathon.id}`);
-
-    await heading('New habit');
-    const goal = screen.getByLabelText('Goal (optional)');
-    expect(
-      within(goal)
-        .getAllByRole('option')
-        .map((o) => o.textContent),
-    ).toEqual(['No goal', 'Run a half marathon']);
-    await user.selectOptions(screen.getByLabelText('Core'), career.id);
-    expect(goal).toHaveValue('');
-    expect(
-      within(goal)
-        .getAllByRole('option')
-        .map((o) => o.textContent),
-    ).toEqual(['No goal', 'Get promoted']);
-  });
 });
 
 describe('habit form: editing', () => {
   beforeEach(() => signedIn());
 
   it('locks the type and schedule, and sends only what changed', async () => {
-    const { api, run, marathon } = setup();
+    const { api, run } = setup();
     const user = userEvent.setup();
     const { router } = renderApp(`/habits/${run.id}/edit`);
 
@@ -274,7 +244,7 @@ describe('habit form: editing', () => {
     expect(screen.getByText(/This counts as a manual change/)).toBeInTheDocument();
     await submit(user, 'Save changes');
 
-    await waitFor(() => expect(router.state.location.pathname).toBe(`/goals/${marathon.id}`));
+    await waitFor(() => expect(router.state.location.pathname).toBe('/cores'));
     expect(api.sent('PATCH', `/habits/${run.id}`)[0]?.body).toEqual({
       name: 'Run',
       daysOfWeek: [1, 2, 3, 5],

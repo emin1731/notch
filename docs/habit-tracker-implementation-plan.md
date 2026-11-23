@@ -550,7 +550,7 @@ Instants are `DateTime @db.Timestamptz(3)`. `@db.Date` columns hold a **user-loc
 - **`@CurrentUser()` decorator:** returns `{ id, username, timezone }`, loaded by `SessionGuard` together with the session in one query, so the timezone is always current.
 - **Ownership:** every service method takes `userId` and scopes every query with `where: { userId }` (or via the parent's `userId`). A record owned by another user returns **404**, never 403, so ids can't be probed. A malformed id is a 404 too.
 - **Validation:** `ZodValidationPipe` with schemas imported from `@notch/shared`.
-- **Errors:** a global exception filter returns `{ statusCode, code, message, details? }`. `code` is a stable string the client can switch on, for example `CORE_NOT_FOUND`, `HABIT_NOT_FOUND`, `CORE_ARCHIVED`, `LIMIT_REACHED`, `UNDO_NOT_ALLOWED`, `BACKFILL_OUT_OF_RANGE`, `CORE_NOT_EMPTY`, `USERNAME_TAKEN`, `INVALID_CREDENTIALS`, `INVALID_INVITE_CODE`, `REGISTRATION_CLOSED`, `UNAUTHENTICATED`, `CSRF_INVALID`.
+- **Errors:** a global exception filter returns `{ statusCode, code, message, details? }`. `code` is a stable string the client can switch on, for example `CORE_NOT_FOUND`, `HABIT_NOT_FOUND`, `CORE_ARCHIVED`, `UNDO_NOT_ALLOWED`, `BACKFILL_OUT_OF_RANGE`, `CORE_NOT_EMPTY`, `USERNAME_TAKEN`, `INVALID_CREDENTIALS`, `INVALID_INVITE_CODE`, `REGISTRATION_CLOSED`, `UNAUTHENTICATED`, `CSRF_INVALID`.
 - **Transactions:** any operation touching more than one table uses `prisma.$transaction`. This includes: core archive plus its habits, log write plus longest-streak update, review creation plus target changes, and undo.
 - **Config:** env validated at boot by a zod schema. The app refuses to start if a value is missing.
 

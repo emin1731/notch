@@ -7,6 +7,6 @@ export const SETTINGS_COPY = {
   wrongPassword: 'That password isn’t right.',
   loggedOutEverywhere: 'Logged out everywhere.',
   accountDeleted: 'Your account was deleted.',
-  nothingArchived: 'Nothing archived. Archived cores, goals and habits show up here.',
+  nothingArchived: 'Nothing archived. Archived cores and habits show up here.',
   coreArchivedFirst: (core: string) => `In ${core}, which is archived: unarchive it first.`,
 } as const;

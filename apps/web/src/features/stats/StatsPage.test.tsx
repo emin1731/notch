@@ -4,7 +4,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { signedIn } from '@/test/auth';
 import { renderApp } from '@/test/render';
 import { mockStatsApi, statsOverview } from '@/test/stats-api';
-import { fakeCore, fakeGoal, fakeHabit, mockStructureApi } from '@/test/structure-api';
+import { fakeCore, fakeHabit, mockStructureApi } from '@/test/structure-api';
 
 const health = fakeCore({ name: 'Health', color: 'emerald' });
 const mind = fakeCore({ name: 'Mind', color: 'violet', icon: 'brain' });
@@ -14,11 +14,6 @@ const gym = fakeHabit({
   name: 'Gym',
   scheduleType: 'TIMES_PER_WEEK',
   timesPerWeek: 3,
-});
-const marathon = fakeGoal({
-  coreId: health.id,
-  title: 'Run a half marathon',
-  milestones: [['5 km', true], ['10 km', true], '15 km', 'Race day'],
 });
 
 const overview = statsOverview({
@@ -36,38 +31,6 @@ const overview = statsOverview({
     { habitId: journal.id, name: 'Journal', currentStreak: 16 },
     { habitId: gym.id, name: 'Gym', currentStreak: 8 },
   ],
-  goals: {
-    active: 1,
-    completedInRange: 2,
-    items: [
-      {
-        id: marathon.id,
-        coreId: health.id,
-        title: 'Run a half marathon',
-        description: null,
-        deadline: null,
-        status: 'ACTIVE',
-        completedAt: null,
-        archivedAt: null,
-        sortOrder: 0,
-        progress: 0.5,
-        milestoneCounts: { done: 2, total: 4 },
-      },
-      {
-        id: 'goal-done',
-        coreId: mind.id,
-        title: 'Read 12 books',
-        description: null,
-        deadline: null,
-        status: 'COMPLETED',
-        completedAt: '2026-11-02T10:00:00.000Z',
-        archivedAt: null,
-        sortOrder: 1,
-        progress: 1,
-        milestoneCounts: { done: 3, total: 3 },
-      },
-    ],
-  },
   changes: { levelUps: 3, deloads: 1 },
 });
 
@@ -77,17 +40,16 @@ const completion = () => screen.findByRole('region', { name: 'Completion over ti
 describe('stats page', () => {
   beforeEach(() => {
     signedIn();
-    mockStructureApi({ cores: [health, mind], goals: [marathon], habits: [journal, gym] });
+    mockStructureApi({ cores: [health, mind], habits: [journal, gym] });
   });
 
-  it('shows the key numbers, the cores, the leaderboard and the goals', async () => {
+  it('shows the key numbers, the cores and the leaderboard', async () => {
     mockStatsApi({ overview });
     renderApp('/stats');
 
     expect(await completion()).toHaveTextContent('87%of what you planned');
     const numbers = await keyNumbers();
     expect(numbers).toHaveTextContent('Best streak16days · Journal');
-    expect(numbers).toHaveTextContent('Goals completed21 active');
     expect(within(numbers).getByLabelText('3 up, 1 eased off')).toBeInTheDocument();
 
     const cores = screen.getByRole('region', { name: 'By core' });
@@ -104,14 +66,6 @@ describe('stats page', () => {
     );
     // A weekly habit's streak is in weeks.
     expect(within(leaderboard).getByRole('link', { name: /Gym/ })).toHaveTextContent('8 weeks');
-
-    const goals = screen.getByRole('region', { name: 'Goals' });
-    expect(
-      within(goals).getByRole('progressbar', { name: 'Run a half marathon progress' }),
-    ).toHaveAttribute('aria-valuetext', '2 / 4 milestones');
-    expect(within(goals).getByRole('list', { name: 'Completed goals' })).toHaveTextContent(
-      'Read 12 books',
-    );
   });
 
   it('switches the range, keeping it in the URL', async () => {

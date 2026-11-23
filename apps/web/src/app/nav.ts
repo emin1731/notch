@@ -10,7 +10,7 @@ export interface NavItem {
 
 export const NAV_ITEMS: NavItem[] = [
   { to: '/today', label: 'Today', short: 'Today', icon: CalendarCheck },
-  { to: '/cores', label: 'Cores & Goals', short: 'Cores', icon: Layers },
+  { to: '/cores', label: 'Cores', short: 'Cores', icon: Layers },
   { to: '/stats', label: 'Stats', short: 'Stats', icon: ChartColumn },
   { to: '/review', label: 'Review', short: 'Review', icon: ClipboardCheck },
 ];

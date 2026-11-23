@@ -20,7 +20,6 @@ export function statsOverview(fields: Partial<StatsOverviewDto> = {}): StatsOver
     daily: [],
     cores: [],
     topStreaks: [],
-    goals: { active: 0, completedInRange: 0, items: [] },
     changes: { levelUps: 0, deloads: 0 },
     ...fields,
   };

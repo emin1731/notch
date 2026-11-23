@@ -1,4 +1,4 @@
-import type { CoreDto, GoalDetailDto, HabitDetailDto } from '@notch/shared';
+import type { CoreDto, HabitDetailDto } from '@notch/shared';
 import { expect } from 'vitest';
 import type { TestClient } from './test-client.js';
 
@@ -14,16 +14,6 @@ export async function createCore(
   });
   expect(res.status, JSON.stringify(res.body)).toBe(201);
   return res.body as CoreDto;
-}
-
-export async function createGoal(
-  client: TestClient,
-  coreId: string,
-  overrides: Record<string, unknown> = {},
-): Promise<GoalDetailDto> {
-  const res = await client.post('/goals', { coreId, title: 'Run a marathon', ...overrides });
-  expect(res.status, JSON.stringify(res.body)).toBe(201);
-  return res.body as GoalDetailDto;
 }
 
 export async function createHabit(

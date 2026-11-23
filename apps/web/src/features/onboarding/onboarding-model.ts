@@ -1,4 +1,4 @@
-import type { CoreColor, CorePresetName, HabitTemplate, LocalDate, UserDto } from '@notch/shared';
+import type { CoreColor, CorePresetName, HabitTemplate, UserDto } from '@notch/shared';
 import { formatValue, scheduleText } from '@/lib/habit-format';
 
 /** A core picked during onboarding; `key` names it until the API gives it an id. */
@@ -11,13 +11,6 @@ export interface DraftCore {
   icon: string;
 }
 
-export interface DraftGoal {
-  coreKey: string;
-  title: string;
-  deadline: LocalDate | null;
-  milestones: string[];
-}
-
 export interface DraftHabit {
   key: string;
   coreKey: string;
@@ -28,20 +21,18 @@ export interface DraftHabit {
 
 export interface OnboardingDraft {
   cores: DraftCore[];
-  goal: DraftGoal | null;
   habits: DraftHabit[];
 }
 
 /** What the API has already created, by draft key: a retry skips these. */
 export interface Created {
   cores: Record<string, string>;
-  goalId: string | null;
   habits: Record<string, string>;
 }
 
-export const NOTHING_CREATED: Created = { cores: {}, goalId: null, habits: {} };
+export const NOTHING_CREATED: Created = { cores: {}, habits: {} };
 
-export type SubmitPhase = 'cores' | 'goal' | 'habits' | 'complete';
+export type SubmitPhase = 'cores' | 'habits' | 'complete';
 
 /** A failed submission, shown on its step with a way to retry. */
 export interface SubmitFailure {
@@ -52,9 +43,8 @@ export interface SubmitFailure {
 /** The step a failure belongs to, so the user lands where they can fix it. */
 export const STEP_OF_PHASE: Record<SubmitPhase, number> = {
   cores: 0,
-  goal: 1,
-  habits: 2,
-  complete: 3,
+  habits: 1,
+  complete: 2,
 };
 
 export const presetKey = (name: CorePresetName) => `preset:${name}`;
@@ -81,12 +71,6 @@ export interface OnboardingApi {
   createCores: (
     cores: { name: string; color: CoreColor; icon: string }[],
   ) => Promise<{ id: string }[]>;
-  createGoal: (input: {
-    coreId: string;
-    title: string;
-    deadline: LocalDate | null;
-    milestones: string[];
-  }) => Promise<{ id: string }>;
   createHabit: (input: HabitTemplate & { coreId: string }) => Promise<{ id: string }>;
   complete: () => Promise<UserDto>;
 }
@@ -101,7 +85,7 @@ export class OnboardingSubmitError extends Error {
 }
 
 /**
- * Creates the draft in order (cores, the goal, each habit) and marks onboarding done. Whatever
+ * Creates the draft in order (cores, then each habit) and marks onboarding done. Whatever
  * `created` already holds is skipped, and `save` records each step as it lands: a retry, or a
  * reload in between, never creates anything twice (plan 7.5).
  */
@@ -113,7 +97,6 @@ export async function submitOnboarding(
 ): Promise<UserDto> {
   let created: Created = {
     cores: { ...initial.cores },
-    goalId: initial.goalId,
     habits: { ...initial.habits },
   };
   const record = (next: Created) => {
@@ -145,19 +128,6 @@ export async function submitOnboarding(
       ids[core.key] = saved[index]!.id;
     });
     record({ ...created, cores: ids });
-  }
-
-  const goal = draft.goal;
-  if (goal && !created.goalId) {
-    const saved = await run('goal', () =>
-      api.createGoal({
-        coreId: coreId(goal.coreKey),
-        title: goal.title,
-        deadline: goal.deadline,
-        milestones: goal.milestones,
-      }),
-    );
-    record({ ...created, goalId: saved.id });
   }
 
   for (const habit of draft.habits) {

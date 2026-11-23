@@ -170,7 +170,7 @@ describe('api client', () => {
       }),
     );
 
-    await api.get('/things', { query: { from: '2026-11-01', archived: false, goalId: undefined } });
+    await api.get('/things', { query: { from: '2026-11-01', archived: false, coreId: undefined } });
 
     expect(search).toBe('?from=2026-11-01&archived=false');
   });

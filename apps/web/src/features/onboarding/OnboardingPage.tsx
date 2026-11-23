@@ -5,7 +5,6 @@ import { useAuth } from '@/features/auth/auth-context';
 import { accountApi } from '@/features/auth/api';
 import { startSession } from '@/features/auth/session';
 import { coresApi } from '@/features/cores/api';
-import { goalsApi } from '@/features/goals/api';
 import { habitsApi } from '@/features/habits/api';
 import { apiErrorMessage } from '@/lib/forms';
 import { queryKeys } from '@/lib/query-keys';
@@ -20,18 +19,16 @@ import {
 } from './onboarding-model';
 import { useOnboarding } from './onboarding-store';
 import { StepCores } from './StepCores';
-import { StepGoal } from './StepGoal';
 import { StepHabits } from './StepHabits';
 import { StepHowItWorks } from './StepHowItWorks';
 
 const api: OnboardingApi = {
   createCores: (cores) => coresApi.batch(cores),
-  createGoal: (input) => goalsApi.create(input),
   createHabit: (input) => habitsApi.create(createHabitSchema.parse(input)),
   complete: () => accountApi.completeOnboarding(),
 };
 
-/** `/onboarding`: four steps, then everything is created at once (plan 7.5). */
+/** `/onboarding`: three steps, then everything is created at once (plan 7.5). */
 export default function OnboardingPage() {
   const { user } = useAuth();
   const client = useQueryClient();
@@ -49,9 +46,9 @@ export default function OnboardingPage() {
   const submit = async () => {
     setSubmitting(true);
     setFailure(null);
-    const { cores, goal, habits, created, setCreated, setStep } = useOnboarding.getState();
+    const { cores, habits, created, setCreated, setStep } = useOnboarding.getState();
     try {
-      const done = await submitOnboarding({ cores, goal, habits }, created, api, setCreated);
+      const done = await submitOnboarding({ cores, habits }, created, api, setCreated);
       useOnboarding.getState().reset();
       // What onboarding created replaces anything cached before; then the guard opens Today.
       await client.invalidateQueries({
@@ -74,9 +71,8 @@ export default function OnboardingPage() {
     <div className="flex flex-col gap-8">
       <StepIndicator step={store.step} />
       {store.step === 0 && <StepCores {...retry} />}
-      {store.step === 1 && <StepGoal {...retry} />}
-      {store.step === 2 && <StepHabits {...retry} />}
-      {store.step === 3 && (
+      {store.step === 1 && <StepHabits {...retry} />}
+      {store.step === 2 && (
         <StepHowItWorks {...retry} submitting={submitting} onStart={() => void submit()} />
       )}
     </div>
@@ -89,7 +85,7 @@ function StepIndicator({ step }: { step: number }) {
       <p className="mb-2 text-sm text-muted-foreground">
         Step {step + 1} of {ONBOARDING_COPY.steps.length}
       </p>
-      <ol className="grid grid-cols-4 gap-2">
+      <ol className="grid grid-cols-3 gap-2">
         {ONBOARDING_COPY.steps.map((title, index) => (
           <li key={title} aria-current={index === step ? 'step' : undefined}>
             <div

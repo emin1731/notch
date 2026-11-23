@@ -60,11 +60,6 @@ export const routes: RouteObject[] = [
                   { path: '/today', lazy: page(() => import('@/features/today/TodayPage')) },
                   { path: '/cores', lazy: page(() => import('@/features/cores/CoresPage')) },
                   {
-                    path: '/goals/:goalId',
-                    handle: narrow,
-                    lazy: page(() => import('@/features/goals/GoalPage')),
-                  },
-                  {
                     path: '/habits/new',
                     handle: narrow,
                     lazy: page(() => import('@/features/habits/HabitFormPage')),
