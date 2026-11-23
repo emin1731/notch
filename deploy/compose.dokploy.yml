@@ -1,0 +1,76 @@
+# Production stack for Dokploy (a "Compose" service built from this repo, compose path
+# deploy/compose.dokploy.yml). Dokploy's Traefik terminates TLS for notch.emindabakhov.com and
+# forwards to api:3000 over dokploy-network; nothing is published on the host. Values come from
+# the service's Environment tab, which Dokploy writes to .env next to this file.
+
+services:
+  api:
+    image: ${NOTCH_IMAGE:-ghcr.io/emin1731/notch}:${NOTCH_TAG:-latest}
+    restart: unless-stopped
+    init: true
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: postgresql://notch:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}@db:5432/notch
+      # Traefik is the one proxy in front (2 if Cloudflare proxies the domain too).
+      TRUST_PROXY: ${TRUST_PROXY:-1}
+      COOKIE_SECURE: 'true'
+      CSRF_SECRET: ${CSRF_SECRET:?set CSRF_SECRET}
+      INVITE_CODE: ${INVITE_CODE:?set INVITE_CODE}
+      MAX_USERS: ${MAX_USERS:-1}
+      SESSION_TTL_DAYS: ${SESSION_TTL_DAYS:-30}
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      AUTH_THROTTLE_LIMIT: ${AUTH_THROTTLE_LIMIT:-10}
+    expose:
+      - '3000'
+    networks:
+      - default
+      - dokploy-network
+    depends_on:
+      db:
+        condition: service_healthy
+    logging:
+      driver: json-file
+      options: { max-size: 10m, max-file: '5' }
+
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: notch
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}
+      POSTGRES_DB: notch
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U notch -d notch']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  # Daily pg_dump into the backups volume, keeping the last BACKUP_KEEP_DAYS days.
+  backup:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    entrypoint: ['sh', '/scripts/backup.sh']
+    environment:
+      PGHOST: db
+      PGUSER: notch
+      PGPASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}
+      PGDATABASE: notch
+      BACKUP_KEEP_DAYS: ${BACKUP_KEEP_DAYS:-14}
+      BACKUP_HOUR_UTC: ${BACKUP_HOUR_UTC:-3}
+    volumes:
+      # A named volume: Dokploy re-clones the repo on each deploy, so a folder here would be lost.
+      - backups:/backups
+      - ./scripts:/scripts:ro
+    depends_on:
+      db:
+        condition: service_healthy
+
+volumes:
+  pgdata:
+  backups:
+
+networks:
+  dokploy-network:
+    external: true
